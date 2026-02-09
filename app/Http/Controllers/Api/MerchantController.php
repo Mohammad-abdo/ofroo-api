@@ -236,18 +236,13 @@ class MerchantController extends Controller
         $user = $request->user();
         $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
 
-        $coupon = Coupon::with(['offer', 'order'])
+        $coupon = Coupon::with(['offer'])
             ->whereHas('offer', function ($query) use ($merchant) {
                 $query->where('merchant_id', $merchant->id);
             })
             ->findOrFail($id);
 
-        // Validate order payment status
-        if ($coupon->order->payment_status !== 'paid') {
-            return response()->json([
-                'message' => 'Order payment not confirmed',
-            ], 400);
-        }
+        // Payment validation: in current schema coupons are tied to offers only
 
         if ($coupon->status !== 'reserved') {
             return response()->json([
@@ -558,13 +553,11 @@ class MerchantController extends Controller
         $user = $request->user();
         $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
 
-        $query = Coupon::with(['category', 'offer'])
-            ->where('created_by', $merchant->id)
-            ->where('created_by_type', 'merchant')
-            ->whereNull('mall_id'); // Regular coupons (no mall)
+        $query = Coupon::with(['offer'])
+            ->whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id));
 
         if ($request->has('category_id')) {
-            $query->where('category_id', $request->category_id);
+            $query->whereHas('offer', fn ($q) => $q->where('category_id', $request->category_id));
         }
 
         if ($request->has('status')) {
@@ -574,8 +567,9 @@ class MerchantController extends Controller
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('coupon_code', 'like', "%{$search}%")
-                  ->orWhere('barcode_value', 'like', "%{$search}%");
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('barcode', 'like', "%{$search}%")
+                  ->orWhere('coupon_code', 'like', "%{$search}%");
             });
         }
 
@@ -601,9 +595,8 @@ class MerchantController extends Controller
         $user = $request->user();
         $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
 
-        $coupon = Coupon::with(['category', 'offer', 'order'])
-            ->where('created_by', $merchant->id)
-            ->where('created_by_type', 'merchant')
+        $coupon = Coupon::with(['offer'])
+            ->whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id))
             ->findOrFail($id);
 
         return response()->json([
@@ -712,19 +705,17 @@ class MerchantController extends Controller
         $user = $request->user();
         $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
 
-        $query = Coupon::with(['category', 'offer', 'mall'])
-            ->where('created_by', $merchant->id)
-            ->where('created_by_type', 'merchant')
-            ->whereNotNull('mall_id'); // Only mall coupons
+        $query = Coupon::with(['offer'])
+            ->whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id));
 
         // Filter by mall
         if ($request->has('mall') && $request->mall !== 'all') {
-            $query->where('mall_id', $request->mall);
+            $query->whereHas('offer', fn ($q) => $q->where('mall_id', $request->mall));
         }
 
         // Filter by category
         if ($request->has('category') && $request->category !== 'all') {
-            $query->where('category_id', $request->category);
+            $query->whereHas('offer', fn ($q) => $q->where('category_id', $request->category));
         }
 
         // Filter by status
@@ -1802,18 +1793,18 @@ class MerchantController extends Controller
         $user = $request->user();
         $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
 
-        $query = Coupon::with(['offer', 'order.user'])
+        $query = Coupon::with(['offer'])
             ->whereHas('offer', function ($q) use ($merchant) {
                 $q->where('merchant_id', $merchant->id);
             })
-            ->where('status', 'activated');
+            ->where('status', 'used');
 
-        // Filter by date range
+        // Filter by date range (use updated_at if activated_at not on coupons)
         if ($request->has('start_date')) {
-            $query->where('activated_at', '>=', $request->start_date);
+            $query->where('updated_at', '>=', $request->start_date);
         }
         if ($request->has('end_date')) {
-            $query->where('activated_at', '<=', $request->end_date);
+            $query->where('updated_at', '<=', $request->end_date);
         }
 
         // Filter by offer

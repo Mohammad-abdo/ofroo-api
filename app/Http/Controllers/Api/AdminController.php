@@ -1547,6 +1547,10 @@ class AdminController extends Controller
             $query->where('offer_id', $request->offer_id);
         }
 
+        if ($request->has('category_id')) {
+            $query->whereHas('offer', fn ($q) => $q->where('category_id', $request->category_id));
+        }
+
         $coupons = $query->orderBy('created_at', 'desc')
             ->paginate($request->get('per_page', 15));
 
@@ -1818,7 +1822,7 @@ class AdminController extends Controller
 
         return response()->json([
             'message' => 'Coupon created successfully',
-            'data' => new CouponResource($coupon->load(['offer', 'category', 'mall', 'createdByMerchant'])),
+            'data' => new CouponResource($coupon->load('offer')),
         ], 201);
     }
 
@@ -1947,7 +1951,7 @@ class AdminController extends Controller
 
         return response()->json([
             'message' => 'Coupon updated successfully',
-            'data' => new CouponResource($coupon->load(['offer', 'category', 'mall', 'order', 'user'])),
+            'data' => new CouponResource($coupon->load('offer')),
         ]);
     }
 
@@ -1999,7 +2003,7 @@ class AdminController extends Controller
 
         return response()->json([
             'message' => 'Coupon activated successfully',
-            'data' => new CouponResource($coupon->load(['offer', 'category', 'mall', 'order', 'user', 'activatedBy'])),
+            'data' => new CouponResource($coupon->load('offer')),
         ]);
     }
 
@@ -2022,7 +2026,7 @@ class AdminController extends Controller
 
         return response()->json([
             'message' => 'Coupon deactivated successfully',
-            'data' => new CouponResource($coupon->load(['offer', 'category', 'mall', 'order', 'user'])),
+            'data' => new CouponResource($coupon->load('offer')),
         ]);
     }
 
