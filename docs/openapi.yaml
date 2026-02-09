@@ -1,0 +1,579 @@
+openapi: 3.0.0
+info:
+  title: OFROO API
+  description: OFROO Local Coupons & Offers API Documentation
+  version: 1.0.0
+  contact:
+    name: OFROO Support
+    email: support@ofroo.com
+
+servers:
+  - url: http://localhost:8000/api
+    description: Local development server
+  - url: https://api.ofroo.com/api
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication endpoints
+  - name: Offers
+    description: Public offers endpoints
+  - name: Cart
+    description: Shopping cart management
+  - name: Orders
+    description: Order management
+  - name: Wallet
+    description: User wallet and coupons
+  - name: Merchant
+    description: Merchant-specific endpoints
+  - name: Admin
+    description: Admin-only endpoints
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - phone
+                - password
+              properties:
+                name:
+                  type: string
+                  example: Ahmed Ali
+                email:
+                  type: string
+                  format: email
+                  example: ahmed@example.com
+                phone:
+                  type: string
+                  example: +96512345678
+                password:
+                  type: string
+                  format: password
+                  example: password123
+                password_confirmation:
+                  type: string
+                  format: password
+                  example: password123
+                language:
+                  type: string
+                  enum: [ar, en]
+                  example: ar
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+                  token:
+                    type: string
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: ahmed@example.com
+                phone:
+                  type: string
+                  example: +96512345678
+                password:
+                  type: string
+                  format: password
+                  example: password123
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+                  token:
+                    type: string
+
+  /offers:
+    get:
+      tags:
+        - Offers
+      summary: List offers
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: integer
+        - name: nearby
+          in: query
+          schema:
+            type: boolean
+        - name: lat
+          in: query
+          schema:
+            type: number
+            format: float
+        - name: lng
+          in: query
+          schema:
+            type: number
+            format: float
+        - name: distance
+          in: query
+          schema:
+            type: integer
+            description: Distance in meters
+        - name: q
+          in: query
+          schema:
+            type: string
+            description: Search query
+        - name: page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of offers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Offer'
+
+  /offers/{id}:
+    get:
+      tags:
+        - Offers
+      summary: Get offer details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Offer details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+
+  /cart:
+    get:
+      tags:
+        - Cart
+      summary: Get user cart
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Cart details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+
+  /cart/add:
+    post:
+      tags:
+        - Cart
+      summary: Add item to cart
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - offer_id
+                - quantity
+              properties:
+                offer_id:
+                  type: integer
+                quantity:
+                  type: integer
+      responses:
+        '200':
+          description: Item added to cart
+
+  /orders/checkout:
+    post:
+      tags:
+        - Orders
+      summary: Create order from cart
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - payment_method
+                - cart_id
+              properties:
+                payment_method:
+                  type: string
+                  enum: [cash, card, none]
+                cart_id:
+                  type: integer
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  order:
+                    $ref: '#/components/schemas/Order'
+
+  /wallet/coupons:
+    get:
+      tags:
+        - Wallet
+      summary: Get user coupons
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of user coupons
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Coupon'
+
+  /merchant/offers:
+    post:
+      tags:
+        - Merchant
+      summary: Create offer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title_ar
+                - price
+                - total_coupons
+              properties:
+                title_ar:
+                  type: string
+                title_en:
+                  type: string
+                description_ar:
+                  type: string
+                description_en:
+                  type: string
+                price:
+                  type: number
+                  format: float
+                original_price:
+                  type: number
+                  format: float
+                discount_percent:
+                  type: integer
+                total_coupons:
+                  type: integer
+                start_at:
+                  type: string
+                  format: date-time
+                end_at:
+                  type: string
+                  format: date-time
+                category_id:
+                  type: integer
+                location_id:
+                  type: integer
+      responses:
+        '201':
+          description: Offer created successfully
+
+  /merchant/coupons/{id}/activate:
+    post:
+      tags:
+        - Merchant
+      summary: Activate coupon
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Coupon activated successfully
+
+  /admin/reports/sales:
+    get:
+      tags:
+        - Admin
+      summary: Get sales report
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: merchant
+          in: query
+          schema:
+            type: integer
+        - name: category
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Sales report data
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        language:
+          type: string
+          enum: [ar, en]
+        role:
+          $ref: '#/components/schemas/Role'
+
+    Role:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        name_ar:
+          type: string
+        name_en:
+          type: string
+
+    Offer:
+      type: object
+      properties:
+        id:
+          type: integer
+        title_ar:
+          type: string
+        title_en:
+          type: string
+        description_ar:
+          type: string
+        description_en:
+          type: string
+        price:
+          type: number
+          format: float
+        original_price:
+          type: number
+          format: float
+        discount_percent:
+          type: integer
+        images:
+          type: array
+          items:
+            type: string
+        total_coupons:
+          type: integer
+        coupons_remaining:
+          type: integer
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [draft, pending, active, expired]
+        merchant:
+          $ref: '#/components/schemas/Merchant'
+        category:
+          $ref: '#/components/schemas/Category'
+
+    Merchant:
+      type: object
+      properties:
+        id:
+          type: integer
+        company_name:
+          type: string
+        company_name_ar:
+          type: string
+        company_name_en:
+          type: string
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name_ar:
+          type: string
+        name_en:
+          type: string
+
+    Cart:
+      type: object
+      properties:
+        id:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        total:
+          type: number
+          format: float
+
+    CartItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        offer:
+          $ref: '#/components/schemas/Offer'
+        quantity:
+          type: integer
+        price_at_add:
+          type: number
+          format: float
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        total_amount:
+          type: number
+          format: float
+        payment_method:
+          type: string
+          enum: [cash, card, none]
+        payment_status:
+          type: string
+          enum: [pending, paid, failed]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        coupons:
+          type: array
+          items:
+            $ref: '#/components/schemas/Coupon'
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        offer:
+          $ref: '#/components/schemas/Offer'
+        quantity:
+          type: integer
+        unit_price:
+          type: number
+          format: float
+        total_price:
+          type: number
+          format: float
+
+    Coupon:
+      type: object
+      properties:
+        id:
+          type: integer
+        coupon_code:
+          type: string
+        barcode_value:
+          type: string
+        status:
+          type: string
+          enum: [reserved, activated, used, cancelled, expired]
+        reserved_at:
+          type: string
+          format: date-time
+        activated_at:
+          type: string
+          format: date-time
+        used_at:
+          type: string
+          format: date-time
+        offer:
+          $ref: '#/components/schemas/Offer'
+

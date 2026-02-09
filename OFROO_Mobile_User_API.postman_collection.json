@@ -1,0 +1,2504 @@
+{
+	"info": {
+		"name": "OFROO - Mobile User API (Figma Design Complete)",
+		"description": "Complete mobile API collection matching ALL Figma design screens. Every screen has its corresponding endpoints with full image URLs and complete data structures.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "ofroo-mobile-api-figma",
+		"version": "4.0.0"
+	},
+	"item": [
+		{
+			"name": "🔐 1. Login Screen",
+			"description": "Login screen endpoints: Email, Phone, Google, Apple",
+			"item": [
+				{
+					"name": "Login with Email",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Login with email and password. Returns access token and user data."
+					}
+				},
+				{
+					"name": "Login with Phone",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"+201012345678\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Login with phone number and password."
+					}
+				},
+				{
+					"name": "Login with Google",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"provider\": \"google\",\n    \"access_token\": \"google_access_token_here\",\n    \"id_token\": \"google_id_token_here\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/social/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "social", "login"]
+						},
+						"description": "Login with Google account. Returns access token."
+					}
+				},
+				{
+					"name": "Login with Apple",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"provider\": \"apple\",\n    \"identity_token\": \"apple_identity_token_here\",\n    \"authorization_code\": \"apple_authorization_code_here\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/social/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "social", "login"]
+						},
+						"description": "Login with Apple account. Returns access token."
+					}
+				}
+			]
+		},
+		{
+			"name": "📝 2. Register Screen",
+			"description": "User registration screen endpoints",
+			"item": [
+				{
+					"name": "Register New Account",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Ahmed Ali\",\n    \"email\": \"ahmed@example.com\",\n    \"phone\": \"+201012345678\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\",\n    \"language\": \"ar\",\n    \"city\": \"القاهرة\",\n    \"governorate\": \"القاهرة\",\n    \"type\": \"male\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "register"]
+						},
+						"description": "Register a new user account. Returns user data with access token."
+					}
+				},
+				{
+					"name": "Register with Google",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"provider\": \"google\",\n    \"access_token\": \"google_access_token_here\",\n    \"id_token\": \"google_id_token_here\",\n    \"city\": \"القاهرة\",\n    \"governorate\": \"القاهرة\",\n    \"type\": \"male\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/social/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "social", "register"]
+						},
+						"description": "Register with Google account."
+					}
+				},
+				{
+					"name": "Register with Apple",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"provider\": \"apple\",\n    \"identity_token\": \"apple_identity_token_here\",\n    \"authorization_code\": \"apple_authorization_code_here\",\n    \"city\": \"القاهرة\",\n    \"governorate\": \"القاهرة\",\n    \"type\": \"male\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/social/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "social", "register"]
+						},
+						"description": "Register with Apple account."
+					}
+				}
+			]
+		},
+		{
+			"name": "🔑 3. OTP Verification Screen",
+			"description": "OTP verification for phone and email",
+			"item": [
+				{
+					"name": "Request OTP (Phone)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"+201012345678\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/otp/request",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "otp", "request"]
+						},
+						"description": "Request OTP code for phone number. OTP will be sent via SMS. Returns masked phone number for display."
+					}
+				},
+				{
+					"name": "Request OTP (Email) - Password Recovery",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"type\": \"password_reset\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/otp/request",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "otp", "request"]
+						},
+						"description": "Request OTP code via email for password recovery. Returns masked email for display."
+					}
+				},
+				{
+					"name": "Verify OTP (Phone)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"+201012345678\",\n    \"otp_code\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/otp/verify",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "otp", "verify"]
+						},
+						"description": "Verify OTP code sent to phone and login. Returns access token."
+					}
+				},
+				{
+					"name": "Verify OTP (Email) - Password Recovery",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"otp_code\": \"123456\",\n    \"type\": \"password_reset\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/otp/verify",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "otp", "verify"]
+						},
+						"description": "Verify OTP code sent to email for password recovery."
+					}
+				},
+				{
+					"name": "Resend OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"+201012345678\",\n    \"resend\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/otp/resend",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "otp", "resend"]
+						},
+						"description": "Resend OTP code. Returns countdown timer (e.g., 00:50 seconds)."
+					}
+				}
+			]
+		},
+		{
+			"name": "🔒 4. Password Recovery Screen",
+			"description": "Password recovery flow endpoints",
+			"item": [
+				{
+					"name": "Request Password Recovery (Email)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"method\": \"email\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/password/forgot",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "password", "forgot"]
+						},
+						"description": "Request password recovery via email. Returns masked email for display."
+					}
+				},
+				{
+					"name": "Request Password Recovery (Phone)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"+201012345678\",\n    \"method\": \"phone\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/password/forgot",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "password", "forgot"]
+						},
+						"description": "Request password recovery via phone. Returns masked phone for display."
+					}
+				},
+				{
+					"name": "Reset Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"otp_code\": \"123456\",\n    \"new_password\": \"newpassword123\",\n    \"new_password_confirmation\": \"newpassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/password/reset",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "password", "reset"]
+						},
+						"description": "Reset password after OTP verification. Used in password recovery flow."
+					}
+				}
+			]
+		},
+		{
+			"name": "🏠 5. Home Screen",
+			"description": "Home feed with offers, categories, and featured content",
+			"item": [
+				{
+					"name": "Get Home Feed",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/home",
+							"host": ["{{base_url}}"],
+							"path": ["api", "home"]
+						},
+						"description": "Get home feed with featured offers, categories, nearby offers, and recommendations. Returns full data with image URLs."
+					}
+				},
+				{
+					"name": "Get All Offers (Home Feed)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/offers?page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "offers"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "category",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "location",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "nearby",
+									"value": "false",
+									"disabled": true
+								},
+								{
+									"key": "lat",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "lng",
+									"value": "",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all offers for home feed. Returns full offer data with complete image URLs, merchant logos, ratings, prices, discounts, expiry times, and location."
+					}
+				},
+				{
+					"name": "Get Offers by Location",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/offers?location=City+Mall&page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "offers"],
+							"query": [
+								{
+									"key": "location",
+									"value": "City Mall"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get offers filtered by location (e.g., City Mall). Returns full offer data with images."
+					}
+				},
+				{
+					"name": "Get Nearby Offers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/offers?nearby=true&lat=30.0444&lng=31.2357&distance=5000",
+							"host": ["{{base_url}}"],
+							"path": ["api", "offers"],
+							"query": [
+								{
+									"key": "nearby",
+									"value": "true"
+								},
+								{
+									"key": "lat",
+									"value": "30.0444"
+								},
+								{
+									"key": "lng",
+									"value": "31.2357"
+								},
+								{
+									"key": "distance",
+									"value": "5000"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get nearby offers based on GPS coordinates. Returns offers within specified distance with full data."
+					}
+				}
+			]
+		},
+		{
+			"name": "📂 6. Categories Screen",
+			"description": "Categories listing with icons and images",
+			"item": [
+				{
+					"name": "Get All Categories",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/categories",
+							"host": ["{{base_url}}"],
+							"path": ["api", "categories"]
+						},
+						"description": "Get all categories with full data including 3D icons/images (full URLs), names in Arabic and English, and descriptions."
+					}
+				},
+				{
+					"name": "Get Category Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/categories/:id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "categories", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get category details with full information including image URLs."
+					}
+				},
+				{
+					"name": "Get Offers by Category",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/offers?category=1&page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "offers"],
+							"query": [
+								{
+									"key": "category",
+									"value": "1"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get offers filtered by category. Returns full offer data with images."
+					}
+				}
+			]
+		},
+		{
+			"name": "🔍 7. Search Screen",
+			"description": "Search functionality for offers",
+			"item": [
+				{
+					"name": "Search Offers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/search?q=pizza",
+							"host": ["{{base_url}}"],
+							"path": ["api", "search"],
+							"query": [
+								{
+									"key": "q",
+									"value": "pizza"
+								},
+								{
+									"key": "category",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "lat",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "lng",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "page",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Search offers by keyword. Returns matching offers with full data and image URLs."
+					}
+				}
+			]
+		},
+		{
+			"name": "📱 8. Offer Details Screen",
+			"description": "Single offer details with full information, images, merchant info",
+			"item": [
+				{
+					"name": "Get Offer Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/offers/:id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "offers", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get complete offer details including: all images (full URLs array), merchant info with logo (full URL), category, location, pricing (original & discounted), discount percentage, expiry date/time, offer contents/description, rating, and availability."
+					}
+				},
+				{
+					"name": "Get Merchant Information",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/merchants/:id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "merchants", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get merchant information including: name (AR/EN), logo (full URL), rating, location, address, phone, email, website, social media links, and special offers."
+					}
+				},
+				{
+					"name": "Get Merchant Special Offers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/merchants/:id/offers",
+							"host": ["{{base_url}}"],
+							"path": ["api", "merchants", ":id", "offers"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get all special offers from a specific merchant. Returns offers with full image URLs."
+					}
+				},
+				{
+					"name": "Get WhatsApp Contact",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/offers/:id/whatsapp",
+							"host": ["{{base_url}}"],
+							"path": ["api", "offers", ":id", "whatsapp"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get WhatsApp contact link for the offer merchant."
+					}
+				}
+			]
+		},
+		{
+			"name": "❤️ 9. Favorites Screen",
+			"description": "User favorites management - Add/Remove favorites, View favorites list",
+			"item": [
+				{
+					"name": "Get Favorites",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/favorites",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "favorites"]
+						},
+						"description": "Get user's favorite offers. Returns full offer data with images, merchant info, ratings, prices, and discounts."
+					}
+				},
+				{
+					"name": "Get Favorites by Category",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/favorites?category=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "favorites"],
+							"query": [
+								{
+									"key": "category",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get favorites filtered by category."
+					}
+				},
+				{
+					"name": "Add to Favorites",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"offer_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/favorites",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "favorites"]
+						},
+						"description": "Add an offer to favorites."
+					}
+				},
+				{
+					"name": "Remove from Favorites",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/favorites/:offer_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "favorites", ":offer_id"],
+							"variable": [
+								{
+									"key": "offer_id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Remove an offer from favorites."
+					}
+				}
+			]
+		},
+		{
+			"name": "🛒 10. Cart Screen",
+			"description": "Shopping cart management with discount codes",
+			"item": [
+				{
+					"name": "Get Cart",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/cart",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cart"]
+						},
+						"description": "Get user cart with all items, quantities, prices, totals, delivery fees, discount codes applied, and final total. Returns full offer data including images."
+					}
+				},
+				{
+					"name": "Add to Cart",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"offer_id\": 1,\n    \"quantity\": 2\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cart/add",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cart", "add"]
+						},
+						"description": "Add offer to cart with specified quantity. Returns updated cart with full data."
+					}
+				},
+				{
+					"name": "Apply Discount Code",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"discount_code\": \"SAVE20\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cart/apply-discount",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cart", "apply-discount"]
+						},
+						"description": "Apply discount code to cart. Returns updated cart with discount applied and new total."
+					}
+				},
+				{
+					"name": "Update Cart Item Quantity",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"quantity\": 3\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cart/:id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cart", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Update cart item quantity."
+					}
+				},
+				{
+					"name": "Remove from Cart",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/cart/:id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cart", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Remove item from cart."
+					}
+				},
+				{
+					"name": "Clear Cart",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/cart",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cart"]
+						},
+						"description": "Clear entire cart."
+					}
+				}
+			]
+		},
+		{
+			"name": "💳 11. Payment & Checkout Screen",
+			"description": "Payment methods selection and checkout",
+			"item": [
+				{
+					"name": "Get Available Payment Methods",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/payment/methods",
+							"host": ["{{base_url}}"],
+							"path": ["api", "payment", "methods"]
+						},
+						"description": "Get all available payment methods: Bank Cards (VISA, Mastercard, Meeza), Electronic Wallets (Vodafone Cash, Orange Cash, e-money, WE Pay), Payment by Reference (Fawry, Opay, Damen, Basata), Cash on Delivery. Returns logos (full URLs) and method details."
+					}
+				},
+				{
+					"name": "Checkout with Bank Card",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"payment_method\": \"visa\",\n    \"payment_method_type\": \"bank_card\",\n    \"card_number\": \"1234567890123456\",\n    \"card_holder_name\": \"Ahmed Ali\",\n    \"expiry_month\": \"12\",\n    \"expiry_year\": \"25\",\n    \"cvv\": \"123\",\n    \"save_as_default\": true,\n    \"notes\": \"Please deliver quickly\",\n    \"address\": \"123 Main Street, Cairo\",\n    \"phone\": \"+201012345678\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/checkout",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "checkout"]
+						},
+						"description": "Create order from cart with bank card payment (VISA, Mastercard, Meeza). Returns order details with full information."
+					}
+				},
+				{
+					"name": "Checkout with Electronic Wallet",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"payment_method\": \"vodafone_cash\",\n    \"payment_method_type\": \"electronic_wallet\",\n    \"wallet_phone\": \"01012345678\",\n    \"notes\": \"Please deliver quickly\",\n    \"address\": \"123 Main Street, Cairo\",\n    \"phone\": \"+201012345678\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/checkout",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "checkout"]
+						},
+						"description": "Create order with electronic wallet payment (Vodafone Cash, Orange Cash, e-money, WE Pay)."
+					}
+				},
+				{
+					"name": "Checkout with Reference Number",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"payment_method\": \"fawry\",\n    \"payment_method_type\": \"reference_number\",\n    \"notes\": \"Please deliver quickly\",\n    \"address\": \"123 Main Street, Cairo\",\n    \"phone\": \"+201012345678\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/checkout",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "checkout"]
+						},
+						"description": "Create order with payment by reference number (Fawry, Opay, Damen, Basata). Returns payment reference number, QR code (full URL), and expiry date/time."
+					}
+				},
+				{
+					"name": "Checkout with Cash on Delivery",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"payment_method\": \"cash_on_delivery\",\n    \"payment_method_type\": \"cash_on_delivery\",\n    \"notes\": \"Please deliver quickly\",\n    \"address\": \"123 Main Street, Cairo\",\n    \"phone\": \"+201012345678\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/checkout",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "checkout"]
+						},
+						"description": "Create order with cash on delivery payment method."
+					}
+				}
+			]
+		},
+		{
+			"name": "📦 12. Orders Screen",
+			"description": "Order history, details, and management",
+			"item": [
+				{
+					"name": "Get Orders History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/orders?per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "orders"],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "15"
+								},
+								{
+									"key": "status",
+									"value": "",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get user orders history with pagination. Returns orders with full details including merchant info, images, order numbers, dates, statuses, and totals."
+					}
+				},
+				{
+					"name": "Get Order Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/orders/:id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get complete order details including: order number, item name, quantity, merchant name, order date, order price, additional charges, discount value, price after discount, payment method, masked card number (if applicable), and total amount. Returns full data with image URLs."
+					}
+				},
+				{
+					"name": "Get Order Coupons",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/orders/:id/coupons",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", ":id", "coupons"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get coupons for an order. Returns coupon details with: QR codes (full image URLs), coupon codes, barcode numbers, expiry dates, status (valid/expired/inactive), merchant info, offer details, prices, and full information."
+					}
+				},
+				{
+					"name": "Cancel Order",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/orders/:id/cancel",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", ":id", "cancel"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Cancel an order."
+					}
+				}
+			]
+		},
+		{
+			"name": "💰 13. Wallet & Coupons Screen",
+			"description": "User wallet coupons with filters (All, Valid, Expired, Inactive)",
+			"item": [
+				{
+					"name": "Get Wallet Coupons (All)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/wallet/coupons",
+							"host": ["{{base_url}}"],
+							"path": ["api", "wallet", "coupons"]
+						},
+						"description": "Get all coupons in user wallet. Returns full coupon data including QR codes (full URLs), offer details, merchant info, status, expiry dates, and images."
+					}
+				},
+				{
+					"name": "Get Valid Coupons",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/wallet/coupons?status=valid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "wallet", "coupons"],
+							"query": [
+								{
+									"key": "status",
+									"value": "valid"
+								}
+							]
+						},
+						"description": "Get only valid coupons from wallet."
+					}
+				},
+				{
+					"name": "Get Expired Coupons",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/wallet/coupons?status=expired",
+							"host": ["{{base_url}}"],
+							"path": ["api", "wallet", "coupons"],
+							"query": [
+								{
+									"key": "status",
+									"value": "expired"
+								}
+							]
+						},
+						"description": "Get expired coupons from wallet."
+					}
+				},
+				{
+					"name": "Get Inactive Coupons",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/wallet/coupons?status=inactive",
+							"host": ["{{base_url}}"],
+							"path": ["api", "wallet", "coupons"],
+							"query": [
+								{
+									"key": "status",
+									"value": "inactive"
+								}
+							]
+						},
+						"description": "Get inactive/not activated coupons from wallet."
+					}
+				},
+				{
+					"name": "Get Coupon Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/wallet/coupons/:id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "wallet", "coupons", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get detailed coupon information including: QR code (full URL), barcode number, coupon code, coupon number, item name, quantity, merchant name, merchant address, order date, coupon expiry date, order price, additional charges, discount value, price after discount, total amount paid, and status."
+					}
+				}
+			]
+		},
+		{
+			"name": "👤 14. Profile Screen",
+			"description": "User profile management with avatar, stats, and referral",
+			"item": [
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "profile"]
+						},
+						"description": "Get authenticated user's profile with full data including: avatar URL (full path), name, email, phone, language, city, governorate, type/gender, and greeting message."
+					}
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Ahmed Ali Updated\",\n    \"email\": \"ahmed.updated@example.com\",\n    \"phone\": \"+201012345679\",\n    \"language\": \"en\",\n    \"city\": \"الجيزة\",\n    \"governorate\": \"الجيزة\",\n    \"type\": \"male\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "profile"]
+						},
+						"description": "Update user profile information including name, email, phone, language, city, governorate, and type/gender."
+					}
+				},
+				{
+					"name": "Upload Avatar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "avatar",
+									"type": "file",
+									"src": [],
+									"description": "Image file (max 2MB, jpeg/png/jpg/gif)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/avatar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "avatar"]
+						},
+						"description": "Upload user avatar image. Returns full image URL."
+					}
+				},
+				{
+					"name": "Delete Avatar",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/avatar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "avatar"]
+						},
+						"description": "Delete user avatar."
+					}
+				},
+				{
+					"name": "Get User Statistics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "stats"]
+						},
+						"description": "Get user statistics: orders count, active coupons count, total spent, and loyalty points."
+					}
+				},
+				{
+					"name": "Get Referral Link",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/referral",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "referral"]
+						},
+						"description": "Get user's referral link for inviting friends. Returns referral code and full referral URL (e.g., http/Google Play.com/ofroo)."
+					}
+				}
+			]
+		},
+		{
+			"name": "⚙️ 15. Settings Screen",
+			"description": "User settings, language, notifications, app info",
+			"item": [
+				{
+					"name": "Get Settings",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/settings",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "settings"]
+						},
+						"description": "Get user settings including language (ar/en) and notification preferences."
+					}
+				},
+				{
+					"name": "Update Settings",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"language\": \"ar\",\n    \"notifications_enabled\": true,\n    \"email_notifications\": true,\n    \"push_notifications\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/settings",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "settings"]
+						},
+						"description": "Update user settings including language (ar/en) and notification preferences."
+					}
+				},
+				{
+					"name": "Change Language",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"language\": \"ar\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/settings",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "settings"]
+						},
+						"description": "Change app language (ar for Arabic, en for English)."
+					}
+				},
+				{
+					"name": "Get App Policy",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/policy",
+							"host": ["{{base_url}}"],
+							"path": ["api", "app", "policy"]
+						},
+						"description": "Get application policy and terms of service. Returns policy content in Arabic and English."
+					}
+				},
+				{
+					"name": "Get About App",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/about",
+							"host": ["{{base_url}}"],
+							"path": ["api", "app", "about"]
+						},
+						"description": "Get about app information including description, features, and social media links (Facebook, Instagram, Snapchat, TikTok)."
+					}
+				},
+				{
+					"name": "Get Help & Support Info",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/help",
+							"host": ["{{base_url}}"],
+							"path": ["api", "app", "help"]
+						},
+						"description": "Get help and support contact information including email (OFROO@GMAIL.COM), WhatsApp number (+20123456789), and working hours."
+					}
+				}
+			]
+		},
+		{
+			"name": "🔔 16. Notifications Screen",
+			"description": "User notifications with filters (All, Read, Unread, Important)",
+			"item": [
+				{
+					"name": "Get Notifications (All)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/notifications?per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "notifications"],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "15"
+								},
+								{
+									"key": "is_read",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "type",
+									"value": "",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get user notifications with pagination. Returns full notification data with: icons (full URLs), titles (AR/EN), messages (AR/EN), timestamps (relative like '15 minutes ago'), read status, notification type, and grouped by date (Today, Yesterday)."
+					}
+				},
+				{
+					"name": "Get Unread Notifications",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/notifications?is_read=false",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "notifications"],
+							"query": [
+								{
+									"key": "is_read",
+									"value": "false"
+								},
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							]
+						},
+						"description": "Get only unread notifications."
+					}
+				},
+				{
+					"name": "Get Read Notifications",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/notifications?is_read=true",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "notifications"],
+							"query": [
+								{
+									"key": "is_read",
+									"value": "true"
+								},
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							]
+						},
+						"description": "Get only read notifications."
+					}
+				},
+				{
+					"name": "Get Important Notifications",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/notifications?type=important",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "notifications"],
+							"query": [
+								{
+									"key": "type",
+									"value": "important"
+								},
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							]
+						},
+						"description": "Get only important notifications."
+					}
+				},
+				{
+					"name": "Mark Notification as Read",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/notifications/:id/read",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "notifications", ":id", "read"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Mark a specific notification as read."
+					}
+				},
+				{
+					"name": "Mark All Notifications as Read",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/notifications/mark-all-read",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "notifications", "mark-all-read"]
+						},
+						"description": "Mark all notifications as read."
+					}
+				},
+				{
+					"name": "Delete Notification",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/notifications/:id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "notifications", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Delete a notification."
+					}
+				}
+			]
+		},
+		{
+			"name": "⭐ 17. Reviews Screen",
+			"description": "Create reviews with ratings for orders",
+			"item": [
+				{
+					"name": "Create Review",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"order_id\": 1,\n    \"merchant_id\": 1,\n    \"overall_rating\": 4,\n    \"staff_attention_rating\": 4,\n    \"service_quality_rating\": 4,\n    \"value_for_money_rating\": 4,\n    \"comment\": \"Great service and food! Highly recommended.\",\n    \"images\": []\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/reviews",
+							"host": ["{{base_url}}"],
+							"path": ["api", "reviews"]
+						},
+						"description": "Create a review for an order. Include overall store rating, staff attention, service quality, value for money (all 1-5 stars), comment (optional, max 500 chars), and optional images."
+					}
+				}
+			]
+		},
+		{
+			"name": "🎁 18. Loyalty Screen",
+			"description": "Loyalty points and rewards",
+			"item": [
+				{
+					"name": "Get Loyalty Account",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/loyalty/account",
+							"host": ["{{base_url}}"],
+							"path": ["api", "loyalty", "account"]
+						},
+						"description": "Get user loyalty account information including current points balance and tier."
+					}
+				},
+				{
+					"name": "Get Loyalty Transactions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/loyalty/transactions",
+							"host": ["{{base_url}}"],
+							"path": ["api", "loyalty", "transactions"]
+						},
+						"description": "Get loyalty points transactions history with full details."
+					}
+				},
+				{
+					"name": "Redeem Loyalty Points",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"points\": 100,\n    \"description\": \"Redeemed for discount coupon\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/loyalty/redeem",
+							"host": ["{{base_url}}"],
+							"path": ["api", "loyalty", "redeem"]
+						},
+						"description": "Redeem loyalty points for rewards or discounts."
+					}
+				}
+			]
+		},
+		{
+			"name": "🎫 19. Support Screen",
+			"description": "Support tickets management",
+			"item": [
+				{
+					"name": "Create Support Ticket",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"subject\": \"Need Help with Order\",\n    \"message\": \"I need assistance with my order #12345. The delivery was delayed.\",\n    \"category\": \"order_issue\",\n    \"order_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/support/tickets",
+							"host": ["{{base_url}}"],
+							"path": ["api", "support", "tickets"]
+						},
+						"description": "Create a new support ticket."
+					}
+				},
+				{
+					"name": "Get Support Tickets",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/support/tickets",
+							"host": ["{{base_url}}"],
+							"path": ["api", "support", "tickets"]
+						},
+						"description": "Get all user support tickets with full details."
+					}
+				},
+				{
+					"name": "Get Ticket Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/support/tickets/:id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "support", "tickets", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get specific ticket details including all messages and responses."
+					}
+				}
+			]
+		},
+		{
+			"name": "🔐 20. Change Password Screen",
+			"description": "Change password functionality",
+			"item": [
+				{
+					"name": "Change Password",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"current_password\": \"password123\",\n    \"new_password\": \"newpassword123\",\n    \"new_password_confirmation\": \"newpassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/password",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "password"]
+						},
+						"description": "Change user password. Requires current password, new password, and confirmation."
+					}
+				}
+			]
+		},
+		{
+			"name": "👥 21. Refer a Friend Screen",
+			"description": "Referral and invite friend functionality",
+			"item": [
+				{
+					"name": "Get Referral Link",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/referral",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "referral"]
+						},
+						"description": "Get user's referral link for inviting friends. Returns referral code and full referral URL (e.g., http/Google Play.com/ofroo) for sharing via social media (Facebook, Instagram, TikTok, Snapchat, WhatsApp)."
+					}
+				},
+				{
+					"name": "Get Referral Statistics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user/referral/stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "referral", "stats"]
+						},
+						"description": "Get referral statistics including number of referrals, rewards earned, etc."
+					}
+				}
+			]
+		},
+		{
+			"name": "🚪 22. Logout Screen",
+			"description": "Logout functionality",
+			"item": [
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/auth/logout",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "logout"]
+						},
+						"description": "Logout current user and revoke access token. Shows confirmation dialog before logout."
+					}
+				}
+			]
+		},
+		{
+			"name": "🗑️ 23. Delete Account Screen",
+			"description": "Account deletion with password confirmation",
+			"item": [
+				{
+					"name": "Delete Account",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/account",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "account"]
+						},
+						"description": "Delete user account. Requires password verification. Shows confirmation dialog. This will anonymize user data (GDPR compliant)."
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://127.0.0.1:8000",
+			"type": "string",
+			"description": "Base URL for API. Change to your server URL in production."
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string",
+			"description": "Access token from login/register. Auto-populated after authentication."
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Auto-set access token from login response",
+					"// After login, copy token to access_token variable"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Auto-extract token from login/register responses",
+					"if (pm.response.code === 200 || pm.response.code === 201) {",
+					"    var jsonData = pm.response.json();",
+					"    if (jsonData.token || jsonData.data?.token) {",
+					"        pm.collectionVariables.set('access_token', jsonData.token || jsonData.data.token);",
+					"    }",
+					"}"
+				]
+			}
+		}
+	]
+}
