@@ -66,8 +66,7 @@ class OfferSeeder extends Seeder
                 $offer->branches()->sync([$branch->id]);
             }
 
-            $barcode = 'CUP-' . strtoupper($faker->bothify('????##??'));
-            // discount_type: table may be enum('percent','amount') from older migration; use 'percent'
+            $barcode = 'OFF-' . strtoupper($faker->unique()->bothify('########'));
             Coupon::create([
                 'offer_id' => $offer->id,
                 'title' => $title['ar'],

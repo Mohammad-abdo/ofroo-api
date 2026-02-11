@@ -32,12 +32,6 @@ class CouponSeeder extends Seeder
 
         $statuses = ['active', 'used', 'expired'];
         $discountTypes = ['percent', 'amount'];
-        if (\Schema::hasColumn('coupons', 'discount_type')) {
-            $colType = \DB::getSchemaBuilder()->getColumnType('coupons', 'discount_type');
-            if ($colType === 'string') {
-                $discountTypes = ['percentage', 'fixed'];
-            }
-        }
 
         foreach ($merchants as $merchant) {
             $merchantOffers = $offers->where('merchant_id', $merchant->id);
@@ -53,10 +47,10 @@ class CouponSeeder extends Seeder
                     ? $faker->dateTimeBetween('-30 days', '-1 day')
                     : $faker->dateTimeBetween('now', '+90 days');
                 $discountType = $faker->randomElement($discountTypes);
-                $discountVal = $discountType === 'percent' || $discountType === 'percentage'
+                $discountVal = $discountType === 'percent'
                     ? $faker->randomElement([10, 15, 20, 25, 30, 40, 50])
                     : $faker->randomFloat(2, 5, 50);
-                $barcode = 'CUP-' . strtoupper($faker->bothify('????##??'));
+                $barcode = 'CUP-' . strtoupper($faker->unique()->bothify('????##??'));
 
                 $data = [
                     'offer_id' => $offer->id,

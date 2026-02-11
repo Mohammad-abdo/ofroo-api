@@ -219,18 +219,24 @@ class GovernorateSeeder extends Seeder
         ];
 
         foreach ($governorates as $g) {
-            $gov = Governorate::create([
-                'name_ar' => $g['name_ar'],
-                'name_en' => $g['name_en'],
-                'order_index' => $g['order_index'],
-            ]);
+            $gov = Governorate::firstOrCreate(
+                ['name_ar' => $g['name_ar']],
+                [
+                    'name_en' => $g['name_en'],
+                    'order_index' => $g['order_index'],
+                ]
+            );
             foreach ($g['cities'] as $c) {
-                City::create([
-                    'governorate_id' => $gov->id,
-                    'name_ar' => $c['name_ar'],
-                    'name_en' => $c['name_en'],
-                    'order_index' => $c['order_index'],
-                ]);
+                City::firstOrCreate(
+                    [
+                        'governorate_id' => $gov->id,
+                        'name_ar' => $c['name_ar'],
+                    ],
+                    [
+                        'name_en' => $c['name_en'],
+                        'order_index' => $c['order_index'],
+                    ]
+                );
             }
         }
     }

@@ -13,6 +13,7 @@ class Category extends Model
         'name_en',
         'order_index',
         'parent_id',
+        'image',
     ];
 
     /**

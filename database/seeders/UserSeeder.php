@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Models\City;
+use App\Models\Governorate;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -21,10 +23,15 @@ class UserSeeder extends Seeder
         $userRole = Role::where('name', 'user')->first();
         $merchantRole = Role::where('name', 'merchant')->first();
 
-        // Egypt governorates
-        $egyptGovernorates = ['القاهرة', 'الجيزة', 'الإسكندرية', 'المنصورة', 'طنطا', 'أسيوط', 'الأقصر', 'أسوان', 'بورسعيد', 'السويس', 'الإسماعيلية', 'شبرا الخيمة', 'زقازيق', 'بنها', 'كفر الشيخ', 'دمياط', 'المنيا', 'سوهاج', 'قنا', 'البحر الأحمر', 'مطروح', 'شمال سيناء', 'جنوب سيناء', 'الوادي الجديد', 'البحيرة', 'الدقهلية', 'الشرقية', 'القليوبية', 'الفيوم', 'بني سويف'];
+        $governorates = Governorate::with('cities')->get();
+        if ($governorates->isEmpty()) {
+            $this->command->warn('No governorates found. Run GovernorateSeeder first.');
+            return;
+        }
 
-        // Admin users
+        $genders = ['male', 'female'];
+
+        // Admin user
         User::firstOrCreate(
             ['email' => 'admin@ofroo.com'],
             [
@@ -34,26 +41,34 @@ class UserSeeder extends Seeder
                 'language' => 'en',
                 'role_id' => $adminRole->id,
                 'email_verified_at' => now(),
-                'city' => $faker->randomElement($egyptGovernorates),
                 'country' => 'مصر',
+                'gender' => $faker->randomElement($genders),
+                'city_id' => $governorates->first()->cities->first()?->id,
+                'governorate_id' => $governorates->first()->id,
             ]
         );
 
-        // Create 50 regular users
+        // Create 50 regular users (firstOrCreate by email so re-seed doesn't duplicate)
         for ($i = 1; $i <= 50; $i++) {
-            User::create([
-                'name' => $faker->name(),
-                'email' => "user{$i}@example.com",
-                'phone' => '+20' . $faker->unique()->numerify('##########'),
-                'password' => Hash::make('password'),
-                'language' => $faker->randomElement(['ar', 'en']),
-                'role_id' => $userRole->id,
-                'email_verified_at' => $faker->optional(0.8)->dateTimeBetween('-1 year', 'now'),
-                'last_location_lat' => $faker->latitude(30.0, 31.5),
-                'last_location_lng' => $faker->longitude(29.0, 32.5),
-                'city' => $faker->randomElement($egyptGovernorates),
-                'country' => 'مصر',
-            ]);
+            $gov = $governorates->random();
+            $city = $gov->cities->random();
+            User::firstOrCreate(
+                ['email' => "user{$i}@example.com"],
+                [
+                    'name' => $faker->name(),
+                    'phone' => '+20' . $faker->unique()->numerify('##########'),
+                    'password' => Hash::make('password'),
+                    'language' => $faker->randomElement(['ar', 'en']),
+                    'role_id' => $userRole->id,
+                    'email_verified_at' => $faker->optional(0.8)->dateTimeBetween('-1 year', 'now'),
+                    'last_location_lat' => $faker->latitude(30.0, 31.5),
+                    'last_location_lng' => $faker->longitude(29.0, 32.5),
+                    'country' => 'مصر',
+                    'gender' => $faker->randomElement($genders),
+                    'city_id' => $city->id,
+                    'governorate_id' => $gov->id,
+                ]
+            );
         }
     }
 }

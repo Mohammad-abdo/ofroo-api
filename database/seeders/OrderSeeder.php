@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Coupon;
 use App\Models\Offer;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -67,31 +66,7 @@ class OrderSeeder extends Seeder
                         'status' => 'success',
                     ],
                 ]);
-
-                // Create coupons for the order
-                // Link to the offer's coupon template if it exists, otherwise create new ones
-                $offerCoupon = $offer->coupon; // The template coupon created by merchant
-                
-                for ($j = 0; $j < $quantity; $j++) {
-                    $couponStatus = $faker->randomElement(['reserved', 'paid', 'activated', 'used', 'expired']);
-                    
-                    Coupon::create([
-                        'order_id' => $order->id,
-                        'offer_id' => $offer->id,
-                        'category_id' => $offer->category_id, // Required field
-                        'user_id' => $user->id,
-                        'coupon_code' => 'CPN' . strtoupper($faker->unique()->bothify('########')),
-                        'barcode_value' => $faker->unique()->numerify('##########'),
-                        'usage_limit' => $offerCoupon ? $offerCoupon->usage_limit : 1, // Use offer's coupon template limit
-                        'times_used' => $couponStatus === 'used' ? 1 : 0,
-                        'status' => $couponStatus,
-                        'reserved_at' => $order->created_at,
-                        'activated_at' => in_array($couponStatus, ['activated', 'used']) ? $faker->dateTimeBetween($order->created_at, 'now') : null,
-                        'used_at' => $couponStatus === 'used' ? $faker->dateTimeBetween($order->created_at, 'now') : null,
-                        'created_by' => $offer->merchant_id,
-                        'created_by_type' => 'system', // Created by system when order is paid
-                    ]);
-                }
+                // Note: Coupons table was refactored to template-only (no order_id). Order-linked coupons are not seeded.
             }
         }
     }

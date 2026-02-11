@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Branch;
+use App\Models\Governorate;
 use App\Models\Merchant;
 use App\Models\Role;
 use App\Models\User;
@@ -20,9 +21,14 @@ class MerchantSeeder extends Seeder
     {
         $faker = Faker::create('ar_EG');
         $merchantRole = Role::where('name', 'merchant')->first();
-        
-        // Egypt governorates
-        $egyptGovernorates = ['القاهرة', 'الجيزة', 'الإسكندرية', 'المنصورة', 'طنطا', 'أسيوط', 'الأقصر', 'أسوان', 'بورسعيد', 'السويس', 'الإسماعيلية', 'شبرا الخيمة', 'زقازيق', 'بنها', 'كفر الشيخ', 'دمياط', 'المنيا', 'سوهاج', 'قنا', 'البحر الأحمر', 'مطروح', 'شمال سيناء', 'جنوب سيناء', 'الوادي الجديد', 'البحيرة', 'الدقهلية', 'الشرقية', 'القليوبية', 'الفيوم', 'بني سويف'];
+        $governorates = Governorate::with('cities')->get();
+
+        if ($governorates->isEmpty()) {
+            $this->command->warn('No governorates found. Run GovernorateSeeder first.');
+            return;
+        }
+
+        $genders = ['male', 'female'];
 
         $merchants = [
             [
@@ -93,38 +99,50 @@ class MerchantSeeder extends Seeder
         ];
 
         foreach ($merchants as $index => $merchantData) {
+            $email = 'merchant' . ($index + 1) . '@ofroo.com';
             $phoneNumber = '+20' . $faker->unique()->numerify('##########');
-            $merchantUser = User::create([
-                'name' => $merchantData['name'],
-                'email' => strtolower(str_replace(' ', '', $merchantData['name'])) . '@merchant.com',
-                'phone' => $phoneNumber,
-                'password' => Hash::make('password'),
-                'language' => 'ar',
-                'role_id' => $merchantRole->id,
-                'email_verified_at' => now(),
-                'city' => $faker->randomElement($egyptGovernorates),
-                'country' => 'مصر',
-            ]);
+            $gov = $governorates->random();
+            $city = $gov->cities->random();
 
-            $merchantCity = $faker->randomElement($egyptGovernorates);
-            $merchant = Merchant::create([
-                'user_id' => $merchantUser->id,
-                'company_name' => $merchantData['name'],
-                'company_name_ar' => $merchantData['name_ar'],
-                'company_name_en' => $merchantData['name_en'],
-                'description' => $merchantData['description'],
-                'description_ar' => $merchantData['description_ar'],
-                'description_en' => $merchantData['description_en'],
-                'address' => $merchantData['address'],
-                'address_ar' => $merchantData['address_ar'],
-                'address_en' => $merchantData['address_en'],
-                'phone' => $phoneNumber,
-                'whatsapp_link' => 'https://wa.me/' . str_replace('+', '', $phoneNumber),
-                'city' => $merchantCity,
-                'country' => 'مصر',
-                'approved' => true,
-            ]);
+            $merchantUser = User::firstOrCreate(
+                ['email' => $email],
+                [
+                    'name' => $merchantData['name'],
+                    'phone' => $phoneNumber,
+                    'password' => Hash::make('password'),
+                    'language' => 'ar',
+                    'role_id' => $merchantRole->id,
+                    'email_verified_at' => now(),
+                    'country' => 'مصر',
+                    'gender' => $faker->randomElement($genders),
+                    'city_id' => $city->id,
+                    'governorate_id' => $gov->id,
+                ]
+            );
 
+            $merchant = Merchant::firstOrCreate(
+                ['user_id' => $merchantUser->id],
+                [
+                    'company_name' => $merchantData['name'],
+                    'company_name_ar' => $merchantData['name_ar'],
+                    'company_name_en' => $merchantData['name_en'],
+                    'description' => $merchantData['description'],
+                    'description_ar' => $merchantData['description_ar'],
+                    'description_en' => $merchantData['description_en'],
+                    'address' => $merchantData['address'],
+                    'address_ar' => $merchantData['address_ar'],
+                    'address_en' => $merchantData['address_en'],
+                    'phone' => $phoneNumber,
+                    'whatsapp_link' => 'https://wa.me/' . str_replace('+', '', $phoneNumber),
+                    'city' => $city->name_ar,
+                    'country' => 'مصر',
+                    'approved' => true,
+                ]
+            );
+
+            if (!$merchant->wasRecentlyCreated) {
+                continue;
+            }
             Branch::create([
                 'merchant_id' => $merchant->id,
                 'name' => $merchantData['name'],
@@ -151,38 +169,50 @@ class MerchantSeeder extends Seeder
 
         // Create 20 more random merchants
         for ($i = 6; $i <= 25; $i++) {
+            $email = "merchant{$i}@example.com";
             $phoneNumber = '+20' . $faker->unique()->numerify('##########');
-            $merchantCity = $faker->randomElement($egyptGovernorates);
-            $merchantUser = User::create([
-                'name' => $faker->company(),
-                'email' => "merchant{$i}@example.com",
-                'phone' => $phoneNumber,
-                'password' => Hash::make('password'),
-                'language' => 'ar',
-                'role_id' => $merchantRole->id,
-                'email_verified_at' => $faker->optional(0.9)->dateTimeBetween('-6 months', 'now'),
-                'city' => $merchantCity,
-                'country' => 'مصر',
-            ]);
+            $gov = $governorates->random();
+            $city = $gov->cities->random();
 
-            $merchant = Merchant::create([
-                'user_id' => $merchantUser->id,
-                'company_name' => $faker->company(),
-                'company_name_ar' => $faker->company() . ' (عربي)',
-                'company_name_en' => $faker->company(),
-                'description' => $faker->text(200),
-                'description_ar' => $faker->realText(200),
-                'description_en' => $faker->text(200),
-                'address' => $faker->address(),
-                'address_ar' => $faker->address(),
-                'address_en' => $faker->address(),
-                'phone' => $phoneNumber,
-                'whatsapp_link' => 'https://wa.me/' . str_replace('+', '', $phoneNumber),
-                'city' => $merchantCity,
-                'country' => 'مصر',
-                'approved' => $faker->boolean(80),
-            ]);
+            $merchantUser = User::firstOrCreate(
+                ['email' => $email],
+                [
+                    'name' => $faker->company(),
+                    'phone' => $phoneNumber,
+                    'password' => Hash::make('password'),
+                    'language' => 'ar',
+                    'role_id' => $merchantRole->id,
+                    'email_verified_at' => $faker->optional(0.9)->dateTimeBetween('-6 months', 'now'),
+                    'country' => 'مصر',
+                    'gender' => $faker->randomElement($genders),
+                    'city_id' => $city->id,
+                    'governorate_id' => $gov->id,
+                ]
+            );
 
+            $merchant = Merchant::firstOrCreate(
+                ['user_id' => $merchantUser->id],
+                [
+                    'company_name' => $faker->company(),
+                    'company_name_ar' => $faker->company() . ' (عربي)',
+                    'company_name_en' => $faker->company(),
+                    'description' => $faker->text(200),
+                    'description_ar' => $faker->realText(200),
+                    'description_en' => $faker->text(200),
+                    'address' => $faker->address(),
+                    'address_ar' => $faker->address(),
+                    'address_en' => $faker->address(),
+                    'phone' => $phoneNumber,
+                    'whatsapp_link' => 'https://wa.me/' . str_replace('+', '', $phoneNumber),
+                    'city' => $city->name_ar,
+                    'country' => 'مصر',
+                    'approved' => $faker->boolean(80),
+                ]
+            );
+
+            if (!$merchant->wasRecentlyCreated) {
+                continue;
+            }
             Branch::create([
                 'merchant_id' => $merchant->id,
                 'name' => $merchant->company_name,

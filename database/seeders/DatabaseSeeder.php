@@ -15,6 +15,8 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
+            // Locations first (users/merchants need city_id, governorate_id)
+            GovernorateSeeder::class,
             // Core seeders
             RoleSeeder::class,
             UserSeeder::class,
