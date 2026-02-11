@@ -64,7 +64,7 @@ class AuthController extends Controller
 
         // Log login attempt
         LoginAttempt::create([
-            'user_id' => $user?->id,
+            'user_id' => $user ? $user->id : null,
             'email' => $request->email,
             'phone' => $request->phone,
             'ip_address' => $request->ip(),
@@ -79,12 +79,14 @@ class AuthController extends Controller
         }
 
         // Update login attempt as successful
-        LoginAttempt::where('user_id', $user->id)
+        $loginAttempt = LoginAttempt::where('user_id', $user->id)
             ->where('email', $request->email ?? null)
             ->where('phone', $request->phone ?? null)
             ->latest()
-            ->first()
-            ?->update(['success' => true]);
+            ->first();
+        if ($loginAttempt) {
+            $loginAttempt->update(['success' => true]);
+        }
 
         $token = $user->createToken('auth_token')->plainTextToken;
 

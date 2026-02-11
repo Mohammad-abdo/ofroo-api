@@ -43,7 +43,7 @@ class UserSeeder extends Seeder
                 'email_verified_at' => now(),
                 'country' => 'مصر',
                 'gender' => $faker->randomElement($genders),
-                'city_id' => $governorates->first()->cities->first()?->id,
+                'city_id' => ($firstCity = $governorates->first()->cities->first()) ? $firstCity->id : null,
                 'governorate_id' => $governorates->first()->id,
             ]
         );

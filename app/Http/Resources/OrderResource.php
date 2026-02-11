@@ -42,8 +42,8 @@ class OrderResource extends JsonResource
                         'coupon_code' => $coupon->coupon_code,
                         'barcode_value' => $coupon->barcode_value,
                         'status' => $coupon->status,
-                        'reserved_at' => $coupon->reserved_at?->toIso8601String(),
-                        'activated_at' => $coupon->activated_at?->toIso8601String(),
+                        'reserved_at' => $coupon->reserved_at ? $coupon->reserved_at->toIso8601String() : null,
+                        'activated_at' => $coupon->activated_at ? $coupon->activated_at->toIso8601String() : null,
                     ];
                 });
             }),

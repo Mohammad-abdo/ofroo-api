@@ -73,7 +73,7 @@ class QrActivationService
             $coupon->update([
                 'status' => 'activated',
                 'activated_at' => now(),
-                'activated_by' => $activatedBy?->id,
+                'activated_by' => $activatedBy ? $activatedBy->id : null,
                 'activation_device_id' => $metadata['device_id'] ?? null,
                 'activation_ip' => $metadata['ip_address'] ?? null,
             ]);
@@ -96,7 +96,7 @@ class QrActivationService
             // Log activity
             $activityLogService = app(ActivityLogService::class);
             $activityLogService->log(
-                $activatedBy?->id,
+                $activatedBy ? $activatedBy->id : null,
                 'coupon_activated',
                 Coupon::class,
                 $coupon->id,

@@ -107,7 +107,8 @@ class ReportController extends Controller
         }
 
         $filters = $request->all();
-        $filters['language'] = $request->user()?->language ?? 'ar';
+        $user = $request->user();
+        $filters['language'] = ($user ? $user->language : null) ?? 'ar';
 
         // Map type to method name
         $methodMap = [

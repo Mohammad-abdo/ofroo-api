@@ -173,7 +173,7 @@ class InvoiceGenerationService
         // Log activity
         $activityLogService = app(ActivityLogService::class);
         $activityLogService->log(
-            $admin?->id,
+            $admin ? $admin->id : null,
             'invoice_reissued',
             MerchantInvoice::class,
             $invoice->id,
@@ -196,7 +196,7 @@ class InvoiceGenerationService
         // Log activity
         $activityLogService = app(ActivityLogService::class);
         $activityLogService->log(
-            $admin?->id,
+            $admin ? $admin->id : null,
             'invoice_cancelled',
             MerchantInvoice::class,
             $invoice->id,

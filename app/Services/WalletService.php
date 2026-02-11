@@ -38,18 +38,18 @@ class WalletService
                 'wallet_type' => 'merchant',
                 'transaction_type' => $transactionType,
                 'related_type' => $related ? get_class($related) : null,
-                'related_id' => $related?->id,
+                'related_id' => $related ? $related->id : null,
                 'amount' => $amount,
                 'balance_before' => $balanceBefore,
                 'balance_after' => $balanceAfter,
                 'note' => $note,
-                'created_by_user_id' => $createdBy?->id,
+                'created_by_user_id' => $createdBy ? $createdBy->id : null,
             ]);
 
             // Log activity
             $activityLogService = app(ActivityLogService::class);
             $activityLogService->log(
-                $createdBy?->id,
+                $createdBy ? $createdBy->id : null,
                 'wallet_credited',
                 MerchantWallet::class,
                 $wallet->id,
@@ -98,18 +98,18 @@ class WalletService
                 'wallet_type' => 'merchant',
                 'transaction_type' => $transactionType,
                 'related_type' => $related ? get_class($related) : null,
-                'related_id' => $related?->id,
+                'related_id' => $related ? $related->id : null,
                 'amount' => -$amount,
                 'balance_before' => $balanceBefore,
                 'balance_after' => $balanceAfter,
                 'note' => $note,
-                'created_by_user_id' => $createdBy?->id,
+                'created_by_user_id' => $createdBy ? $createdBy->id : null,
             ]);
 
             // Log activity
             $activityLogService = app(ActivityLogService::class);
             $activityLogService->log(
-                $createdBy?->id,
+                $createdBy ? $createdBy->id : null,
                 'wallet_debited',
                 MerchantWallet::class,
                 $wallet->id,
@@ -146,12 +146,12 @@ class WalletService
                 'wallet_type' => 'admin',
                 'transaction_type' => $transactionType,
                 'related_type' => $related ? get_class($related) : null,
-                'related_id' => $related?->id,
+                'related_id' => $related ? $related->id : null,
                 'amount' => $amount,
                 'balance_before' => $balanceBefore,
                 'balance_after' => $balanceAfter,
                 'note' => $note,
-                'created_by_user_id' => $createdBy?->id,
+                'created_by_user_id' => $createdBy ? $createdBy->id : null,
             ]);
 
             DB::commit();
@@ -185,12 +185,12 @@ class WalletService
                 'wallet_type' => 'admin',
                 'transaction_type' => $transactionType,
                 'related_type' => $related ? get_class($related) : null,
-                'related_id' => $related?->id,
+                'related_id' => $related ? $related->id : null,
                 'amount' => -$amount,
                 'balance_before' => $balanceBefore,
                 'balance_after' => $balanceAfter,
                 'note' => $note,
-                'created_by_user_id' => $createdBy?->id,
+                'created_by_user_id' => $createdBy ? $createdBy->id : null,
             ]);
 
             DB::commit();
@@ -287,7 +287,7 @@ class WalletService
         // Log activity
         $activityLogService = app(ActivityLogService::class);
         $activityLogService->log(
-            $admin?->id,
+            $admin ? $admin->id : null,
             'wallet_frozen',
             MerchantWallet::class,
             $wallet->id,
@@ -309,7 +309,7 @@ class WalletService
         // Log activity
         $activityLogService = app(ActivityLogService::class);
         $activityLogService->log(
-            $admin?->id,
+            $admin ? $admin->id : null,
             'wallet_unfrozen',
             MerchantWallet::class,
             $wallet->id,

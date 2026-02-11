@@ -31,7 +31,7 @@ class UserResource extends JsonResource
                     'name_en' => $this->role->name_en,
                 ];
             }),
-            'email_verified_at' => $this->email_verified_at?->toIso8601String(),
+            'email_verified_at' => $this->email_verified_at ? $this->email_verified_at->toIso8601String() : null,
             'created_at' => $this->created_at->toIso8601String(),
         ];
     }

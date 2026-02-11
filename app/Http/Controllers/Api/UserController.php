@@ -278,7 +278,7 @@ class UserController extends Controller
                     'title_en' => $data['title_en'] ?? $data['title'] ?? '',
                     'message_ar' => $data['message_ar'] ?? $data['message'] ?? '',
                     'message_en' => $data['message_en'] ?? $data['message'] ?? '',
-                    'read_at' => $notification->read_at?->toIso8601String(),
+                    'read_at' => $notification->read_at ? $notification->read_at->toIso8601String() : null,
                     'created_at' => $notification->created_at->toIso8601String(),
                 ];
             }),

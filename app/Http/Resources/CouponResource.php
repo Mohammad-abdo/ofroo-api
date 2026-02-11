@@ -20,7 +20,7 @@ class CouponResource extends JsonResource
             'discount_type' => $this->discount_type ?? 'percentage',
             'barcode' => $this->barcode ?? $this->coupon_code ?? null,
             'coupon_code' => $this->coupon_code ?? $this->barcode ?? null,
-            'expires_at' => $this->expires_at?->toIso8601String(),
+            'expires_at' => $this->expires_at ? $this->expires_at->toIso8601String() : null,
             'status' => $this->status,
             'created_at' => $this->created_at->toIso8601String(),
         ];

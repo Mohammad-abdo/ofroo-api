@@ -127,7 +127,7 @@ class OrderController extends Controller
                 'merchant_id' => $merchantId,
                 'total_amount' => $totalAmount,
                 'payment_method' => $paymentMethod,
-                'payment_status' => $paymentMethod === 'cash' ? 'pending' : ($payment?->status ?? 'pending'),
+                'payment_status' => $paymentMethod === 'cash' ? 'pending' : ($payment ? $payment->status : null) ?? 'pending',
                 'notes' => $request->notes,
             ]);
 

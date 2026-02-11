@@ -22,7 +22,7 @@ class MerchantSuspensionService
                 'suspended_at' => now(),
                 'suspended_until' => $until,
                 'suspension_reason' => $reason,
-                'suspended_by_admin_id' => $admin?->id,
+                'suspended_by_admin_id' => $admin ? $admin->id : null,
             ]);
 
             // Hide all active offers
@@ -42,14 +42,14 @@ class MerchantSuspensionService
             // Log activity
             $activityLogService = app(ActivityLogService::class);
             $activityLogService->log(
-                $admin?->id,
+                $admin ? $admin->id : null,
                 'merchant_suspended',
                 Merchant::class,
                 $merchant->id,
                 "Merchant {$merchant->id} suspended. Reason: {$reason}",
                 ['status' => 'active'],
                 ['status' => 'suspended'],
-                ['until' => $until?->toIso8601String(), 'freeze_wallet' => $freezeWallet]
+                ['until' => $until ? $until->toIso8601String() : null, 'freeze_wallet' => $freezeWallet]
             );
 
             DB::commit();
@@ -84,7 +84,7 @@ class MerchantSuspensionService
             // Log activity
             $activityLogService = app(ActivityLogService::class);
             $activityLogService->log(
-                $admin?->id,
+                $admin ? $admin->id : null,
                 'merchant_unfrozen',
                 Merchant::class,
                 $merchant->id,
@@ -116,7 +116,7 @@ class MerchantSuspensionService
                 'status' => 'disabled',
                 'suspended_at' => now(),
                 'suspension_reason' => $reason,
-                'suspended_by_admin_id' => $admin?->id,
+                'suspended_by_admin_id' => $admin ? $admin->id : null,
             ]);
 
             // Hide all offers
@@ -129,7 +129,7 @@ class MerchantSuspensionService
             // Log activity
             $activityLogService = app(ActivityLogService::class);
             $activityLogService->log(
-                $admin?->id,
+                $admin ? $admin->id : null,
                 'merchant_disabled',
                 Merchant::class,
                 $merchant->id,

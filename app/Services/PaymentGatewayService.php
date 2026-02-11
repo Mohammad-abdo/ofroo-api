@@ -21,7 +21,7 @@ class PaymentGatewayService
 
         // Create payment record (order_id will be set later if order is created)
         $payment = Payment::create([
-            'order_id' => $order?->id,
+            'order_id' => $order ? $order->id : null,
             'amount' => $amount,
             'gateway' => $gatewayName,
             'status' => 'pending',

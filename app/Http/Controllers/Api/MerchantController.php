@@ -283,7 +283,8 @@ class MerchantController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        $language = $request->get('language', $request->user()?->language ?? 'ar');
+        $userReq = $request->user();
+        $language = $request->get('language', $userReq ? $userReq->language : null) ?? 'ar';
         return response()->json([
             'data' => $locations->map(function ($location) use ($language) {
                 $name = $language === 'ar' ? ($location->name_ar ?: $location->name_en ?: $location->name)
@@ -360,7 +361,8 @@ class MerchantController extends Controller
 
         $location = $merchant->branches()->findOrFail($id);
 
-        $language = $request->get('language', $request->user()?->language ?? 'ar');
+        $userReq = $request->user();
+        $language = $request->get('language', $userReq ? $userReq->language : null) ?? 'ar';
         $name = $language === 'ar' ? ($location->name_ar ?: $location->name_en ?: $location->name) : ($location->name_en ?: $location->name_ar ?: $location->name);
         return response()->json([
             'data' => [
@@ -1503,9 +1505,9 @@ class MerchantController extends Controller
                 'message_ar' => $data['message_ar'] ?? $data['message'] ?? '',
                 'message_en' => $data['message_en'] ?? $data['message'] ?? '',
                 'type' => $data['type'] ?? $notification->type ?? 'info',
-                'read_at' => $notification->read_at?->toIso8601String(),
-                'created_at' => $notification->created_at?->toIso8601String(),
-                'updated_at' => $notification->updated_at?->toIso8601String(),
+                'read_at' => $notification->read_at ? $notification->read_at->toIso8601String() : null,
+                'created_at' => $notification->created_at ? $notification->created_at->toIso8601String() : null,
+                'updated_at' => $notification->updated_at ? $notification->updated_at->toIso8601String() : null,
             ];
         });
 
@@ -1833,13 +1835,13 @@ class MerchantController extends Controller
                     'id' => $coupon->id,
                     'coupon_code' => $coupon->coupon_code,
                     'barcode_value' => $coupon->barcode_value,
-                    'activated_at' => $coupon->activated_at?->toIso8601String(),
+                    'activated_at' => $coupon->activated_at ? $coupon->activated_at->toIso8601String() : null,
                     'offer' => $coupon->offer ? [
                         'id' => $coupon->offer->id,
                         'title_ar' => $coupon->offer->title_ar,
                         'title_en' => $coupon->offer->title_en,
                     ] : null,
-                    'customer' => $coupon->order?->user?->name ?? 'N/A',
+                    'customer' => ($order = $coupon->order) && $order->user ? $order->user->name : 'N/A',
                     'order_id' => $coupon->order_id,
                 ];
             }),
@@ -1939,8 +1941,8 @@ class MerchantController extends Controller
             return [
                 'id' => $order->id,
                 'created_at' => $order->created_at->toIso8601String(),
-                'description' => $activatedCoupons->first()?->offer?->title_ar ?? $activatedCoupons->first()?->offer?->title_en ?? 'N/A',
-                'item' => $activatedCoupons->first()?->offer?->title_ar ?? $activatedCoupons->first()?->offer?->title_en ?? 'N/A',
+                'description' => (($first = $activatedCoupons->first()) && $first->offer ? $first->offer->title_ar : null) ?? ($first && $first->offer ? $first->offer->title_en : null) ?? 'N/A',
+                'item' => (($first = $activatedCoupons->first()) && $first->offer ? $first->offer->title_ar : null) ?? ($first && $first->offer ? $first->offer->title_en : null) ?? 'N/A',
                 'user' => [
                     'id' => $order->user->id,
                     'name' => $order->user->name,

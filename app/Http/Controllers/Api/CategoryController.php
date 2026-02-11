@@ -15,7 +15,8 @@ class CategoryController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $language = $request->get('language', $request->user()?->language ?? 'ar');
+        $user = $request->user();
+        $language = $request->get('language', $user ? $user->language : null) ?? 'ar';
 
         $categories = Category::whereNull('parent_id')
             ->with(['offers' => fn ($q) => $q->where('status', 'active')->whereNotNull('category_id')->with(['merchant', 'category', 'branches', 'coupons'])])
@@ -44,20 +45,40 @@ class CategoryController extends Controller
     }
 
     /**
-     * Get category details
+     * Get category details with its offers as children (mobile API).
+     * Returns category info + image + children = array of offers (full OfferResource format).
      */
-    public function show(string $id): JsonResponse
+    public function show(Request $request, string $id): JsonResponse
     {
-        $category = Category::with(['parent', 'children'])->findOrFail($id);
+        $user = $request->user();
+        $language = $request->get('language', $user ? $user->language : null) ?? 'ar';
+
+        $category = Category::with([
+            'offers' => function ($q) {
+                $q->where('status', 'active')
+                    ->whereNotNull('category_id')
+                    ->with(['merchant', 'category', 'branches', 'coupons']);
+            },
+        ])->findOrFail($id);
+
+        $offersForCategory = $category->offers->where('category_id', $category->id)->values();
+        $children = $offersForCategory->map(function ($offer) use ($request) {
+            return (new OfferResource($offer))->toArray($request);
+        })->all();
+
+        $name = $language === 'ar'
+            ? ($category->name_ar ?? $category->name_en)
+            : ($category->name_en ?? $category->name_ar);
 
         return response()->json([
             'data' => [
                 'id' => $category->id,
+                'name' => $name,
                 'name_ar' => $category->name_ar,
                 'name_en' => $category->name_en,
                 'order_index' => $category->order_index,
-                'parent' => $category->parent,
-                'children' => $category->children,
+                'image' => $category->image_url,
+                'children' => $children,
             ],
         ]);
     }

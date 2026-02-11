@@ -110,7 +110,7 @@ class AdminController extends Controller
                     ] : null,
                     'total_offers' => 0, // Simplified for now
                     'created_coupons_count' => 0, // Simplified for now
-                    'created_at' => $merchant->created_at?->toIso8601String(),
+                    'created_at' => $merchant->created_at ? $merchant->created_at->toIso8601String() : null,
                 ];
             });
 
@@ -175,7 +175,7 @@ class AdminController extends Controller
                 ],
                 'total_offers' => $merchant->offers()->count(),
                 'created_coupons_count' => $createdCouponsCount,
-                'created_at' => $merchant->created_at?->toIso8601String(),
+                'created_at' => $merchant->created_at ? $merchant->created_at->toIso8601String() : null,
             ],
         ]);
     }
@@ -1015,7 +1015,7 @@ class AdminController extends Controller
                     'name_ar' => $user->role->name_ar,
                     'name_en' => $user->role->name_en,
                 ],
-                'email_verified_at' => $user->email_verified_at?->toIso8601String(),
+                'email_verified_at' => $user->email_verified_at ? $user->email_verified_at->toIso8601String() : null,
                 'total_orders' => $user->orders()->count(),
                 'total_coupons' => $user->coupons()->count(),
                 'used_coupons_count' => $usedCouponsCount,
@@ -1151,8 +1151,8 @@ class AdminController extends Controller
                     'id' => $withdrawal->merchant->id,
                     'company_name' => $withdrawal->merchant->company_name,
                 ],
-                'approved_at' => $withdrawal->approved_at?->toIso8601String(),
-                'created_at' => $withdrawal->created_at?->toIso8601String(),
+                'approved_at' => $withdrawal->approved_at ? $withdrawal->approved_at->toIso8601String() : null,
+                'created_at' => $withdrawal->created_at ? $withdrawal->created_at->toIso8601String() : null,
             ];
         });
 
@@ -1309,7 +1309,7 @@ class AdminController extends Controller
                     'name' => $log->user->name,
                     'email' => $log->user->email,
                 ],
-                'created_at' => $log->created_at?->toIso8601String(),
+                'created_at' => $log->created_at ? $log->created_at->toIso8601String() : null,
             ];
         });
 
@@ -1433,12 +1433,12 @@ class AdminController extends Controller
                 'merchant_id' => $report->merchant_id,
                 'user_id' => $report->user_id,
                 'order_id' => $report->order_id,
-                'coupon_code' => $report->coupon?->code,
-                'merchant_name' => $report->merchant?->company_name,
-                'user_name' => $report->user?->name,
-                'order_total' => $report->order?->total_amount,
+                'coupon_code' => $report->coupon ? $report->coupon->code : null,
+                'merchant_name' => $report->merchant ? $report->merchant->company_name : null,
+                'user_name' => $report->user ? $report->user->name : null,
+                'order_total' => $report->order ? $report->order->total_amount : null,
                 'activation_type' => $report->activation_type,
-                'created_at' => $report->created_at?->toIso8601String(),
+                'created_at' => $report->created_at ? $report->created_at->toIso8601String() : null,
             ];
         });
 
@@ -2250,7 +2250,7 @@ class AdminController extends Controller
                 'payment_status' => $order->payment_status,
                 'items_count' => $order->items()->count(),
                 'coupons_count' => $order->coupons()->count(),
-                'created_at' => $order->created_at?->toIso8601String(),
+                'created_at' => $order->created_at ? $order->created_at->toIso8601String() : null,
             ];
         });
 
@@ -2309,7 +2309,7 @@ class AdminController extends Controller
                         'status' => $coupon->status,
                     ];
                 }),
-                'created_at' => $order->created_at?->toIso8601String(),
+                'created_at' => $order->created_at ? $order->created_at->toIso8601String() : null,
             ],
         ]);
     }
@@ -2865,7 +2865,7 @@ class AdminController extends Controller
         $adminRole = \App\Models\Role::where('name', 'admin')->first();
 
         $query = User::with('role')
-            ->where('role_id', $adminRole?->id);
+            ->where('role_id', $adminRole ? $adminRole->id : null);
 
         if ($request->has('search')) {
             $search = $request->search;
@@ -3955,7 +3955,7 @@ class AdminController extends Controller
                     'name' => $log->user->name,
                     'email' => $log->user->email,
                 ],
-                'created_at' => $log->created_at?->toIso8601String(),
+                'created_at' => $log->created_at ? $log->created_at->toIso8601String() : null,
             ],
         ]);
     }

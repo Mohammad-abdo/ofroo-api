@@ -105,6 +105,23 @@ php artisan serve
 
 The application will be available at `http://localhost:8000`
 
+## بعد السحب على السيرفر / After git pull on server
+
+بعد تنفيذ `git pull` على السيرفر شغّل الأوامر التالية لتحديث الكاش والاعتماديات (حتى لا تحصل أخطاء):
+
+```bash
+cd /path/to/api   # أو مسار مشروع الـ API على السيرفر
+composer install --no-dev --optimize-autoloader
+php artisan config:clear
+php artisan cache:clear
+php artisan route:clear
+php artisan view:clear
+```
+
+- **لا تحذف ملف `.env`** على السيرفر ولا تستبدله بملف من الريبو (الـ `.env` غير مرفوع لأسباب أمان).
+- إذا أضفت متغيرات جديدة في `.env.example` انسخها يدوياً إلى `.env` على السيرفر.
+- إذا كانت هناك migrations جديدة: `php artisan migrate --force`
+
 ## استخدام Docker / Using Docker
 
 ### Docker Compose Setup

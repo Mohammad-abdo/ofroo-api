@@ -14,7 +14,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Ensure View is available (fixes "Target class [view] does not exist" on some servers)
+        if (!$this->app->bound('view')) {
+            $this->app->register(\Illuminate\View\ViewServiceProvider::class);
+        }
     }
 
     /**
@@ -23,7 +26,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+            $user = $request->user();
+            return Limit::perMinute(60)->by($user ? $user->id : $request->ip());
         });
     }
 }

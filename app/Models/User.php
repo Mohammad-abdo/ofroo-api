@@ -126,7 +126,7 @@ class User extends Authenticatable
      */
     public function isAdmin(): bool
     {
-        return $this->role?->name === 'admin';
+        return $this->role ? $this->role->name === 'admin' : false;
     }
 
     /**
@@ -134,7 +134,7 @@ class User extends Authenticatable
      */
     public function isMerchant(): bool
     {
-        return $this->role?->name === 'merchant';
+        return $this->role ? $this->role->name === 'merchant' : false;
     }
 
     /**
@@ -142,7 +142,7 @@ class User extends Authenticatable
      */
     public function isUser(): bool
     {
-        return $this->role?->name === 'user';
+        return $this->role ? $this->role->name === 'user' : false;
     }
 
     /**
@@ -154,7 +154,7 @@ class User extends Authenticatable
             return true; // Admin has all permissions
         }
 
-        return $this->role?->hasPermission($permissionName) ?? false;
+        return $this->role ? ($this->role->hasPermission($permissionName) ?? false) : false;
     }
 
 
