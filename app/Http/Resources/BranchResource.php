@@ -11,12 +11,12 @@ class BranchResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'name' => $this->name,
-            'phone' => $this->phone,
-            'lat' => (float) $this->lat,
-            'lng' => (float) $this->lng,
-            'address' => $this->address,
-            'is_active' => $this->is_active,
+            'name' => $this->name ?? $this->name_ar ?? $this->name_en ?? '',
+            'phone' => $this->phone ?? '',
+            'lat' => $this->lat !== null ? (float) $this->lat : 0,
+            'lng' => $this->lng !== null ? (float) $this->lng : 0,
+            'address' => $this->address ?? $this->address_ar ?? $this->address_en ?? '',
+            'is_active' => (bool) ($this->is_active ?? true),
         ];
     }
 }

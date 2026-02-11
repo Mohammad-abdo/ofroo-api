@@ -25,6 +25,8 @@ class Offer extends Model
         'end_date',
         'location',
         'status', // active, expired, disabled
+        'terms_conditions_ar',
+        'terms_conditions_en',
     ];
 
     protected function casts(): array

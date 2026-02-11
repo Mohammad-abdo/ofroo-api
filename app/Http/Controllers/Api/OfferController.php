@@ -95,14 +95,19 @@ class OfferController extends Controller
     }
 
     /**
-     * Display the specified offer.
+     * Display the specified offer (with full merchant details and terms).
      */
-    public function show(Offer $offer): JsonResponse
+    public function show(Request $request, Offer $offer): JsonResponse
     {
         $offer->load(['merchant', 'category', 'mall', 'branches', 'coupons']);
-        return response()->json([
-            'data' => new OfferResource($offer),
-        ]);
+        $data = (new OfferResource($offer))->toArray($request);
+        // تفاصيل التاجر الكاملة + شروط الاستخدام للعرض
+        if ($offer->merchant) {
+            $data['merchant'] = (new \App\Http\Resources\MerchantResource($offer->merchant, true))->toArray($request);
+        }
+        $data['terms_conditions_ar'] = $offer->terms_conditions_ar ?? '';
+        $data['terms_conditions_en'] = $offer->terms_conditions_en ?? '';
+        return response()->json(['data' => $data]);
     }
 
     /**

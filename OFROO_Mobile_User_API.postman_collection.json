@@ -4,7 +4,7 @@
 		"description": "Complete mobile API collection matching ALL Figma design screens. Every screen has its corresponding endpoints with full image URLs and complete data structures.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "ofroo-mobile-api-figma",
-		"version": "4.0.0"
+		"version": "4.1.0"
 	},
 	"item": [
 		{
@@ -30,9 +30,9 @@
 							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"password\": \"password123\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/login",
+							"raw": "{{base_url}}/api/mobile/auth/login",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "login"]
+							"path": ["api", "mobile", "auth", "login"]
 						},
 						"description": "Login with email and password. Returns access token and user data."
 					}
@@ -56,9 +56,9 @@
 							"raw": "{\n    \"phone\": \"+201012345678\",\n    \"password\": \"password123\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/login",
+							"raw": "{{base_url}}/api/mobile/auth/login",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "login"]
+							"path": ["api", "mobile", "auth", "login"]
 						},
 						"description": "Login with phone number and password."
 					}
@@ -82,9 +82,9 @@
 							"raw": "{\n    \"provider\": \"google\",\n    \"access_token\": \"google_access_token_here\",\n    \"id_token\": \"google_id_token_here\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/social/login",
+							"raw": "{{base_url}}/api/mobile/auth/social/login",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "social", "login"]
+							"path": ["api", "mobile", "auth", "social", "login"]
 						},
 						"description": "Login with Google account. Returns access token."
 					}
@@ -108,9 +108,9 @@
 							"raw": "{\n    \"provider\": \"apple\",\n    \"identity_token\": \"apple_identity_token_here\",\n    \"authorization_code\": \"apple_authorization_code_here\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/social/login",
+							"raw": "{{base_url}}/api/mobile/auth/social/login",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "social", "login"]
+							"path": ["api", "mobile", "auth", "social", "login"]
 						},
 						"description": "Login with Apple account. Returns access token."
 					}
@@ -140,9 +140,9 @@
 							"raw": "{\n    \"name\": \"Ahmed Ali\",\n    \"email\": \"ahmed@example.com\",\n    \"phone\": \"+201012345678\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\",\n    \"language\": \"ar\",\n    \"city\": \"القاهرة\",\n    \"governorate\": \"القاهرة\",\n    \"type\": \"male\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/register",
+							"raw": "{{base_url}}/api/mobile/auth/register",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "register"]
+							"path": ["api", "mobile", "auth", "register"]
 						},
 						"description": "Register a new user account. Returns user data with access token."
 					}
@@ -166,9 +166,9 @@
 							"raw": "{\n    \"provider\": \"google\",\n    \"access_token\": \"google_access_token_here\",\n    \"id_token\": \"google_id_token_here\",\n    \"city\": \"القاهرة\",\n    \"governorate\": \"القاهرة\",\n    \"type\": \"male\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/social/register",
+							"raw": "{{base_url}}/api/mobile/auth/social/register",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "social", "register"]
+							"path": ["api", "mobile", "auth", "social", "register"]
 						},
 						"description": "Register with Google account."
 					}
@@ -192,9 +192,9 @@
 							"raw": "{\n    \"provider\": \"apple\",\n    \"identity_token\": \"apple_identity_token_here\",\n    \"authorization_code\": \"apple_authorization_code_here\",\n    \"city\": \"القاهرة\",\n    \"governorate\": \"القاهرة\",\n    \"type\": \"male\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/social/register",
+							"raw": "{{base_url}}/api/mobile/auth/social/register",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "social", "register"]
+							"path": ["api", "mobile", "auth", "social", "register"]
 						},
 						"description": "Register with Apple account."
 					}
@@ -224,9 +224,9 @@
 							"raw": "{\n    \"phone\": \"+201012345678\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/otp/request",
+							"raw": "{{base_url}}/api/mobile/auth/otp/request",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "otp", "request"]
+							"path": ["api", "mobile", "auth", "otp", "request"]
 						},
 						"description": "Request OTP code for phone number. OTP will be sent via SMS. Returns masked phone number for display."
 					}
@@ -250,9 +250,9 @@
 							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"type\": \"password_reset\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/otp/request",
+							"raw": "{{base_url}}/api/mobile/auth/otp/request",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "otp", "request"]
+							"path": ["api", "mobile", "auth", "otp", "request"]
 						},
 						"description": "Request OTP code via email for password recovery. Returns masked email for display."
 					}
@@ -276,9 +276,9 @@
 							"raw": "{\n    \"phone\": \"+201012345678\",\n    \"otp_code\": \"123456\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/otp/verify",
+							"raw": "{{base_url}}/api/mobile/auth/otp/verify",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "otp", "verify"]
+							"path": ["api", "mobile", "auth", "otp", "verify"]
 						},
 						"description": "Verify OTP code sent to phone and login. Returns access token."
 					}
@@ -302,9 +302,9 @@
 							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"otp_code\": \"123456\",\n    \"type\": \"password_reset\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/otp/verify",
+							"raw": "{{base_url}}/api/mobile/auth/otp/verify",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "otp", "verify"]
+							"path": ["api", "mobile", "auth", "otp", "verify"]
 						},
 						"description": "Verify OTP code sent to email for password recovery."
 					}
@@ -328,9 +328,9 @@
 							"raw": "{\n    \"phone\": \"+201012345678\",\n    \"resend\": true\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/otp/resend",
+							"raw": "{{base_url}}/api/mobile/auth/otp/resend",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "otp", "resend"]
+							"path": ["api", "mobile", "auth", "otp", "resend"]
 						},
 						"description": "Resend OTP code. Returns countdown timer (e.g., 00:50 seconds)."
 					}
@@ -360,9 +360,9 @@
 							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"method\": \"email\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/password/forgot",
+							"raw": "{{base_url}}/api/mobile/auth/password/forgot",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "password", "forgot"]
+							"path": ["api", "mobile", "auth", "password", "forgot"]
 						},
 						"description": "Request password recovery via email. Returns masked email for display."
 					}
@@ -386,9 +386,9 @@
 							"raw": "{\n    \"phone\": \"+201012345678\",\n    \"method\": \"phone\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/password/forgot",
+							"raw": "{{base_url}}/api/mobile/auth/password/forgot",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "password", "forgot"]
+							"path": ["api", "mobile", "auth", "password", "forgot"]
 						},
 						"description": "Request password recovery via phone. Returns masked phone for display."
 					}
@@ -412,9 +412,9 @@
 							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"otp_code\": \"123456\",\n    \"new_password\": \"newpassword123\",\n    \"new_password_confirmation\": \"newpassword123\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/auth/password/reset",
+							"raw": "{{base_url}}/api/mobile/auth/password/reset",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "password", "reset"]
+							"path": ["api", "mobile", "auth", "password", "reset"]
 						},
 						"description": "Reset password after OTP verification. Used in password recovery flow."
 					}
@@ -441,9 +441,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/home",
+							"raw": "{{base_url}}/api/mobile/home",
 							"host": ["{{base_url}}"],
-							"path": ["api", "home"]
+							"path": ["api", "mobile", "home"]
 						},
 						"description": "Get home feed with featured offers, categories, nearby offers, and recommendations. Returns full data with image URLs."
 					}
@@ -464,9 +464,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/offers?page=1",
+							"raw": "{{base_url}}/api/mobile/offers?page=1",
 							"host": ["{{base_url}}"],
-							"path": ["api", "offers"],
+							"path": ["api", "mobile", "offers"],
 							"query": [
 								{
 									"key": "page",
@@ -518,9 +518,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/offers?location=City+Mall&page=1",
+							"raw": "{{base_url}}/api/mobile/offers?location=City+Mall&page=1",
 							"host": ["{{base_url}}"],
-							"path": ["api", "offers"],
+							"path": ["api", "mobile", "offers"],
 							"query": [
 								{
 									"key": "location",
@@ -551,9 +551,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/offers?nearby=true&lat=30.0444&lng=31.2357&distance=5000",
+							"raw": "{{base_url}}/api/mobile/offers?nearby=true&lat=30.0444&lng=31.2357&distance=5000",
 							"host": ["{{base_url}}"],
-							"path": ["api", "offers"],
+							"path": ["api", "mobile", "offers"],
 							"query": [
 								{
 									"key": "nearby",
@@ -597,9 +597,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/categories",
+							"raw": "{{base_url}}/api/mobile/categories",
 							"host": ["{{base_url}}"],
-							"path": ["api", "categories"]
+							"path": ["api", "mobile", "categories"]
 						},
 						"description": "Get all categories with full data including 3D icons/images (full URLs), names in Arabic and English, and descriptions."
 					}
@@ -615,9 +615,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/categories/:id",
+							"raw": "{{base_url}}/api/mobile/categories/:id",
 							"host": ["{{base_url}}"],
-							"path": ["api", "categories", ":id"],
+							"path": ["api", "mobile", "categories", ":id"],
 							"variable": [
 								{
 									"key": "id",
@@ -644,9 +644,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/offers?category=1&page=1",
+							"raw": "{{base_url}}/api/mobile/offers?category=1&page=1",
 							"host": ["{{base_url}}"],
-							"path": ["api", "offers"],
+							"path": ["api", "mobile", "offers"],
 							"query": [
 								{
 									"key": "category",
@@ -683,9 +683,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/search?q=pizza",
+							"raw": "{{base_url}}/api/mobile/search?q=pizza",
 							"host": ["{{base_url}}"],
-							"path": ["api", "search"],
+							"path": ["api", "mobile", "search"],
 							"query": [
 								{
 									"key": "q",
@@ -737,9 +737,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/offers/:id",
+							"raw": "{{base_url}}/api/mobile/offers/:id",
 							"host": ["{{base_url}}"],
-							"path": ["api", "offers", ":id"],
+							"path": ["api", "mobile", "offers", ":id"],
 							"variable": [
 								{
 									"key": "id",
@@ -766,9 +766,16 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/merchants/:id",
+							"raw": "{{base_url}}/api/mobile/merchants/:id?language=ar",
 							"host": ["{{base_url}}"],
-							"path": ["api", "merchants", ":id"],
+							"path": ["api", "mobile", "merchants", ":id"],
+							"query": [
+								{
+									"key": "language",
+									"value": "ar",
+									"description": "ar | en"
+								}
+							],
 							"variable": [
 								{
 									"key": "id",
@@ -776,7 +783,7 @@
 								}
 							]
 						},
-						"description": "Get merchant information including: name (AR/EN), logo (full URL), rating, location, address, phone, email, website, social media links, and special offers."
+						"description": "صفحة تفاصيل التاجر: بيانات التاجر (الاسم، الشعار، المدينة، التصنيف، التقييم، عدد التقييمات، الوصف، الهاتف، واتساب، العنوان، الفروع) + أول 10 عروض نشطة (عروض التاجر الخاصة). لا يتطلب مصادقة."
 					}
 				},
 				{
@@ -795,9 +802,15 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/merchants/:id/offers",
+							"raw": "{{base_url}}/api/mobile/merchants/:id/offers?per_page=15",
 							"host": ["{{base_url}}"],
-							"path": ["api", "merchants", ":id", "offers"],
+							"path": ["api", "mobile", "merchants", ":id", "offers"],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							],
 							"variable": [
 								{
 									"key": "id",
@@ -805,7 +818,7 @@
 								}
 							]
 						},
-						"description": "Get all special offers from a specific merchant. Returns offers with full image URLs."
+						"description": "عرض الكل: كل العروض النشطة للتاجر مع pagination. لا يتطلب مصادقة."
 					}
 				},
 				{
@@ -824,9 +837,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/offers/:id/whatsapp",
+							"raw": "{{base_url}}/api/mobile/offers/:id/whatsapp",
 							"host": ["{{base_url}}"],
-							"path": ["api", "offers", ":id", "whatsapp"],
+							"path": ["api", "mobile", "offers", ":id", "whatsapp"],
 							"variable": [
 								{
 									"key": "id",
@@ -859,9 +872,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/favorites",
+							"raw": "{{base_url}}/api/mobile/user/favorites",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "favorites"]
+							"path": ["api", "mobile", "user", "favorites"]
 						},
 						"description": "Get user's favorite offers. Returns full offer data with images, merchant info, ratings, prices, and discounts."
 					}
@@ -882,9 +895,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/favorites?category=1",
+							"raw": "{{base_url}}/api/mobile/user/favorites?category=1",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "favorites"],
+							"path": ["api", "mobile", "user", "favorites"],
 							"query": [
 								{
 									"key": "category",
@@ -919,9 +932,9 @@
 							"raw": "{\n    \"offer_id\": 1\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/user/favorites",
+							"raw": "{{base_url}}/api/mobile/user/favorites",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "favorites"]
+							"path": ["api", "mobile", "user", "favorites"]
 						},
 						"description": "Add an offer to favorites."
 					}
@@ -942,9 +955,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/favorites/:offer_id",
+							"raw": "{{base_url}}/api/mobile/user/favorites/:offer_id",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "favorites", ":offer_id"],
+							"path": ["api", "mobile", "user", "favorites", ":offer_id"],
 							"variable": [
 								{
 									"key": "offer_id",
@@ -977,9 +990,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/cart",
+							"raw": "{{base_url}}/api/mobile/cart",
 							"host": ["{{base_url}}"],
-							"path": ["api", "cart"]
+							"path": ["api", "mobile", "cart"]
 						},
 						"description": "Get user cart with all items, quantities, prices, totals, delivery fees, discount codes applied, and final total. Returns full offer data including images."
 					}
@@ -1008,9 +1021,9 @@
 							"raw": "{\n    \"offer_id\": 1,\n    \"quantity\": 2\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cart/add",
+							"raw": "{{base_url}}/api/mobile/cart/add",
 							"host": ["{{base_url}}"],
-							"path": ["api", "cart", "add"]
+							"path": ["api", "mobile", "cart", "add"]
 						},
 						"description": "Add offer to cart with specified quantity. Returns updated cart with full data."
 					}
@@ -1039,9 +1052,9 @@
 							"raw": "{\n    \"discount_code\": \"SAVE20\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cart/apply-discount",
+							"raw": "{{base_url}}/api/mobile/cart/apply-discount",
 							"host": ["{{base_url}}"],
-							"path": ["api", "cart", "apply-discount"]
+							"path": ["api", "mobile", "cart", "apply-discount"]
 						},
 						"description": "Apply discount code to cart. Returns updated cart with discount applied and new total."
 					}
@@ -1070,9 +1083,9 @@
 							"raw": "{\n    \"quantity\": 3\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cart/:id",
+							"raw": "{{base_url}}/api/mobile/cart/:id",
 							"host": ["{{base_url}}"],
-							"path": ["api", "cart", ":id"],
+							"path": ["api", "mobile", "cart", ":id"],
 							"variable": [
 								{
 									"key": "id",
@@ -1099,9 +1112,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/cart/:id",
+							"raw": "{{base_url}}/api/mobile/cart/:id",
 							"host": ["{{base_url}}"],
-							"path": ["api", "cart", ":id"],
+							"path": ["api", "mobile", "cart", ":id"],
 							"variable": [
 								{
 									"key": "id",
@@ -1128,9 +1141,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/cart",
+							"raw": "{{base_url}}/api/mobile/cart",
 							"host": ["{{base_url}}"],
-							"path": ["api", "cart"]
+							"path": ["api", "mobile", "cart"]
 						},
 						"description": "Clear entire cart."
 					}
@@ -1157,9 +1170,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/payment/methods",
+							"raw": "{{base_url}}/api/mobile/payment/methods",
 							"host": ["{{base_url}}"],
-							"path": ["api", "payment", "methods"]
+							"path": ["api", "mobile", "payment", "methods"]
 						},
 						"description": "Get all available payment methods: Bank Cards (VISA, Mastercard, Meeza), Electronic Wallets (Vodafone Cash, Orange Cash, e-money, WE Pay), Payment by Reference (Fawry, Opay, Damen, Basata), Cash on Delivery. Returns logos (full URLs) and method details."
 					}
@@ -1188,9 +1201,9 @@
 							"raw": "{\n    \"payment_method\": \"visa\",\n    \"payment_method_type\": \"bank_card\",\n    \"card_number\": \"1234567890123456\",\n    \"card_holder_name\": \"Ahmed Ali\",\n    \"expiry_month\": \"12\",\n    \"expiry_year\": \"25\",\n    \"cvv\": \"123\",\n    \"save_as_default\": true,\n    \"notes\": \"Please deliver quickly\",\n    \"address\": \"123 Main Street, Cairo\",\n    \"phone\": \"+201012345678\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/orders/checkout",
+							"raw": "{{base_url}}/api/mobile/orders/checkout",
 							"host": ["{{base_url}}"],
-							"path": ["api", "orders", "checkout"]
+							"path": ["api", "mobile", "orders", "checkout"]
 						},
 						"description": "Create order from cart with bank card payment (VISA, Mastercard, Meeza). Returns order details with full information."
 					}
@@ -1219,9 +1232,9 @@
 							"raw": "{\n    \"payment_method\": \"vodafone_cash\",\n    \"payment_method_type\": \"electronic_wallet\",\n    \"wallet_phone\": \"01012345678\",\n    \"notes\": \"Please deliver quickly\",\n    \"address\": \"123 Main Street, Cairo\",\n    \"phone\": \"+201012345678\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/orders/checkout",
+							"raw": "{{base_url}}/api/mobile/orders/checkout",
 							"host": ["{{base_url}}"],
-							"path": ["api", "orders", "checkout"]
+							"path": ["api", "mobile", "orders", "checkout"]
 						},
 						"description": "Create order with electronic wallet payment (Vodafone Cash, Orange Cash, e-money, WE Pay)."
 					}
@@ -1250,9 +1263,9 @@
 							"raw": "{\n    \"payment_method\": \"fawry\",\n    \"payment_method_type\": \"reference_number\",\n    \"notes\": \"Please deliver quickly\",\n    \"address\": \"123 Main Street, Cairo\",\n    \"phone\": \"+201012345678\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/orders/checkout",
+							"raw": "{{base_url}}/api/mobile/orders/checkout",
 							"host": ["{{base_url}}"],
-							"path": ["api", "orders", "checkout"]
+							"path": ["api", "mobile", "orders", "checkout"]
 						},
 						"description": "Create order with payment by reference number (Fawry, Opay, Damen, Basata). Returns payment reference number, QR code (full URL), and expiry date/time."
 					}
@@ -1281,9 +1294,9 @@
 							"raw": "{\n    \"payment_method\": \"cash_on_delivery\",\n    \"payment_method_type\": \"cash_on_delivery\",\n    \"notes\": \"Please deliver quickly\",\n    \"address\": \"123 Main Street, Cairo\",\n    \"phone\": \"+201012345678\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/orders/checkout",
+							"raw": "{{base_url}}/api/mobile/orders/checkout",
 							"host": ["{{base_url}}"],
-							"path": ["api", "orders", "checkout"]
+							"path": ["api", "mobile", "orders", "checkout"]
 						},
 						"description": "Create order with cash on delivery payment method."
 					}
@@ -1310,9 +1323,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/orders?per_page=15",
+							"raw": "{{base_url}}/api/mobile/user/orders?per_page=15",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "orders"],
+							"path": ["api", "mobile", "user", "orders"],
 							"query": [
 								{
 									"key": "per_page",
@@ -1344,9 +1357,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/orders/:id",
+							"raw": "{{base_url}}/api/mobile/orders/:id",
 							"host": ["{{base_url}}"],
-							"path": ["api", "orders", ":id"],
+							"path": ["api", "mobile", "orders", ":id"],
 							"variable": [
 								{
 									"key": "id",
@@ -1373,9 +1386,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/orders/:id/coupons",
+							"raw": "{{base_url}}/api/mobile/orders/:id/coupons",
 							"host": ["{{base_url}}"],
-							"path": ["api", "orders", ":id", "coupons"],
+							"path": ["api", "mobile", "orders", ":id", "coupons"],
 							"variable": [
 								{
 									"key": "id",
@@ -1402,9 +1415,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/orders/:id/cancel",
+							"raw": "{{base_url}}/api/mobile/orders/:id/cancel",
 							"host": ["{{base_url}}"],
-							"path": ["api", "orders", ":id", "cancel"],
+							"path": ["api", "mobile", "orders", ":id", "cancel"],
 							"variable": [
 								{
 									"key": "id",
@@ -1437,9 +1450,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/wallet/coupons",
+							"raw": "{{base_url}}/api/mobile/wallet/coupons",
 							"host": ["{{base_url}}"],
-							"path": ["api", "wallet", "coupons"]
+							"path": ["api", "mobile", "wallet", "coupons"]
 						},
 						"description": "Get all coupons in user wallet. Returns full coupon data including QR codes (full URLs), offer details, merchant info, status, expiry dates, and images."
 					}
@@ -1460,9 +1473,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/wallet/coupons?status=valid",
+							"raw": "{{base_url}}/api/mobile/wallet/coupons?status=valid",
 							"host": ["{{base_url}}"],
-							"path": ["api", "wallet", "coupons"],
+							"path": ["api", "mobile", "wallet", "coupons"],
 							"query": [
 								{
 									"key": "status",
@@ -1489,9 +1502,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/wallet/coupons?status=expired",
+							"raw": "{{base_url}}/api/mobile/wallet/coupons?status=expired",
 							"host": ["{{base_url}}"],
-							"path": ["api", "wallet", "coupons"],
+							"path": ["api", "mobile", "wallet", "coupons"],
 							"query": [
 								{
 									"key": "status",
@@ -1518,9 +1531,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/wallet/coupons?status=inactive",
+							"raw": "{{base_url}}/api/mobile/wallet/coupons?status=inactive",
 							"host": ["{{base_url}}"],
-							"path": ["api", "wallet", "coupons"],
+							"path": ["api", "mobile", "wallet", "coupons"],
 							"query": [
 								{
 									"key": "status",
@@ -1547,9 +1560,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/wallet/coupons/:id",
+							"raw": "{{base_url}}/api/mobile/wallet/coupons/:id",
 							"host": ["{{base_url}}"],
-							"path": ["api", "wallet", "coupons", ":id"],
+							"path": ["api", "mobile", "wallet", "coupons", ":id"],
 							"variable": [
 								{
 									"key": "id",
@@ -1582,9 +1595,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/profile",
+							"raw": "{{base_url}}/api/mobile/user/profile",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "profile"]
+							"path": ["api", "mobile", "user", "profile"]
 						},
 						"description": "Get authenticated user's profile with full data including: avatar URL (full path), name, email, phone, language, city, governorate, type/gender, and greeting message."
 					}
@@ -1613,9 +1626,9 @@
 							"raw": "{\n    \"name\": \"Ahmed Ali Updated\",\n    \"email\": \"ahmed.updated@example.com\",\n    \"phone\": \"+201012345679\",\n    \"language\": \"en\",\n    \"city\": \"الجيزة\",\n    \"governorate\": \"الجيزة\",\n    \"type\": \"male\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/user/profile",
+							"raw": "{{base_url}}/api/mobile/user/profile",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "profile"]
+							"path": ["api", "mobile", "user", "profile"]
 						},
 						"description": "Update user profile information including name, email, phone, language, city, governorate, and type/gender."
 					}
@@ -1647,9 +1660,9 @@
 							]
 						},
 						"url": {
-							"raw": "{{base_url}}/api/user/avatar",
+							"raw": "{{base_url}}/api/mobile/user/avatar",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "avatar"]
+							"path": ["api", "mobile", "user", "avatar"]
 						},
 						"description": "Upload user avatar image. Returns full image URL."
 					}
@@ -1670,9 +1683,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/avatar",
+							"raw": "{{base_url}}/api/mobile/user/avatar",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "avatar"]
+							"path": ["api", "mobile", "user", "avatar"]
 						},
 						"description": "Delete user avatar."
 					}
@@ -1693,9 +1706,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/stats",
+							"raw": "{{base_url}}/api/mobile/user/stats",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "stats"]
+							"path": ["api", "mobile", "user", "stats"]
 						},
 						"description": "Get user statistics: orders count, active coupons count, total spent, and loyalty points."
 					}
@@ -1716,9 +1729,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/referral",
+							"raw": "{{base_url}}/api/mobile/user/referral",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "referral"]
+							"path": ["api", "mobile", "user", "referral"]
 						},
 						"description": "Get user's referral link for inviting friends. Returns referral code and full referral URL (e.g., http/Google Play.com/ofroo)."
 					}
@@ -1745,9 +1758,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/settings",
+							"raw": "{{base_url}}/api/mobile/user/settings",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "settings"]
+							"path": ["api", "mobile", "user", "settings"]
 						},
 						"description": "Get user settings including language (ar/en) and notification preferences."
 					}
@@ -1776,9 +1789,9 @@
 							"raw": "{\n    \"language\": \"ar\",\n    \"notifications_enabled\": true,\n    \"email_notifications\": true,\n    \"push_notifications\": true\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/user/settings",
+							"raw": "{{base_url}}/api/mobile/user/settings",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "settings"]
+							"path": ["api", "mobile", "user", "settings"]
 						},
 						"description": "Update user settings including language (ar/en) and notification preferences."
 					}
@@ -1807,9 +1820,9 @@
 							"raw": "{\n    \"language\": \"ar\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/user/settings",
+							"raw": "{{base_url}}/api/mobile/user/settings",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "settings"]
+							"path": ["api", "mobile", "user", "settings"]
 						},
 						"description": "Change app language (ar for Arabic, en for English)."
 					}
@@ -1825,9 +1838,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/app/policy",
+							"raw": "{{base_url}}/api/mobile/app/policy",
 							"host": ["{{base_url}}"],
-							"path": ["api", "app", "policy"]
+							"path": ["api", "mobile", "app", "policy"]
 						},
 						"description": "Get application policy and terms of service. Returns policy content in Arabic and English."
 					}
@@ -1843,9 +1856,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/app/about",
+							"raw": "{{base_url}}/api/mobile/app/about",
 							"host": ["{{base_url}}"],
-							"path": ["api", "app", "about"]
+							"path": ["api", "mobile", "app", "about"]
 						},
 						"description": "Get about app information including description, features, and social media links (Facebook, Instagram, Snapchat, TikTok)."
 					}
@@ -1861,9 +1874,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/app/help",
+							"raw": "{{base_url}}/api/mobile/app/help",
 							"host": ["{{base_url}}"],
-							"path": ["api", "app", "help"]
+							"path": ["api", "mobile", "app", "help"]
 						},
 						"description": "Get help and support contact information including email (OFROO@GMAIL.COM), WhatsApp number (+20123456789), and working hours."
 					}
@@ -1890,9 +1903,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/notifications?per_page=15",
+							"raw": "{{base_url}}/api/mobile/user/notifications?per_page=15",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "notifications"],
+							"path": ["api", "mobile", "user", "notifications"],
 							"query": [
 								{
 									"key": "per_page",
@@ -1929,9 +1942,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/notifications?is_read=false",
+							"raw": "{{base_url}}/api/mobile/user/notifications?is_read=false",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "notifications"],
+							"path": ["api", "mobile", "user", "notifications"],
 							"query": [
 								{
 									"key": "is_read",
@@ -1962,9 +1975,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/notifications?is_read=true",
+							"raw": "{{base_url}}/api/mobile/user/notifications?is_read=true",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "notifications"],
+							"path": ["api", "mobile", "user", "notifications"],
 							"query": [
 								{
 									"key": "is_read",
@@ -1995,9 +2008,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/notifications?type=important",
+							"raw": "{{base_url}}/api/mobile/user/notifications?type=important",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "notifications"],
+							"path": ["api", "mobile", "user", "notifications"],
 							"query": [
 								{
 									"key": "type",
@@ -2028,9 +2041,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/notifications/:id/read",
+							"raw": "{{base_url}}/api/mobile/user/notifications/:id/read",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "notifications", ":id", "read"],
+							"path": ["api", "mobile", "user", "notifications", ":id", "read"],
 							"variable": [
 								{
 									"key": "id",
@@ -2057,9 +2070,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/notifications/mark-all-read",
+							"raw": "{{base_url}}/api/mobile/user/notifications/mark-all-read",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "notifications", "mark-all-read"]
+							"path": ["api", "mobile", "user", "notifications", "mark-all-read"]
 						},
 						"description": "Mark all notifications as read."
 					}
@@ -2080,9 +2093,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/notifications/:id",
+							"raw": "{{base_url}}/api/mobile/user/notifications/:id",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "notifications", ":id"],
+							"path": ["api", "mobile", "user", "notifications", ":id"],
 							"variable": [
 								{
 									"key": "id",
@@ -2123,9 +2136,9 @@
 							"raw": "{\n    \"order_id\": 1,\n    \"merchant_id\": 1,\n    \"overall_rating\": 4,\n    \"staff_attention_rating\": 4,\n    \"service_quality_rating\": 4,\n    \"value_for_money_rating\": 4,\n    \"comment\": \"Great service and food! Highly recommended.\",\n    \"images\": []\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/reviews",
+							"raw": "{{base_url}}/api/mobile/reviews",
 							"host": ["{{base_url}}"],
-							"path": ["api", "reviews"]
+							"path": ["api", "mobile", "reviews"]
 						},
 						"description": "Create a review for an order. Include overall store rating, staff attention, service quality, value for money (all 1-5 stars), comment (optional, max 500 chars), and optional images."
 					}
@@ -2152,9 +2165,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/loyalty/account",
+							"raw": "{{base_url}}/api/mobile/loyalty/account",
 							"host": ["{{base_url}}"],
-							"path": ["api", "loyalty", "account"]
+							"path": ["api", "mobile", "loyalty", "account"]
 						},
 						"description": "Get user loyalty account information including current points balance and tier."
 					}
@@ -2175,9 +2188,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/loyalty/transactions",
+							"raw": "{{base_url}}/api/mobile/loyalty/transactions",
 							"host": ["{{base_url}}"],
-							"path": ["api", "loyalty", "transactions"]
+							"path": ["api", "mobile", "loyalty", "transactions"]
 						},
 						"description": "Get loyalty points transactions history with full details."
 					}
@@ -2206,9 +2219,9 @@
 							"raw": "{\n    \"points\": 100,\n    \"description\": \"Redeemed for discount coupon\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/loyalty/redeem",
+							"raw": "{{base_url}}/api/mobile/loyalty/redeem",
 							"host": ["{{base_url}}"],
-							"path": ["api", "loyalty", "redeem"]
+							"path": ["api", "mobile", "loyalty", "redeem"]
 						},
 						"description": "Redeem loyalty points for rewards or discounts."
 					}
@@ -2243,9 +2256,9 @@
 							"raw": "{\n    \"subject\": \"Need Help with Order\",\n    \"message\": \"I need assistance with my order #12345. The delivery was delayed.\",\n    \"category\": \"order_issue\",\n    \"order_id\": 1\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/support/tickets",
+							"raw": "{{base_url}}/api/mobile/support/tickets",
 							"host": ["{{base_url}}"],
-							"path": ["api", "support", "tickets"]
+							"path": ["api", "mobile", "support", "tickets"]
 						},
 						"description": "Create a new support ticket."
 					}
@@ -2266,9 +2279,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/support/tickets",
+							"raw": "{{base_url}}/api/mobile/support/tickets",
 							"host": ["{{base_url}}"],
-							"path": ["api", "support", "tickets"]
+							"path": ["api", "mobile", "support", "tickets"]
 						},
 						"description": "Get all user support tickets with full details."
 					}
@@ -2289,9 +2302,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/support/tickets/:id",
+							"raw": "{{base_url}}/api/mobile/support/tickets/:id",
 							"host": ["{{base_url}}"],
-							"path": ["api", "support", "tickets", ":id"],
+							"path": ["api", "mobile", "support", "tickets", ":id"],
 							"variable": [
 								{
 									"key": "id",
@@ -2332,9 +2345,9 @@
 							"raw": "{\n    \"current_password\": \"password123\",\n    \"new_password\": \"newpassword123\",\n    \"new_password_confirmation\": \"newpassword123\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/user/password",
+							"raw": "{{base_url}}/api/mobile/user/password",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "password"]
+							"path": ["api", "mobile", "user", "password"]
 						},
 						"description": "Change user password. Requires current password, new password, and confirmation."
 					}
@@ -2361,9 +2374,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/referral",
+							"raw": "{{base_url}}/api/mobile/user/referral",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "referral"]
+							"path": ["api", "mobile", "user", "referral"]
 						},
 						"description": "Get user's referral link for inviting friends. Returns referral code and full referral URL (e.g., http/Google Play.com/ofroo) for sharing via social media (Facebook, Instagram, TikTok, Snapchat, WhatsApp)."
 					}
@@ -2384,9 +2397,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/user/referral/stats",
+							"raw": "{{base_url}}/api/mobile/user/referral/stats",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "referral", "stats"]
+							"path": ["api", "mobile", "user", "referral", "stats"]
 						},
 						"description": "Get referral statistics including number of referrals, rewards earned, etc."
 					}
@@ -2413,9 +2426,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/auth/logout",
+							"raw": "{{base_url}}/api/mobile/auth/logout",
 							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "logout"]
+							"path": ["api", "mobile", "auth", "logout"]
 						},
 						"description": "Logout current user and revoke access token. Shows confirmation dialog before logout."
 					}
@@ -2450,9 +2463,9 @@
 							"raw": "{\n    \"password\": \"password123\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/user/account",
+							"raw": "{{base_url}}/api/mobile/user/account",
 							"host": ["{{base_url}}"],
-							"path": ["api", "user", "account"]
+							"path": ["api", "mobile", "user", "account"]
 						},
 						"description": "Delete user account. Requires password verification. Shows confirmation dialog. This will anonymize user data (GDPR compliant)."
 					}

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\FinancialController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\CouponController;
+use App\Http\Controllers\Api\MerchantProfileController;
 use App\Http\Controllers\Api\OfferController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PermissionController;
@@ -49,6 +50,7 @@ Route::get('/', function () {
             'auth' => '/api/mobile/auth',
             'categories' => '/api/mobile/categories',
             'offers' => '/api/mobile/offers',
+            'merchants' => '/api/mobile/merchants',
             'cart' => '/api/mobile/cart',
             'orders' => '/api/mobile/orders',
             'user' => '/api/mobile/user',
@@ -89,6 +91,12 @@ Route::get('/categories/{id}', [CategoryController::class, 'show']);
 Route::get('/offers', [OfferController::class, 'index']);
 Route::get('/offers/{offer}', [OfferController::class, 'show']);
 Route::get('/offers/{offer}/coupons', [CouponController::class, 'index']);
+
+// ================================
+// 4.1 تفاصيل التاجر وعروضه (Merchant Profile) - Public Routes
+// ================================
+Route::get('/merchants/{id}', [MerchantProfileController::class, 'show']);
+Route::get('/merchants/{id}/offers', [MerchantProfileController::class, 'offers']);
 
 // ================================
 // Protected Routes (تتطلب مصادقة)
