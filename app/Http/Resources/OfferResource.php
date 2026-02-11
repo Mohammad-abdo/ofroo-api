@@ -26,11 +26,11 @@ class OfferResource extends JsonResource
             'location' => $this->location,
             'status' => $this->status,
             'is_favorite' => $user ? $this->favoritedBy()->where('user_id', $user->id)->exists() : false,
-            'merchant' => new MerchantResource($this->whenLoaded('merchant')),
-            'category' => new CategoryResource($this->whenLoaded('category')),
-            'mall' => new MallResource($this->whenLoaded('mall')),
-            'branches' => BranchResource::collection($this->whenLoaded('branches')),
-            'coupons' => CouponResource::collection($this->whenLoaded('coupons')),
+            'merchant' => $this->when($this->relationLoaded('merchant') && $this->merchant, fn () => new MerchantResource($this->merchant)),
+            'category' => $this->when($this->relationLoaded('category') && $this->category, fn () => new CategoryResource($this->category)),
+            'mall' => $this->when($this->relationLoaded('mall') && $this->mall, fn () => new MallResource($this->mall)),
+            'branches' => $this->when($this->relationLoaded('branches'), fn () => BranchResource::collection($this->branches)),
+            'coupons' => $this->when($this->relationLoaded('coupons'), fn () => CouponResource::collection($this->coupons)),
             'created_at' => $this->created_at->toIso8601String(),
         ];
     }

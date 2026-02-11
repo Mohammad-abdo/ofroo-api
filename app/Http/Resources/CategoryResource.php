@@ -9,10 +9,16 @@ class CategoryResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $language = $request->get('language', 'ar');
+        $name = $language === 'ar' ? ($this->name_ar ?? $this->name_en) : ($this->name_en ?? $this->name_ar);
+
         return [
             'id' => $this->id,
-            'name' => $this->name,
-            'icon_url' => $this->icon_url,
+            'name' => $name,
+            'name_ar' => $this->name_ar,
+            'name_en' => $this->name_en,
+            'image' => $this->image_url ?? null,
+            'icon_url' => $this->image_url ?? null,
         ];
     }
 }

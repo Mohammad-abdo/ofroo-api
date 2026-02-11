@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class Category extends Model
 {
@@ -15,6 +16,25 @@ class Category extends Model
         'parent_id',
         'image',
     ];
+
+    /**
+     * Placeholder image when category has no image (usable in API).
+     */
+    public const DEFAULT_IMAGE_URL = 'https://cdn-icons-png.flaticon.com/256/3179/3179068.png';
+
+    /**
+     * Full URL for category image (storage path or placeholder).
+     */
+    public function getImageUrlAttribute(): string
+    {
+        if (! empty($this->image)) {
+            if (str_starts_with($this->image, ['http://', 'https://'])) {
+                return $this->image;
+            }
+            return Storage::url($this->image);
+        }
+        return self::DEFAULT_IMAGE_URL;
+    }
 
     /**
      * Get the parent category.
