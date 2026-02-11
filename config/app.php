@@ -119,4 +119,14 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Service Providers (View first for API apps - fixes "Target class [view] does not exist")
+    |--------------------------------------------------------------------------
+    */
+    'providers' => array_merge(
+        [\Illuminate\View\ViewServiceProvider::class],
+        require __DIR__ . '/../bootstrap/providers.php'
+    ),
+
 ];
