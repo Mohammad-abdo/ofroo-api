@@ -126,6 +126,12 @@ return [
     */
     'providers' => array_merge(
         [\Illuminate\View\ViewServiceProvider::class],
+        array_values(array_filter(
+            \Illuminate\Support\ServiceProvider::defaultProviders()->toArray(),
+            function ($p) {
+                return $p !== \Illuminate\View\ViewServiceProvider::class;
+            }
+        )),
         require __DIR__ . '/../bootstrap/providers.php'
     ),
 
