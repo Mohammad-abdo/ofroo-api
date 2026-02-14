@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
@@ -217,26 +218,44 @@ class AuthController extends Controller
     }
 
     /**
-     * Verify OTP: phone أو email + otp (123456). بعد النجاح → إنشاء توكن وإرجاعه.
+     * Verify OTP: إما (التوكن في الهيدر + otp) أو (phone/email + otp). OTP تجربة 123456. بعد النجاح يرجع token + user.
      */
     public function verifyOtp(Request $request): JsonResponse
     {
         $request->validate([
             'otp' => 'required|string|size:6',
-            'email' => 'required_without:phone|email|exists:users,email',
-            'phone' => 'required_without:email|string|exists:users,phone',
+            'phone' => 'nullable|string',
+            'email' => 'nullable|email',
         ]);
 
-        $user = $request->phone
-            ? User::where('phone', $request->phone)->first()
-            : User::where('email', $request->email)->first();
+        $user = null;
 
-        if (!$user) {
-            return response()->json(['message' => 'Invalid or expired OTP'], 400);
+        if ($request->bearerToken()) {
+            $accessToken = PersonalAccessToken::findToken($request->bearerToken());
+            if ($accessToken && $accessToken->tokenable instanceof User) {
+                $user = $accessToken->tokenable;
+            }
         }
 
-        $ok = $user->otp_code === $request->otp || $request->otp === '123456';
-        if (!$ok) {
+        if (!$user && ($request->phone || $request->email)) {
+            $user = $request->phone
+                ? User::where('phone', $request->phone)->first()
+                : User::where('email', $request->email)->first();
+        }
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+
+        $otpValid =
+            (
+                (string) $user->otp_code === (string) $request->otp &&
+                $user->otp_expires_at &&
+                $user->otp_expires_at->greaterThanOrEqualTo(now())
+            )
+            || $request->otp === '123456';
+
+        if (!$otpValid) {
             return response()->json(['message' => 'Invalid or expired OTP'], 400);
         }
 
@@ -247,10 +266,11 @@ class AuthController extends Controller
         ]);
 
         $user->load('role');
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'message' => 'success',
+            'message' => 'OTP verified successfully',
             'token' => $token,
             'user' => new UserResource($user),
         ]);
