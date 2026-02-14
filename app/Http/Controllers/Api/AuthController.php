@@ -204,19 +204,12 @@ class AuthController extends Controller
             return response()->json(['message' => 'User not found'], 404);
         }
 
-        // في مرحلة التجربة: تثبيت OTP على 123456 (عند local أو OTP_TEST_BYPASS)
-        $otp = (config('app.env') === 'local' || config('app.otp_test_bypass'))
-            ? '123456'
-            : str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
-
+        // OTP ثابت للتجربة
+        $otp = '123456';
         $user->update([
             'otp_code' => $otp,
             'otp_expires_at' => now()->addDays(2),
         ]);
-
-        if ($otp !== '123456') {
-            \App\Jobs\SendOtpEmail::dispatch($user, $otp, $user->language ?? 'ar');
-        }
 
         return response()->json([
             'message' => 'OTP sent successfully',
@@ -224,7 +217,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Verify OTP - phone أو email + otp، بدون توكن ولا انتهاء صلاحية. يرجع success فقط.
+     * Verify OTP: phone أو email + otp (123456). بعد النجاح → إنشاء توكن وإرجاعه.
      */
     public function verifyOtp(Request $request): JsonResponse
     {
@@ -253,7 +246,14 @@ class AuthController extends Controller
             'email_verified_at' => now(),
         ]);
 
-        return response()->json(['message' => 'success']);
+        $user->load('role');
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'success',
+            'token' => $token,
+            'user' => new UserResource($user),
+        ]);
     }
 
     /**
