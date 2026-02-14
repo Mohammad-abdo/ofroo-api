@@ -29,8 +29,11 @@ class MobileRegisterRequest extends FormRequest
             'password_confirmation' => 'required|string|same:password',
             'gender' => 'nullable|string|in:male,female,mal,fem',
             'language' => 'nullable|in:ar,en',
-            'city' => 'nullable|integer',
-            'governorate' => 'nullable|integer',
+            'city_id' => 'nullable|integer|exists:cities,id',
+            'governorate_id' => 'nullable|integer|exists:governorates,id',
+            // للتوافق مع الطلب القديم (نص المدينة)
+            'city' => 'nullable|string|max:255',
+            'governorate' => 'nullable|string|max:255',
         ];
     }
 

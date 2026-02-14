@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\OfferResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -383,6 +384,75 @@ class UserController extends Controller
                 'active_coupons_count' => $activeCouponsCount,
                 'total_spent' => (float) $totalSpent,
                 'loyalty_points' => $loyaltyPoints,
+            ],
+        ]);
+    }
+
+    /**
+     * قائمة المحفوظات (العروض المفضلة للمستخدم).
+     * GET /api/mobile/user/favorites
+     */
+    public function getFavorites(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $perPage = $request->get('per_page', 15);
+
+        $offers = $user->favoriteOffers()
+            ->with(['merchant', 'category', 'mall', 'branches', 'coupons'])
+            ->where('status', 'active')
+            ->orderByPivot('created_at', 'desc')
+            ->paginate($perPage);
+
+        $data = $offers->getCollection()->map(function ($offer) use ($request) {
+            return (new OfferResource($offer))->toArray($request);
+        })->all();
+
+        return response()->json([
+            'data' => $data,
+            'meta' => [
+                'current_page' => $offers->currentPage(),
+                'last_page' => $offers->lastPage(),
+                'per_page' => $offers->perPage(),
+                'total' => $offers->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * قائمة التقييمات التي كتبها المستخدم.
+     * GET /api/mobile/user/reviews
+     */
+    public function getReviews(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $perPage = $request->get('per_page', 15);
+
+        $reviews = $user->reviews()
+            ->with(['merchant:id,company_name,company_name_ar,company_name_en', 'order:id,total_amount'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage);
+
+        $data = $reviews->getCollection()->map(function ($review) {
+            return [
+                'id' => $review->id,
+                'merchant_id' => $review->merchant_id,
+                'merchant_name' => $review->merchant ? ($review->merchant->company_name_ar ?? $review->merchant->company_name) : '',
+                'order_id' => $review->order_id,
+                'rating' => (int) $review->rating,
+                'notes' => $review->notes ?? '',
+                'notes_ar' => $review->notes_ar ?? '',
+                'notes_en' => $review->notes_en ?? '',
+                'created_at' => $review->created_at ? $review->created_at->toIso8601String() : null,
+            ];
+        })->all();
+
+        return response()->json([
+            'data' => $data,
+            'meta' => [
+                'current_page' => $reviews->currentPage(),
+                'last_page' => $reviews->lastPage(),
+                'per_page' => $reviews->perPage(),
+                'total' => $reviews->total(),
             ],
         ]);
     }

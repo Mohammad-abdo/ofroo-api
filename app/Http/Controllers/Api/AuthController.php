@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
+use App\Http\Requests\MobileRegisterRequest;
 use App\Http\Resources\UserResource;
+use App\Models\City;
 use App\Models\LoginAttempt;
 use App\Models\Role;
 use App\Models\User;
@@ -34,6 +36,47 @@ class AuthController extends Controller
             'role_id' => $userRole->id,
             'city' => $request->city ?? null,
             'country' => 'مصر', // Default to Egypt
+        ]);
+
+        $user->load('role');
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'User registered successfully',
+            'user' => new UserResource($user),
+            'token' => $token,
+        ], 201);
+    }
+
+    /**
+     * تسجيل مستخدم من تطبيق الموبايل (يدعم اختيار المحافظة والمدينة من اند بوينت المحافظات/المدن)
+     */
+    public function registerMobile(MobileRegisterRequest $request): JsonResponse
+    {
+        $userRole = Role::where('name', 'user')->first();
+
+        $cityName = null;
+        if ($request->city_id) {
+            $city = City::find($request->city_id);
+            $cityName = $city ? $city->name_ar : null;
+        }
+        if ($cityName === null && $request->city) {
+            $cityName = $request->city;
+        }
+
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'phone' => $request->phone,
+            'password' => Hash::make($request->password),
+            'language' => $request->language ?? 'ar',
+            'role_id' => $userRole->id,
+            'country' => 'مصر',
+            'city' => $cityName,
+            'city_id' => $request->city_id,
+            'governorate_id' => $request->governorate_id ?? ($request->city_id ? City::find($request->city_id)?->governorate_id : null),
+            'gender' => $request->gender,
         ]);
 
         $user->load('role');

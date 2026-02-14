@@ -114,6 +114,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Get offers favorited by the user (المحفوظات).
+     */
+    public function favoriteOffers()
+    {
+        return $this->belongsToMany(Offer::class, 'offer_user');
+    }
+
+    /**
      * Get the cart for the user.
      */
     public function cart()

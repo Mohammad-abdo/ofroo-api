@@ -119,8 +119,62 @@
 		},
 		{
 			"name": "📝 2. Register Screen",
-			"description": "User registration screen endpoints",
+			"description": "تسجيل حساب جديد + اند بوينت المدن والمحافظات لاختيار مدينة المستخدم",
 			"item": [
+				{
+					"name": "Get Governorates (قائمة المحافظات)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/governorates?language=ar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "governorates"],
+							"query": [
+								{
+									"key": "language",
+									"value": "ar",
+									"description": "ar | en"
+								}
+							]
+						},
+						"description": "قائمة المحافظات (المراكز) لاستخدامها عند التسجيل. لا يتطلب مصادقة. الاستجابة: data[].id, name, name_ar, name_en, order_index."
+					}
+				},
+				{
+					"name": "Get Cities by Governorate (مدن المحافظة)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/cities?governorate_id=1&language=ar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "cities"],
+							"query": [
+								{
+									"key": "governorate_id",
+									"value": "1",
+									"description": "معرف المحافظة من اند بوينت المحافظات"
+								},
+								{
+									"key": "language",
+									"value": "ar"
+								}
+							]
+						},
+						"description": "قائمة المدن التابعة لمحافظة معينة. يُستدعى بعد اختيار المحافظة عند التسجيل. لا يتطلب مصادقة. الاستجابة: data[].id, governorate_id, name, name_ar, name_en. استخدم city_id عند التسجيل."
+					}
+				},
 				{
 					"name": "Register New Account",
 					"request": {
@@ -137,14 +191,14 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"name\": \"Ahmed Ali\",\n    \"email\": \"ahmed@example.com\",\n    \"phone\": \"+201012345678\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\",\n    \"language\": \"ar\",\n    \"city\": \"القاهرة\",\n    \"governorate\": \"القاهرة\",\n    \"type\": \"male\"\n}"
+							"raw": "{\n    \"name\": \"Ahmed Ali\",\n    \"email\": \"ahmed@example.com\",\n    \"phone\": \"+201012345678\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\",\n    \"language\": \"ar\",\n    \"city_id\": 1,\n    \"governorate_id\": 1,\n    \"gender\": \"male\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/mobile/auth/register",
 							"host": ["{{base_url}}"],
 							"path": ["api", "mobile", "auth", "register"]
 						},
-						"description": "Register a new user account. Returns user data with access token."
+						"description": "تسجيل مستخدم جديد. أرسل city_id و governorate_id من اند بوينت المحافظات والمدن (اختياري). يُرجع user + token."
 					}
 				},
 				{
@@ -872,11 +926,17 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/mobile/user/favorites",
+							"raw": "{{base_url}}/api/mobile/user/favorites?per_page=15",
 							"host": ["{{base_url}}"],
-							"path": ["api", "mobile", "user", "favorites"]
+							"path": ["api", "mobile", "user", "favorites"],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							]
 						},
-						"description": "Get user's favorite offers. Returns full offer data with images, merchant info, ratings, prices, and discounts."
+						"description": "قائمة المحفوظات: العروض المفضلة للمستخدم مع pagination. يتطلب مصادقة."
 					}
 				},
 				{
@@ -909,7 +969,7 @@
 					}
 				},
 				{
-					"name": "Add to Favorites",
+					"name": "Toggle Favorite (إضافة/إزالة من المحفوظات)",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -919,53 +979,22 @@
 								"type": "text"
 							},
 							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"offer_id\": 1\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/api/mobile/user/favorites",
-							"host": ["{{base_url}}"],
-							"path": ["api", "mobile", "user", "favorites"]
-						},
-						"description": "Add an offer to favorites."
-					}
-				},
-				{
-					"name": "Remove from Favorites",
-					"request": {
-						"method": "DELETE",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{access_token}}",
-								"type": "text"
-							},
-							{
 								"key": "Accept",
 								"value": "application/json"
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/mobile/user/favorites/:offer_id",
+							"raw": "{{base_url}}/api/mobile/offers/:id/favorite",
 							"host": ["{{base_url}}"],
-							"path": ["api", "mobile", "user", "favorites", ":offer_id"],
+							"path": ["api", "mobile", "offers", ":id", "favorite"],
 							"variable": [
 								{
-									"key": "offer_id",
+									"key": "id",
 									"value": "1"
 								}
 							]
 						},
-						"description": "Remove an offer from favorites."
+						"description": "تبديل حالة العرض: إضافة أو إزالة من المحفوظات. الاستجابة تحتوي is_favorite (true/false)."
 					}
 				}
 			]
@@ -2110,8 +2139,37 @@
 		},
 		{
 			"name": "⭐ 17. Reviews Screen",
-			"description": "Create reviews with ratings for orders",
+			"description": "قائمة التقييمات + إنشاء تقييم للطلبات",
 			"item": [
+				{
+					"name": "Get My Reviews (قائمة التقييمات)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/user/reviews?per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "user", "reviews"],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							]
+						},
+						"description": "قائمة التقييمات التي كتبها المستخدم (التاجر، الطلب، التقييم، الملاحظات). يتطلب مصادقة."
+					}
+				},
 				{
 					"name": "Create Review",
 					"request": {
@@ -2133,14 +2191,14 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"order_id\": 1,\n    \"merchant_id\": 1,\n    \"overall_rating\": 4,\n    \"staff_attention_rating\": 4,\n    \"service_quality_rating\": 4,\n    \"value_for_money_rating\": 4,\n    \"comment\": \"Great service and food! Highly recommended.\",\n    \"images\": []\n}"
+							"raw": "{\n    \"order_id\": 1,\n    \"merchant_id\": 1,\n    \"rating\": 4,\n    \"notes\": \"Great service!\",\n    \"notes_ar\": \"خدمة ممتازة\",\n    \"notes_en\": \"Great service!\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/mobile/reviews",
 							"host": ["{{base_url}}"],
 							"path": ["api", "mobile", "reviews"]
 						},
-						"description": "Create a review for an order. Include overall store rating, staff attention, service quality, value for money (all 1-5 stars), comment (optional, max 500 chars), and optional images."
+						"description": "إنشاء تقييم لطلب: order_id, merchant_id, rating (1-5), notes اختياري، notes_ar، notes_en."
 					}
 				}
 			]

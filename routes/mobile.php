@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\FinancialController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\CouponController;
@@ -48,6 +49,8 @@ Route::get('/', function () {
         'status' => 'active',
         'endpoints' => [
             'auth' => '/api/mobile/auth',
+            'governorates' => '/api/mobile/governorates',
+            'cities' => '/api/mobile/cities',
             'categories' => '/api/mobile/categories',
             'offers' => '/api/mobile/offers',
             'merchants' => '/api/mobile/merchants',
@@ -63,8 +66,8 @@ Route::get('/', function () {
 // 2. المصادقة (Authentication) - Public Routes
 // ================================
 Route::prefix('auth')->group(function () {
-    // تسجيل مستخدم عادي
-    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+    // تسجيل مستخدم عادي (يدعم city_id و governorate_id من اند بوينت المحافظات/المدن)
+    Route::post('/register', [AuthController::class, 'registerMobile'])->middleware('throttle:5,1');
     
     // تسجيل الدخول
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
@@ -78,6 +81,12 @@ Route::prefix('auth')->group(function () {
     // التحقق من OTP
     Route::post('/otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:5,1');
 });
+
+// ================================
+// 2.1 المحافظات والمدن (لتسجيل حساب جديد - اختيار المدينة)
+// ================================
+Route::get('/governorates', [LocationController::class, 'governorates']);
+Route::get('/cities', [LocationController::class, 'cities']);
 
 // ================================
 // 3. التصنيفات (Categories) - Public Routes
@@ -113,6 +122,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ================================
     Route::get('/search', [OfferController::class, 'search']);
     Route::get('/offers/{id}/whatsapp', [OfferController::class, 'whatsappContact']);
+    Route::post('/offers/{offer}/favorite', [OfferController::class, 'toggleFavorite']);
     
     // ================================
     // 5. السلة (Cart)
@@ -188,6 +198,12 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Statistics
         Route::get('/stats', [UserController::class, 'getStats']);
+        
+        // المحفوظات (Favorites)
+        Route::get('/favorites', [UserController::class, 'getFavorites']);
+        
+        // التقييمات (Reviews - قائمة تقييمات المستخدم)
+        Route::get('/reviews', [UserController::class, 'getReviews']);
         
         // Settings
         Route::get('/settings', [UserController::class, 'getSettings']);
