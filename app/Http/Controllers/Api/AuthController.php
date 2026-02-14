@@ -236,9 +236,9 @@ class AuthController extends Controller
             $user = User::where('phone', $request->phone)->first();
         }
 
-        $otpValid = $user->otp_code === $request->otp && $user->otp_expires_at && $user->otp_expires_at >= now();
-        // في بيئة التطوير فقط: قبول 123456 لتسهيل الاختبار (بدون إيميل حقيقي)
-        if (!$otpValid && config('app.debug') && $request->otp === '123456') {
+        $otpValid = $user && $user->otp_code === $request->otp && $user->otp_expires_at && $user->otp_expires_at >= now();
+        // للتجربة: قبول 123456 عند تفعيل OTP_TEST_BYPASS=true في .env
+        if (!$otpValid && $user && (bool) env('OTP_TEST_BYPASS', false) && $request->otp === '123456') {
             $otpValid = true;
         }
         if (!$user || !$otpValid) {
