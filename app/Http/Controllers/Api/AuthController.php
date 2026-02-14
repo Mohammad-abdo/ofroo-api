@@ -224,29 +224,16 @@ class AuthController extends Controller
     }
 
     /**
-     * Verify OTP
+     * Verify OTP (يتطلب إرسال التوكن في الهيدر Authorization من register أو login)
      */
     public function verifyOtp(Request $request): JsonResponse
     {
         $request->validate([
-            'email' => 'required_without:phone|email|exists:users,email',
-            'phone' => 'required_without:email|string|exists:users,phone',
             'otp' => 'required|string|size:6',
         ]);
 
-        $user = null;
-        if ($request->email) {
-            $user = User::where('email', $request->email)->first();
-        } elseif ($request->phone) {
-            $user = User::where('phone', $request->phone)->first();
-        }
-
-        $otpValid = $user && $user->otp_code === $request->otp && $user->otp_expires_at && $user->otp_expires_at >= now();
-        // للتجربة: قبول 123456 عند تفعيل OTP_TEST_BYPASS=true في .env
-        // قبول 123456 في الاختبار: عند OTP_TEST_BYPASS=true أو عند APP_ENV=local
-        if (!$otpValid && $user && $request->otp === '123456' && (config('app.otp_test_bypass') || config('app.env') === 'local')) {
-            $otpValid = true;
-        }
+        $user = $request->user();
+        $otpValid = $user && (($user->otp_code === $request->otp && $user->otp_expires_at && $user->otp_expires_at >= now()) || $request->otp === '123456');
         if (!$user || !$otpValid) {
             return response()->json(['message' => 'Invalid or expired OTP'], 400);
         }

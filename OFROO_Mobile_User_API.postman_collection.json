@@ -323,18 +323,22 @@
 							{
 								"key": "Accept",
 								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
 							}
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"phone\": \"+201012345678\",\n    \"otp\": \"123456\"\n}"
+							"raw": "{\n    \"otp\": \"123456\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/mobile/auth/otp/verify",
 							"host": ["{{base_url}}"],
 							"path": ["api", "mobile", "auth", "otp", "verify"]
 						},
-						"description": "Verify OTP code sent to phone and login. Returns access token."
+						"description": "التحقق من OTP. إلزامي إرسال التوكن في الهيدر (المرتجع من Register أو Login). Body: otp فقط."
 					}
 				},
 				{
@@ -349,18 +353,22 @@
 							{
 								"key": "Accept",
 								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
 							}
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"otp\": \"123456\",\n    \"type\": \"password_reset\"\n}"
+							"raw": "{\n    \"otp\": \"123456\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/mobile/auth/otp/verify",
 							"host": ["{{base_url}}"],
 							"path": ["api", "mobile", "auth", "otp", "verify"]
 						},
-						"description": "Verify OTP code sent to email for password recovery."
+						"description": "التحقق من OTP. إلزامي إرسال التوكن (من Register أو Login). Body: otp فقط."
 					}
 				},
 				{
