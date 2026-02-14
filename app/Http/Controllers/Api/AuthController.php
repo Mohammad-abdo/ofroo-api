@@ -224,17 +224,26 @@ class AuthController extends Controller
     }
 
     /**
-     * Verify OTP (يتطلب إرسال التوكن في الهيدر Authorization من register أو login)
+     * Verify OTP - phone أو email + otp، بدون توكن ولا انتهاء صلاحية. يرجع success فقط.
      */
     public function verifyOtp(Request $request): JsonResponse
     {
         $request->validate([
             'otp' => 'required|string|size:6',
+            'email' => 'required_without:phone|email|exists:users,email',
+            'phone' => 'required_without:email|string|exists:users,phone',
         ]);
 
-        $user = $request->user();
-        $otpValid = $user && (($user->otp_code === $request->otp && $user->otp_expires_at && $user->otp_expires_at >= now()) || $request->otp === '123456');
-        if (!$user || !$otpValid) {
+        $user = $request->phone
+            ? User::where('phone', $request->phone)->first()
+            : User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'Invalid or expired OTP'], 400);
+        }
+
+        $ok = $user->otp_code === $request->otp || $request->otp === '123456';
+        if (!$ok) {
             return response()->json(['message' => 'Invalid or expired OTP'], 400);
         }
 
@@ -244,15 +253,7 @@ class AuthController extends Controller
             'email_verified_at' => now(),
         ]);
 
-        $user->load('role');
-
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'message' => 'OTP verified successfully',
-            'user' => new UserResource($user),
-            'token' => $token,
-        ]);
+        return response()->json(['message' => 'success']);
     }
 
     /**

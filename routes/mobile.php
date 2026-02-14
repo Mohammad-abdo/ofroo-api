@@ -78,8 +78,8 @@ Route::prefix('auth')->group(function () {
     // طلب OTP
     Route::post('/otp/request', [AuthController::class, 'requestOtp'])->middleware('throttle:3,1');
     
-    // التحقق من OTP (يجب إرسال التوكن المرتجع من register أو login في الهيدر Authorization)
-    Route::post('/otp/verify', [AuthController::class, 'verifyOtp'])->middleware('auth:sanctum')->middleware('throttle:5,1');
+    // التحقق من OTP (phone أو email + otp)
+    Route::post('/otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:5,1');
 });
 
 // ================================
