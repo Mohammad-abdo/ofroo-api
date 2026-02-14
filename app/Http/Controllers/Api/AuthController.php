@@ -204,14 +204,19 @@ class AuthController extends Controller
             return response()->json(['message' => 'User not found'], 404);
         }
 
-        $otp = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
+        // في مرحلة التجربة: تثبيت OTP على 123456 (عند local أو OTP_TEST_BYPASS)
+        $otp = (config('app.env') === 'local' || config('app.otp_test_bypass'))
+            ? '123456'
+            : str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
+
         $user->update([
             'otp_code' => $otp,
-            'otp_expires_at' => now()->addMinutes(10),
+            'otp_expires_at' => now()->addDays(2),
         ]);
 
-        // Send OTP via email queue
-        \App\Jobs\SendOtpEmail::dispatch($user, $otp, $user->language ?? 'ar');
+        if ($otp !== '123456') {
+            \App\Jobs\SendOtpEmail::dispatch($user, $otp, $user->language ?? 'ar');
+        }
 
         return response()->json([
             'message' => 'OTP sent successfully',
@@ -238,7 +243,8 @@ class AuthController extends Controller
 
         $otpValid = $user && $user->otp_code === $request->otp && $user->otp_expires_at && $user->otp_expires_at >= now();
         // للتجربة: قبول 123456 عند تفعيل OTP_TEST_BYPASS=true في .env
-        if (!$otpValid && $user && (bool) env('OTP_TEST_BYPASS', false) && $request->otp === '123456') {
+        // قبول 123456 في الاختبار: عند OTP_TEST_BYPASS=true أو عند APP_ENV=local
+        if (!$otpValid && $user && $request->otp === '123456' && (config('app.otp_test_bypass') || config('app.env') === 'local')) {
             $otpValid = true;
         }
         if (!$user || !$otpValid) {
