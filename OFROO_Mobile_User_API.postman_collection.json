@@ -327,7 +327,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"phone\": \"+201012345678\",\n    \"otp_code\": \"123456\"\n}"
+							"raw": "{\n    \"phone\": \"+201012345678\",\n    \"otp\": \"123456\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/mobile/auth/otp/verify",
@@ -353,7 +353,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"otp_code\": \"123456\",\n    \"type\": \"password_reset\"\n}"
+							"raw": "{\n    \"email\": \"ahmed@example.com\",\n    \"otp\": \"123456\",\n    \"type\": \"password_reset\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/mobile/auth/otp/verify",
