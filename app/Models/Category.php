@@ -17,6 +17,8 @@ class Category extends Model
         'image',
     ];
 
+    protected $appends = ['image_url'];
+
     /**
      * Placeholder image when category has no image (usable in API).
      */
@@ -27,13 +29,19 @@ class Category extends Model
      */
     public function getImageUrlAttribute(): string
     {
-        if (! empty($this->image)) {
-            if (str_starts_with($this->image, ['http://', 'https://'])) {
-                return $this->image;
+        try {
+            if (empty($this->attributes['image'] ?? null)) {
+                return self::DEFAULT_IMAGE_URL;
             }
-            return Storage::url($this->image);
+            $image = $this->attributes['image'];
+            if (str_starts_with($image, 'http://') || str_starts_with($image, 'https://')) {
+                return $image;
+            }
+            $base = rtrim(config('app.url', 'http://localhost'), '/');
+            return $base . '/storage/' . ltrim($image, '/');
+        } catch (\Throwable $e) {
+            return self::DEFAULT_IMAGE_URL;
         }
-        return self::DEFAULT_IMAGE_URL;
     }
 
     /**

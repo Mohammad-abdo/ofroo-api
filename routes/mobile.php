@@ -52,6 +52,7 @@ Route::get('/', function () {
             'governorates' => '/api/mobile/governorates',
             'cities' => '/api/mobile/cities',
             'categories' => '/api/mobile/categories',
+            'category-name' => '/api/mobile/category-name',
             'offers' => '/api/mobile/offers',
             'merchants' => '/api/mobile/merchants',
             'cart' => '/api/mobile/cart',
@@ -91,6 +92,7 @@ Route::get('/cities', [LocationController::class, 'cities']);
 // ================================
 // 3. التصنيفات (Categories) - Public Routes
 // ================================
+Route::get('/category-name', [CategoryController::class, 'categoryName']);
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/{id}', [CategoryController::class, 'show']);
 
@@ -102,32 +104,35 @@ Route::get('/offers/{offer}', [OfferController::class, 'show']);
 Route::get('/offers/{offer}/coupons', [CouponController::class, 'index']);
 
 // ================================
-// 4.1 تفاصيل التاجر وعروضه (Merchant Profile) - Public Routes
+// 4.1 لليوزر: قائمة التجار + بيانات التاجر + عروضه (بدون مصادقة)
+// مهم: العروض فقط على مسار /merchants/{id}/offers (بشرطة قبل offers)
 // ================================
-Route::get('/merchants/{id}', [MerchantProfileController::class, 'show']);
-Route::get('/merchants/{id}/offers', [MerchantProfileController::class, 'offers']);
+Route::get('/merchants', [MerchantProfileController::class, 'index']);
+Route::get('/merchants/{id}/offers', [MerchantProfileController::class, 'offers']); // قبل {id} عشان يطابق الأول
+Route::get('/merchants/{id}', [MerchantProfileController::class, 'show'])->where('id', '[0-9]+');
 
 // ================================
-// Protected Routes (تتطلب مصادقة)
+// Protected Routes - كل ما يخص المستخدم يتطلب تسجيل الدخول (auth:sanctum)
+// Cart, Orders, Payment (checkout), Profile, Wallet, Coupons, Reviews, Support, Loyalty
 // ================================
 Route::middleware('auth:sanctum')->group(function () {
     
     // ================================
-    // 2. المصادقة - Protected Routes
+    // 2. المصادقة - Protected
     // ================================
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     
     // ================================
-    // 4. العروض - Protected Routes
+    // 4. العروض - Protected (بحث، واتساب، مفضلة)
     // ================================
     Route::get('/search', [OfferController::class, 'search']);
     Route::get('/offers/{id}/whatsapp', [OfferController::class, 'whatsappContact']);
     Route::post('/offers/{offer}/favorite', [OfferController::class, 'toggleFavorite']);
     
     // ================================
-    // 5. السلة (Cart)
+    // 5. السلة (Cart) - تتطلب تسجيل الدخول (auth:sanctum)
     // ================================
-    Route::prefix('cart')->group(function () {
+    Route::prefix('cart')->middleware('auth:sanctum')->group(function () {
         Route::get('/', [CartController::class, 'index']);
         Route::post('/add', [CartController::class, 'add']);
         Route::put('/{id}', [CartController::class, 'update']);
@@ -136,9 +141,9 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     
     // ================================
-    // 6. الطلبات (Orders)
+    // 6. الطلبات والدفع (Orders & Payment) - تتطلب مصادقة
     // ================================
-    Route::prefix('orders')->group(function () {
+    Route::prefix('orders')->middleware('auth:sanctum')->group(function () {
         Route::get('/', [OrderController::class, 'index']);
         Route::get('/{id}', [OrderController::class, 'show']);
         Route::get('/{id}/coupons', [OrderController::class, 'getOrderCoupons']);
@@ -147,39 +152,39 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     
     // ================================
-    // 7. المحفظة والكوبونات (Wallet)
+    // 7. المحفظة والكوبونات (Wallet & Coupons) - تتطلب مصادقة
     // ================================
-    Route::prefix('wallet')->group(function () {
+    Route::prefix('wallet')->middleware('auth:sanctum')->group(function () {
         Route::get('/coupons', [OrderController::class, 'walletCoupons']);
     });
     
     // ================================
-    // 8. التقييمات (Reviews)
+    // 8. التقييمات (Reviews) - تتطلب مصادقة
     // ================================
     Route::post('/reviews', [OrderController::class, 'createReview']);
     
     // ================================
-    // 9. الدعم الفني (Support)
+    // 9. الدعم الفني (Support) - تتطلب مصادقة
     // ================================
-    Route::prefix('support')->group(function () {
+    Route::prefix('support')->middleware('auth:sanctum')->group(function () {
         Route::post('/tickets', [SupportTicketController::class, 'create']);
         Route::get('/tickets', [SupportTicketController::class, 'index']);
         Route::get('/tickets/{id}', [SupportTicketController::class, 'show']);
     });
     
     // ================================
-    // 10. الولاء (Loyalty)
+    // 10. الولاء (Loyalty) - تتطلب مصادقة
     // ================================
-    Route::prefix('loyalty')->group(function () {
+    Route::prefix('loyalty')->middleware('auth:sanctum')->group(function () {
         Route::get('/account', [LoyaltyController::class, 'account']);
         Route::get('/transactions', [LoyaltyController::class, 'transactions']);
         Route::post('/redeem', [LoyaltyController::class, 'redeem']);
     });
     
     // ================================
-    // 11. المستخدم (User Profile & Settings)
+    // 11. المستخدم (User Profile, Settings, Coupons) - تتطلب مصادقة
     // ================================
-    Route::prefix('user')->group(function () {
+    Route::prefix('user')->middleware('auth:sanctum')->group(function () {
         // Profile Management
         Route::get('/profile', [UserController::class, 'getProfile']);
         Route::put('/profile', [UserController::class, 'updateProfile']);
@@ -220,7 +225,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // 12. التاجر (Merchant) - تتطلب middleware 'merchant'
     // ================================
     Route::prefix('merchant')->middleware('merchant')->group(function () {
-        
+
+        // ===== اند بوينتس التاجر نفسه: بياناته، عروضه، كوبوناته =====
+        Route::get('/me', [MerchantController::class, 'getProfile']);
+        Route::get('/me/offers', [MerchantController::class, 'offers']);
+        Route::get('/me/coupons', [MerchantController::class, 'getCoupons']);
+
         // ===== العروض (Merchant Offers) - توحيد مع منطق الأدمن =====
         Route::prefix('offers')->group(function () {
             Route::get('/', [MerchantController::class, 'offers']);

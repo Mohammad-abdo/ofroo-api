@@ -32,7 +32,7 @@ class AdminWallet extends Model
     {
         return self::firstOrCreate(
             ['id' => 1],
-            ['balance' => 0, 'currency' => 'KWD']
+            ['balance' => 0, 'currency' => 'EGP']
         );
     }
 }

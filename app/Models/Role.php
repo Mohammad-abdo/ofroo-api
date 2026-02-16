@@ -8,6 +8,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Role extends Model
 {
+    protected $attributes = [
+        'guard_name' => 'web',
+    ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Role $role) {
+            if (empty($role->guard_name)) {
+                $role->guard_name = 'web';
+            }
+        });
+    }
+
     protected $fillable = [
         'name',
         'guard_name',

@@ -17,6 +17,8 @@ class DatabaseSeeder extends Seeder
         $this->call([
             // Locations first (users/merchants need city_id, governorate_id)
             GovernorateSeeder::class,
+            // Permissions before roles (for role_permissions pivot)
+            PermissionSeeder::class,
             // Core seeders
             RoleSeeder::class,
             UserSeeder::class,

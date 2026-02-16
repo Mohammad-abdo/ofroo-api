@@ -30,13 +30,17 @@ class PermissionController extends Controller
     {
         $request->validate([
             'name' => 'required|string|unique:permissions,name',
-            'group' => 'required|string',
-            'name_ar' => 'nullable|string',
-            'name_en' => 'nullable|string',
+            'group' => 'required|string|max:50',
+            'name_ar' => 'nullable|string|max:100',
+            'name_en' => 'nullable|string|max:100',
             'description' => 'nullable|string',
+            'description_ar' => 'nullable|string',
+            'description_en' => 'nullable|string',
         ]);
 
-        $permission = Permission::create($request->all());
+        $permission = Permission::create($request->only([
+            'name', 'name_ar', 'name_en', 'group', 'description', 'description_ar', 'description_en',
+        ]));
 
         return response()->json([
             'message' => 'Permission created successfully',
@@ -93,9 +97,16 @@ class PermissionController extends Controller
             'name_ar' => 'nullable|string',
             'name_en' => 'nullable|string',
             'description' => 'nullable|string',
+            'description_ar' => 'nullable|string',
+            'description_en' => 'nullable|string',
         ]);
 
-        $role = Role::create($request->all());
+        $payload = $request->only([
+            'name', 'name_ar', 'name_en', 'description', 'description_ar', 'description_en',
+        ]);
+        $payload['guard_name'] = $request->filled('guard_name') ? $request->input('guard_name') : 'web';
+
+        $role = Role::create($payload);
 
         return response()->json([
             'message' => 'Role created successfully',
@@ -123,12 +134,15 @@ class PermissionController extends Controller
     public function assignPermissions(Request $request, string $id): JsonResponse
     {
         $request->validate([
-            'permissions' => 'required|array',
+            'permissions' => 'nullable|array',
             'permissions.*' => 'exists:permissions,id',
+            'permission_ids' => 'nullable|array',
+            'permission_ids.*' => 'exists:permissions,id',
         ]);
 
+        $ids = $request->input('permission_ids', $request->input('permissions', []));
         $role = Role::findOrFail($id);
-        $role->permissions()->sync($request->permissions);
+        $role->permissions()->sync($ids);
 
         return response()->json([
             'message' => 'Permissions assigned successfully',

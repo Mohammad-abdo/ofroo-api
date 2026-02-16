@@ -282,12 +282,12 @@ class ReportService
      */
     public function exportToPdf(string $reportType, array $data, array $filters = []): string
     {
-        $language = $filters['language'] ?? 'ar';
-        $view = "reports.pdf.{$reportType}-{$language}";
+        $filters['language'] = $filters['language'] ?? 'ar';
 
-        $pdf = Pdf::loadView($view, [
+        $pdf = Pdf::loadView('reports.pdf.report', [
             'data' => $data,
             'filters' => $filters,
+            'reportType' => $reportType,
             'generated_at' => now(),
         ]);
 
@@ -305,10 +305,7 @@ class ReportService
     public function exportToExcel(string $reportType, array $data, array $filters = []): string
     {
         $filename = "report_{$reportType}_" . date('Y-m-d_H-i-s') . '.xlsx';
-        $path = storage_path('app/public/reports/' . $filename);
-
         Excel::store(new \App\Exports\ReportExport($data, $reportType), 'reports/' . $filename, 'public');
-
         return \Storage::url('reports/' . $filename);
     }
 

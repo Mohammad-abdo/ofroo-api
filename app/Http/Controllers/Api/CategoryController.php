@@ -11,6 +11,32 @@ use Illuminate\Http\Request;
 class CategoryController extends Controller
 {
     /**
+     * قائمة أسماء التصنيفات فقط (id + name) بدون children - للموبايل.
+     * GET api/mobile/category-name?language=ar|en
+     */
+    public function categoryName(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $language = $request->get('language', $user ? $user->language : null) ?? 'ar';
+
+        $categories = Category::whereNull('parent_id')
+            ->select('id', 'name_ar', 'name_en', 'order_index')
+            ->orderBy('order_index')
+            ->get();
+
+        $data = $categories->map(function ($category) use ($language) {
+            return [
+                'id' => $category->id,
+                'name' => $language === 'ar'
+                    ? ($category->name_ar ?? $category->name_en)
+                    : ($category->name_en ?? $category->name_ar),
+            ];
+        });
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
      * List all categories with active offers in children (mobile API).
      */
     public function index(Request $request): JsonResponse

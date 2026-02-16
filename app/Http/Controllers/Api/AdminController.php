@@ -73,23 +73,46 @@ class AdminController extends Controller
     }
 
     /**
-     * List merchants
+     * List merchants - returns ALL merchants when param "approved" is not sent.
+     * When "approved" is sent (1/0 or true/false), filter by that. Never filter by status.
      */
     public function merchants(Request $request): JsonResponse
     {
-        // Temporary debugging
-        \Log::info('Merchants endpoint called with params: ' . json_encode($request->all()));
-        
         try {
-            // Simple version first - just get basic merchants data
-            $merchants = Merchant::with(['user'])
-                ->when($request->has('approved'), function ($query) use ($request) {
-                    $query->where('approved', $request->boolean('approved'));
-                })
-                ->orderBy('created_at', 'desc')
+            $query = Merchant::with(['user']);
+
+            // فلتر الموافقة فقط عند إرسال المعامل صراحة (عند عدم الإرسال = عرض الكل)
+            if ($request->has('approved') && $request->get('approved') !== '' && $request->get('approved') !== null) {
+                $query->where('approved', $request->boolean('approved'));
+            }
+
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('company_name', 'like', "%{$search}%")
+                        ->orWhere('company_name_ar', 'like', "%{$search}%")
+                        ->orWhere('company_name_en', 'like', "%{$search}%")
+                        ->orWhereHas('user', function ($uq) use ($search) {
+                            $uq->where('email', 'like', "%{$search}%")
+                                ->orWhere('name', 'like', "%{$search}%");
+                        });
+                });
+            }
+
+            if ($request->filled('created_from')) {
+                $query->whereDate('created_at', '>=', $request->created_from);
+            }
+            if ($request->filled('created_to')) {
+                $query->whereDate('created_at', '<=', $request->created_to);
+            }
+
+            $merchants = $query->orderBy('created_at', 'desc')
                 ->paginate($request->get('per_page', 15));
 
             $data = $merchants->getCollection()->map(function ($merchant) {
+                $isSuspended = $merchant->suspended_until && $merchant->suspended_until->isFuture();
+                $isActive = ! ($merchant->is_blocked ?? false) && ! $isSuspended;
+
                 return [
                     'id' => $merchant->id,
                     'company_name' => $merchant->company_name ?? 'N/A',
@@ -101,20 +124,20 @@ class AdminController extends Controller
                     'city' => $merchant->city,
                     'country' => $merchant->country ?? 'مصر',
                     'approved' => $merchant->approved ?? false,
+                    'is_approved' => $merchant->approved ?? false,
                     'is_blocked' => $merchant->is_blocked ?? false,
+                    'is_active' => $isActive,
                     'user' => $merchant->user ? [
                         'id' => $merchant->user->id,
                         'name' => $merchant->user->name,
                         'email' => $merchant->user->email,
                         'phone' => $merchant->user->phone ?? null,
                     ] : null,
-                    'total_offers' => 0, // Simplified for now
-                    'created_coupons_count' => 0, // Simplified for now
+                    'total_offers' => $merchant->offers()->count(),
+                    'created_coupons_count' => \App\Models\Coupon::whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id))->count(),
                     'created_at' => $merchant->created_at ? $merchant->created_at->toIso8601String() : null,
                 ];
             });
-
-            \Log::info('Merchants query successful, returning ' . count($data) . ' merchants');
 
             return response()->json([
                 'data' => $data,
@@ -125,18 +148,12 @@ class AdminController extends Controller
                     'total' => $merchants->total(),
                 ],
             ]);
-            
         } catch (\Exception $e) {
             \Log::error('Error in merchants endpoint: ' . $e->getMessage());
-            \Log::error('Stack trace: ' . $e->getTraceAsString());
-            
+
             return response()->json([
                 'message' => 'Internal server error',
                 'error' => config('app.debug') ? $e->getMessage() : 'Something went wrong',
-                'debug' => [
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine()
-                ]
             ], 500);
         }
     }
@@ -610,12 +627,16 @@ class AdminController extends Controller
      */
     public function createCategory(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
+        $rules = [
             'name_ar' => 'required|string|max:255',
             'name_en' => 'nullable|string|max:255',
             'parent_id' => 'nullable|exists:categories,id',
             'order_index' => 'nullable|integer',
-        ]);
+        ];
+        if ($request->hasFile('image')) {
+            $rules['image'] = 'image|mimes:jpeg,png,jpg,gif,webp|max:2048';
+        }
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             return response()->json([
@@ -624,12 +645,20 @@ class AdminController extends Controller
             ], 422);
         }
 
-        $category = \App\Models\Category::create([
+        $data = [
             'name_ar' => $request->name_ar,
             'name_en' => $request->name_en ?? $request->name_ar,
             'parent_id' => $request->parent_id,
-            'order_index' => $request->order_index ?? 0,
-        ]);
+            'order_index' => (int) ($request->order_index ?? 0),
+        ];
+
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
+            $name = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $data['image'] = $file->storeAs('categories', $name, 'public');
+        }
+
+        $category = \App\Models\Category::create($data);
 
         return response()->json([
             'message' => 'Category created successfully',
@@ -644,12 +673,17 @@ class AdminController extends Controller
     {
         $category = \App\Models\Category::findOrFail($id);
 
-        $validator = Validator::make($request->all(), [
+        $rules = [
             'name_ar' => 'nullable|string|max:255',
             'name_en' => 'nullable|string|max:255',
             'parent_id' => 'nullable|exists:categories,id',
             'order_index' => 'nullable|integer',
-        ]);
+            'remove_image' => 'nullable|string|in:1,true',
+        ];
+        if ($request->hasFile('image')) {
+            $rules['image'] = 'image|mimes:jpeg,png,jpg,gif,webp|max:2048';
+        }
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             return response()->json([
@@ -665,7 +699,33 @@ class AdminController extends Controller
             ], 422);
         }
 
-        $category->update($request->only(['name_ar', 'name_en', 'parent_id', 'order_index']));
+        $update = [
+            'name_ar' => $request->input('name_ar', $category->name_ar),
+            'name_en' => $request->input('name_en', $category->name_en),
+            'parent_id' => $request->has('parent_id') ? $request->parent_id : $category->parent_id,
+            'order_index' => $request->has('order_index') ? (int) $request->order_index : $category->order_index,
+        ];
+
+        // Remove existing image if requested
+        if ($request->input('remove_image') === '1' || $request->input('remove_image') === 'true') {
+            if ($category->image && ! (str_starts_with($category->image, 'http://') || str_starts_with($category->image, 'https://'))) {
+                Storage::disk('public')->delete($category->image);
+            }
+            $update['image'] = null;
+        }
+
+        // Upload new image if provided
+        if ($request->hasFile('image')) {
+            // Delete old image if exists (storage path only)
+            if ($category->image && ! (str_starts_with($category->image, 'http://') || str_starts_with($category->image, 'https://'))) {
+                Storage::disk('public')->delete($category->image);
+            }
+            $file = $request->file('image');
+            $name = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $update['image'] = $file->storeAs('categories', $name, 'public');
+        }
+
+        $category->update($update);
 
         return response()->json([
             'message' => 'Category updated successfully',
@@ -706,6 +766,8 @@ class AdminController extends Controller
      */
     public function offers(Request $request): JsonResponse
     {
+        $perPage = min((int) $request->get('per_page', 15), 500);
+
         $offers = \App\Models\Offer::with(['merchant', 'category', 'mall', 'branches', 'coupons'])
             ->when($request->has('status') && $request->status, function ($query) use ($request) {
                 $query->where('status', $request->status);
@@ -729,7 +791,7 @@ class AdminController extends Controller
                 });
             })
             ->orderBy('created_at', 'desc')
-            ->paginate($request->get('per_page', 15));
+            ->paginate($perPage);
 
         return response()->json([
             'data' => \App\Http\Resources\OfferResource::collection($offers->items()),
@@ -1295,20 +1357,36 @@ class AdminController extends Controller
             $query->where('created_at', '<=', $request->to);
         }
 
+        if ($request->filled('actor_role')) {
+            $query->where('actor_role', $request->actor_role);
+        }
+
+        if ($request->filled('target_type')) {
+            $query->where('target_type', $request->target_type);
+        }
+
         $logs = $query->paginate($request->get('per_page', 50));
 
         $data = $logs->getCollection()->map(function ($log) {
+            $user = $log->user;
             return [
                 'id' => $log->id,
                 'user_id' => $log->user_id,
+                'actor_role' => $log->actor_role,
                 'action' => $log->action,
+                'target_type' => $log->target_type,
+                'target_id' => $log->target_id,
                 'description' => $log->description,
                 'ip_address' => $log->ip_address,
-                'user' => [
-                    'id' => $log->user->id,
-                    'name' => $log->user->name,
-                    'email' => $log->user->email,
-                ],
+                'user_agent' => $log->user_agent,
+                'old_values' => $log->old_values,
+                'new_values' => $log->new_values,
+                'metadata' => $log->metadata,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ] : null,
                 'created_at' => $log->created_at ? $log->created_at->toIso8601String() : null,
             ];
         });
@@ -2035,26 +2113,76 @@ class AdminController extends Controller
      */
     public function getMerchantWarnings(Request $request): JsonResponse
     {
-        $query = \App\Models\MerchantWarning::with(['merchant', 'admin']);
+        $query = \App\Models\MerchantWarning::with(['merchant.user', 'admin']);
 
-        if ($request->has('merchant_id')) {
+        if ($request->filled('merchant_id')) {
             $query->where('merchant_id', $request->merchant_id);
         }
 
-        if ($request->has('active')) {
+        if ($request->has('active') && $request->get('active') !== '') {
             $query->where('active', $request->boolean('active'));
         }
 
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('warning_type', 'like', "%{$search}%")
+                    ->orWhere('message', 'like', "%{$search}%")
+                    ->orWhereHas('merchant', function ($mq) use ($search) {
+                        $mq->where('company_name', 'like', "%{$search}%")
+                            ->orWhere('company_name_ar', 'like', "%{$search}%")
+                            ->orWhere('company_name_en', 'like', "%{$search}%")
+                            ->orWhereHas('user', function ($uq) use ($search) {
+                                $uq->where('name', 'like', "%{$search}%")
+                                    ->orWhere('email', 'like', "%{$search}%");
+                            });
+                    });
+            });
+        }
+
+        $totalActive = (clone $query)->where('active', true)->count();
+        $totalInactive = (clone $query)->where('active', false)->count();
+
         $warnings = $query->orderBy('issued_at', 'desc')
-            ->paginate($request->get('per_page', 15));
+            ->paginate($request->get('per_page', 50));
+
+        $data = $warnings->getCollection()->map(function ($w) {
+            $merchant = $w->merchant;
+            $user = $merchant->user ?? null;
+            return [
+                'id' => $w->id,
+                'merchant_id' => $w->merchant_id,
+                'warning_type' => $w->warning_type,
+                'message' => $w->message,
+                'issued_at' => $w->issued_at?->toIso8601String(),
+                'expires_at' => $w->expires_at?->toIso8601String(),
+                'active' => $w->active,
+                'merchant' => $merchant ? [
+                    'id' => $merchant->id,
+                    'name' => $user->name ?? $merchant->company_name ?? 'N/A',
+                    'company_name' => $merchant->company_name,
+                    'company_name_ar' => $merchant->company_name_ar,
+                    'company_name_en' => $merchant->company_name_en,
+                    'email' => $user->email ?? null,
+                ] : null,
+                'reason' => $w->warning_type,
+                'reason_ar' => $w->warning_type,
+                'reason_en' => $w->warning_type,
+                'description' => $w->message,
+                'is_active' => $w->active,
+                'created_at' => $w->issued_at?->toIso8601String(),
+            ];
+        });
 
         return response()->json([
-            'data' => $warnings->getCollection(),
+            'data' => $data,
             'meta' => [
                 'current_page' => $warnings->currentPage(),
                 'last_page' => $warnings->lastPage(),
                 'per_page' => $warnings->perPage(),
                 'total' => $warnings->total(),
+                'total_active' => $totalActive,
+                'total_inactive' => $totalInactive,
             ],
         ]);
     }
@@ -3614,7 +3742,19 @@ class AdminController extends Controller
      */
     public function createAd(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
+        $input = $request->all();
+        // Accept "budget" from frontend as total_budget
+        if ($request->has('budget') && ! $request->filled('total_budget')) {
+            $input['total_budget'] = $request->budget;
+        }
+        // Treat empty date strings as null so validation passes
+        foreach (['start_date', 'end_date'] as $dateField) {
+            if (isset($input[$dateField]) && (is_string($input[$dateField]) && trim($input[$dateField]) === '')) {
+                $input[$dateField] = null;
+            }
+        }
+        $request->merge($input);
+        $validator = Validator::make($input, [
             'title' => 'required|string|max:255',
             'title_ar' => 'nullable|string|max:255',
             'title_en' => 'nullable|string|max:255',
@@ -3632,12 +3772,13 @@ class AdminController extends Controller
             'ad_type' => 'required|in:banner,popup,sidebar,inline,video',
             'merchant_id' => 'nullable|exists:merchants,id',
             'category_id' => 'nullable|exists:categories,id',
-            'is_active' => 'nullable|boolean',
+            'is_active' => 'nullable',
             'order_index' => 'nullable|integer',
             'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after:start_date',
+            'end_date' => 'nullable|date',
             'cost_per_click' => 'nullable|numeric|min:0',
             'total_budget' => 'nullable|numeric|min:0',
+            'budget' => 'nullable|numeric|min:0',
             // إضافة دعم الإحصائيات عند الإنشاء
             'views_count' => 'nullable|integer|min:0',
             'clicks_count' => 'nullable|integer|min:0',
@@ -3647,6 +3788,12 @@ class AdminController extends Controller
             return response()->json([
                 'message' => 'Validation error',
                 'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        if ($request->filled('start_date') && $request->filled('end_date') && $request->end_date <= $request->start_date) {
+            return response()->json([
+                'message' => 'End date must be after start date',
             ], 422);
         }
 
@@ -3682,6 +3829,7 @@ class AdminController extends Controller
             ], 422);
         }
 
+        $totalBudget = $request->filled('total_budget') ? $request->total_budget : $request->input('budget');
         $ad = \App\Models\Ad::create([
             'title' => $request->title,
             'title_ar' => $request->title_ar,
@@ -3702,7 +3850,7 @@ class AdminController extends Controller
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
             'cost_per_click' => $request->cost_per_click,
-            'total_budget' => $request->total_budget,
+            'total_budget' => $totalBudget,
         ]);
 
         return response()->json([

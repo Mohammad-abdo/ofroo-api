@@ -152,7 +152,7 @@ class AdminWalletController extends Controller
         $merchant = \App\Models\Merchant::findOrFail($merchantId);
         $wallet = \App\Models\MerchantWallet::firstOrCreate(
             ['merchant_id' => $merchant->id],
-            ['balance' => 0, 'reserved_balance' => 0, 'currency' => 'KWD', 'is_frozen' => false]
+            ['balance' => 0, 'reserved_balance' => 0, 'currency' => 'EGP', 'is_frozen' => false]
         );
 
         return response()->json([

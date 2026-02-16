@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\ReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ReportController extends Controller
 {
@@ -98,7 +98,7 @@ class ReportController extends Controller
     /**
      * Export report to PDF
      */
-    public function exportPdf(Request $request, string $type): StreamedResponse
+    public function exportPdf(Request $request, string $type): BinaryFileResponse
     {
         // Validate type
         $allowedTypes = ['users', 'merchants', 'orders', 'products', 'payments', 'financial', 'sales', 'commission'];
@@ -108,7 +108,16 @@ class ReportController extends Controller
 
         $filters = $request->all();
         $user = $request->user();
-        $filters['language'] = ($user ? $user->language : null) ?? 'ar';
+        $filters['language'] = ($user ? $user->language : null) ?? $request->input('language', 'ar');
+        if (isset($filters['status']) && $type === 'merchants') {
+            $filters['approved'] = $filters['status'] === 'approved';
+        }
+        if (isset($filters['status']) && in_array($type, ['orders', 'sales'])) {
+            $filters['payment_status'] = $filters['status'];
+        }
+        if (isset($filters['merchant_id'])) {
+            $filters['merchant'] = $filters['merchant_id'];
+        }
 
         // Map type to method name
         $methodMap = [
@@ -131,14 +140,17 @@ class ReportController extends Controller
         $report = $this->reportService->$method($filters);
 
         try {
-        $pdfPath = $this->reportService->exportToPdf($type, $report, $filters);
-            $filePath = storage_path('app/public/' . str_replace('/storage/', '', $pdfPath));
-            
+            $pdfPath = $this->reportService->exportToPdf($type, $report, $filters);
+            $pathOnly = parse_url($pdfPath, PHP_URL_PATH) ?: $pdfPath;
+            $relativePath = ltrim(str_replace('/storage/', '', $pathOnly), '/');
+            $filePath = storage_path('app/public/' . $relativePath);
+
             if (!file_exists($filePath)) {
                 abort(500, 'Report file not found');
             }
 
-            return response()->download($filePath);
+            $filename = basename($filePath);
+            return response()->download($filePath, $filename, ['Content-Type' => 'application/pdf']);
         } catch (\Exception $e) {
             abort(500, 'Failed to generate PDF: ' . $e->getMessage());
         }
@@ -147,7 +159,7 @@ class ReportController extends Controller
     /**
      * Export report to Excel
      */
-    public function exportExcel(Request $request, string $type): StreamedResponse
+    public function exportExcel(Request $request, string $type): BinaryFileResponse
     {
         // Validate type
         $allowedTypes = ['users', 'merchants', 'orders', 'products', 'payments', 'financial', 'sales', 'commission'];
@@ -156,6 +168,16 @@ class ReportController extends Controller
         }
 
         $filters = $request->all();
+        $filters['language'] = $request->input('language', 'ar');
+        if (isset($filters['status']) && $type === 'merchants') {
+            $filters['approved'] = $filters['status'] === 'approved';
+        }
+        if (isset($filters['status']) && in_array($type, ['orders', 'sales'])) {
+            $filters['payment_status'] = $filters['status'];
+        }
+        if (isset($filters['merchant_id'])) {
+            $filters['merchant'] = $filters['merchant_id'];
+        }
 
         // Map type to method name
         $methodMap = [
@@ -178,14 +200,19 @@ class ReportController extends Controller
         $report = $this->reportService->$method($filters);
 
         try {
-        $excelPath = $this->reportService->exportToExcel($type, $report, $filters);
-            $filePath = storage_path('app/public/' . str_replace('/storage/', '', $excelPath));
-            
+            $excelPath = $this->reportService->exportToExcel($type, $report, $filters);
+            $pathOnly = parse_url($excelPath, PHP_URL_PATH) ?: $excelPath;
+            $relativePath = ltrim(str_replace('/storage/', '', $pathOnly), '/');
+            $filePath = storage_path('app/public/' . $relativePath);
+
             if (!file_exists($filePath)) {
                 abort(500, 'Report file not found');
             }
 
-            return response()->download($filePath);
+            $filename = basename($filePath);
+            return response()->download($filePath, $filename, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ]);
         } catch (\Exception $e) {
             abort(500, 'Failed to generate Excel: ' . $e->getMessage());
         }

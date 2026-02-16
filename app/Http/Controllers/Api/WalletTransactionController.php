@@ -21,7 +21,7 @@ class WalletTransactionController extends Controller
         
         $wallet = MerchantWallet::firstOrCreate(
             ['merchant_id' => $merchant->id],
-            ['balance' => 0, 'reserved_balance' => 0, 'currency' => 'KWD', 'is_frozen' => false]
+            ['balance' => 0, 'reserved_balance' => 0, 'currency' => 'EGP', 'is_frozen' => false]
         );
 
         $query = WalletTransaction::where('wallet_id', $wallet->id)
