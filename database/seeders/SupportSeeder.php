@@ -31,6 +31,12 @@ class SupportSeeder extends Seeder
             'other' => ['ar' => 'أخرى', 'en' => 'Other'],
         ];
 
+        // Next ticket number: max existing numeric part + 1 (avoid duplicate key on re-seed)
+        $maxNum = SupportTicket::query()
+            ->selectRaw("COALESCE(MAX(CAST(SUBSTRING_INDEX(ticket_number, '-', -1) AS UNSIGNED)), 0) as n")
+            ->value('n');
+        $start = (int) $maxNum + 1;
+
         // Create 100 support tickets
         for ($i = 0; $i < 100; $i++) {
             $user = $users->random();
@@ -38,8 +44,10 @@ class SupportSeeder extends Seeder
             $assignedTo = $faker->optional(0.5) ? $admins->random() : null;
             $category = $faker->randomElement(array_keys($categories));
 
+            $ticketNumber = 'TKT-' . str_pad($start + $i, 6, '0', STR_PAD_LEFT);
+
             SupportTicket::create([
-                'ticket_number' => 'TKT-' . str_pad($i + 1, 6, '0', STR_PAD_LEFT),
+                'ticket_number' => $ticketNumber,
                 'user_id' => $user->id,
                 'merchant_id' => $merchant ? $merchant->id : null,
                 'assigned_to' => $assignedTo ? $assignedTo->id : null,
