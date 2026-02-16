@@ -434,7 +434,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{id}/approve', [AdminController::class, 'approveOffer']);
         });
 
-        // Banners Management
+        // Banners Managementddsfd
         Route::prefix('banners')->group(function () {
             Route::get('/', [AdminController::class, 'getBanners']);
             Route::post('/', [AdminController::class, 'createBanner']);
