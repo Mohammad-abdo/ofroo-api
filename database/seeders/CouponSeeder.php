@@ -52,6 +52,12 @@ class CouponSeeder extends Seeder
                     : $faker->randomFloat(2, 5, 50);
                 $barcode = 'CUP-' . strtoupper($faker->unique()->bothify('????##??'));
 
+                // صورة الكوبون: أول صورة من العرض إن وُجدت
+                $offerImages = $offer->offer_images ?? [];
+                $firstImage = is_array($offerImages) && !empty($offerImages)
+                    ? (str_starts_with($offerImages[0], 'http') || str_starts_with($offerImages[0], '/') ? $offerImages[0] : asset('storage/' . $offerImages[0]))
+                    : '';
+
                 $data = [
                     'offer_id' => $offer->id,
                     'title' => $offer->title ?? 'كوبون خصم',
@@ -62,6 +68,7 @@ class CouponSeeder extends Seeder
                     'barcode' => $barcode,
                     'expires_at' => $expiresAt,
                     'status' => $status,
+                    'image' => $firstImage,
                 ];
 
                 if (\Schema::hasColumn('coupons', 'coupon_code')) {

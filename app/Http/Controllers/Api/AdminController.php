@@ -889,6 +889,58 @@ class AdminController extends Controller
             $offer->branches()->sync($request->branches);
         }
 
+        // إنشاء الكوبونات المرسلة مع العرض (نسبة الخصم، صورة، إلخ)
+        $couponsList = [];
+        $rawCoupons = $request->input('coupons');
+        if (is_string($rawCoupons)) {
+            $decoded = json_decode($rawCoupons, true);
+            $couponsList = is_array($decoded) ? $decoded : [];
+        } elseif (is_array($rawCoupons)) {
+            $couponsList = $rawCoupons;
+        }
+
+        $couponImageFiles = [];
+        $filesInput = $request->file('coupon_images');
+        if (is_array($filesInput)) {
+            foreach ($filesInput as $idx => $file) {
+                if ($file && $file->isValid()) {
+                    $couponImageFiles[(int) $idx] = $file;
+                }
+            }
+        }
+        if (empty($couponImageFiles)) {
+            $allFiles = $request->allFiles();
+            foreach ($allFiles as $key => $file) {
+                if (preg_match('/^coupon_images\[(\d+)\]$/', $key, $m) && $file && $file->isValid()) {
+                    $couponImageFiles[(int) $m[1]] = $file;
+                }
+            }
+        }
+        ksort($couponImageFiles);
+        $couponImageFiles = array_values($couponImageFiles);
+
+        foreach ($couponsList as $index => $couponData) {
+            if (!is_array($couponData)) {
+                continue;
+            }
+            $imageFile = $couponImageFiles[$index] ?? null;
+            $data = [
+                'title' => $couponData['title'] ?? '',
+                'description' => $couponData['description'] ?? '',
+                'price' => (float) ($couponData['price'] ?? 0),
+                'discount' => (float) ($couponData['discount'] ?? 0),
+                'discount_type' => $couponData['discount_type'] ?? 'percentage',
+                'barcode' => $couponData['barcode'] ?? null,
+                'image' => $couponData['image'] ?? null,
+                'status' => $couponData['status'] ?? 'active',
+            ];
+            try {
+                $this->offerService->createCouponForOffer($offer, $data, $imageFile);
+            } catch (\Throwable $e) {
+                \Log::warning('Admin createOffer: failed to create coupon for offer ' . $offer->id . ': ' . $e->getMessage());
+            }
+        }
+
         return response()->json([
             'message' => 'Offer created successfully',
             'data' => new \App\Http\Resources\OfferResource($offer->load(['merchant', 'category', 'mall', 'branches', 'coupons'])),
