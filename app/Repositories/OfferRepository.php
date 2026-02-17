@@ -37,9 +37,19 @@ class OfferRepository extends BaseRepository
             $query->where('mall_id', $filters['mall']);
         }
 
-        if (isset($filters['search'])) {
-            $search = $filters['search'];
-            $query->where('title', 'like', "%{$search}%");
+        if (!empty($filters['search'])) {
+            $search = trim((string) $filters['search']);
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('title_ar', 'like', "%{$search}%")
+                    ->orWhere('title_en', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('merchant', function ($mq) use ($search) {
+                        $mq->where('company_name', 'like', "%{$search}%")
+                            ->orWhere('company_name_ar', 'like', "%{$search}%")
+                            ->orWhere('company_name_en', 'like', "%{$search}%");
+                    });
+            });
         }
 
         return $query->orderBy('created_at', 'desc')

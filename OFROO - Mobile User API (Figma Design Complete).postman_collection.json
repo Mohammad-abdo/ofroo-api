@@ -1075,7 +1075,14 @@
               "query": [
                 {
                   "key": "q",
-                  "value": "pizza"
+                  "value": "pizza",
+                  "description": "كلمة البحث (أو استخدم search)"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true,
+                  "description": "بديل لـ q"
                 },
                 {
                   "key": "category",
@@ -1083,13 +1090,8 @@
                   "disabled": true
                 },
                 {
-                  "key": "lat",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "lng",
-                  "value": "",
+                  "key": "per_page",
+                  "value": "15",
                   "disabled": true
                 },
                 {
@@ -1098,12 +1100,21 @@
                 }
               ]
             },
-            "description": "Search offers by keyword. Returns matching offers with full data and image URLs."
+            "description": "بحث في العروض. يتطلب مصادقة (Authorization: Bearer {{access_token}}). Query: q أو search (مطلوب)، اختياري: category, per_page. البحث يشمل: عنوان العرض (title, title_ar, title_en)، الوصف، واسم التاجر. الاستجابة: data[] + meta (pagination). 401 بدون توكن: message_ar / message_en."
           },
-          "response": []
+          "response": [
+            {
+              "name": "401 Unauthenticated",
+              "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/mobile/search?q=pizza" } },
+              "status": "Unauthenticated",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"message\": \"Unauthenticated.\",\n  \"message_ar\": \"يجب تسجيل الدخول.\",\n  \"message_en\": \"You must be logged in.\"\n}"
+            }
+          ]
         }
       ],
-      "description": "Search functionality for offers"
+      "description": "البحث في العروض. يتطلب مصادقة (Auth). GET /api/mobile/search?q=كلمة أو ?search=كلمة. 401 بدون توكن."
     },
     {
       "name": "📱 8. Offer Details Screen",
@@ -1339,6 +1350,51 @@
         }
       ],
       "description": "Single offer details with full information, images, merchant info"
+    },
+    {
+      "name": "📢 Ads",
+      "item": [
+        {
+          "name": "Get Ads (List)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/mobile/ads",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mobile", "ads"],
+              "query": [
+                { "key": "per_page", "value": "15", "description": "optional" },
+                { "key": "position", "value": "header", "description": "optional filter" },
+                { "key": "ad_type", "value": "banner", "description": "optional: banner, popup, sidebar, inline, video" },
+                { "key": "merchant_id", "value": "", "description": "optional" },
+                { "key": "category_id", "value": "", "description": "optional" }
+              ]
+            },
+            "description": "قائمة الإعلانات النشطة (is_active وفي الفترة الزمنية). لا يتطلب مصادقة. الاستجابة: data[] كل عنصر يحتوي كل بيانات الإعلان + merchant (id, company_name, logo_url, ...) + category (id, name_ar, name_en, image_url). اختياري: per_page, position, ad_type, merchant_id, category_id."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Ad by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/mobile/ads/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mobile", "ads", "1"]
+            },
+            "description": "تفاصيل إعلان واحد بكل ما يتعلق به: بيانات الإعلان كاملة + merchant + category. لا يتطلب مصادقة."
+          },
+          "response": []
+        }
+      ],
+      "description": "الإعلانات (Ads) - Public. GET /api/mobile/ads قائمة إعلانات نشطة مع merchant و category. GET /api/mobile/ads/{id} إعلان واحد. لا يتطلب مصادقة."
     },
     {
       "name": "❤️ 9. Favorites Screen",
@@ -3425,12 +3481,29 @@
                 "logout"
               ]
             },
-            "description": "Logout current user and revoke access token. Shows confirmation dialog before logout."
+            "description": "تسجيل الخروج وإبطال التوكن الحالي. يتطلب مصادقة (Authorization: Bearer {{access_token}}). بدون توكن: 401 مع message_ar و message_en. عند النجاح: message و message_ar و message_en."
           },
-          "response": []
+          "response": [
+            {
+              "name": "200 Success",
+              "originalRequest": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": { "raw": "{{base_url}}/api/mobile/auth/logout" } },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"message\": \"Logged out successfully\",\n  \"message_ar\": \"تم تسجيل الخروج بنجاح\",\n  \"message_en\": \"Logged out successfully\"\n}"
+            },
+            {
+              "name": "401 Unauthenticated",
+              "originalRequest": { "method": "POST", "header": [], "url": { "raw": "{{base_url}}/api/mobile/auth/logout" } },
+              "status": "Unauthenticated",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"message\": \"Unauthenticated. You must be logged in to logout.\",\n  \"message_ar\": \"يجب تسجيل الدخول. الرجاء تسجيل الدخول أولاً.\",\n  \"message_en\": \"You must be logged in to logout.\"\n}"
+            }
+          ]
         }
       ],
-      "description": "Logout functionality"
+      "description": "تسجيل الخروج. يتطلب مصادقة (Bearer token). بدون توكن يُرجع 401 مع message_ar و message_en. عند النجاح يُبطّل التوكن ويُرجع رسالة نجاح."
     },
     {
       "name": "🗑️ 23. Delete Account Screen",

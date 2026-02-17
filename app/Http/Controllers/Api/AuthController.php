@@ -168,19 +168,28 @@ class AuthController extends Controller
     }
 
     /**
-     * Logout user
+     * Logout user. Requires auth (Bearer token). Returns 401 with message_ar/message_en if not authenticated.
      */
     public function logout(Request $request): JsonResponse
     {
         $user = $request->user();
+        if (! $user) {
+            return response()->json([
+                'message' => 'Unauthenticated. You must be logged in to logout.',
+                'message_ar' => 'يجب تسجيل الدخول. الرجاء تسجيل الدخول أولاً.',
+                'message_en' => 'You must be logged in to logout.',
+            ], 401);
+        }
+
         $user->currentAccessToken()->delete();
 
-        // Log logout activity
         $activityLogService = app(\App\Services\ActivityLogService::class);
         $activityLogService->logLogout($user->id);
 
         return response()->json([
             'message' => 'Logged out successfully',
+            'message_ar' => 'تم تسجيل الخروج بنجاح',
+            'message_en' => 'Logged out successfully',
         ]);
     }
 

@@ -45,6 +45,7 @@ class UserController extends Controller
                 'avatar' => $user->avatar ? $this->fullAvatarUrl($user->avatar) : null,
                 'avatar_url' => $user->avatar ? $this->fullAvatarUrl($user->avatar) : null,
                 'language' => $user->language ?? 'ar',
+                'gender' => $user->gender ?? null,
                 'city' => $cityPayload,
                 'country' => $countryPayload,
                 'role' => $user->role ? [

@@ -24,6 +24,31 @@ class OfferController extends Controller
     }
 
     /**
+     * Search offers (mobile: GET /api/mobile/search?q=... or ?search=...). Requires auth.
+     */
+    public function search(Request $request): JsonResponse
+    {
+        $q = $request->input('q') ?? $request->input('search');
+        if (trim((string) $q) === '') {
+            return response()->json([
+                'data' => [],
+                'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 0],
+            ]);
+        }
+        $filters = array_merge($request->all(), ['search' => $q, 'active' => true]);
+        $offers = $this->offerRepository->getOffers($filters);
+        return response()->json([
+            'data' => OfferResource::collection($offers->items()),
+            'meta' => [
+                'current_page' => $offers->currentPage(),
+                'last_page' => $offers->lastPage(),
+                'per_page' => $offers->perPage(),
+                'total' => $offers->total(),
+            ],
+        ]);
+    }
+
+    /**
      * Display a listing of offers with filters.
      */
     public function index(Request $request): JsonResponse
