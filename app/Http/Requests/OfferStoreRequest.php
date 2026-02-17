@@ -100,6 +100,7 @@ class OfferStoreRequest extends FormRequest
             'coupons.*.barcode' => 'nullable|string|max:64',
             'coupons.*.image' => 'nullable|string',
             'coupons.*.status' => 'nullable|in:active,used,expired',
+            'coupons.*.usage_limit' => 'nullable|integer|min:1',
         ];
 
         $contentType = $this->header('Content-Type', '');

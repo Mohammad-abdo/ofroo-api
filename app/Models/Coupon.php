@@ -19,6 +19,8 @@ class Coupon extends Model
         'coupon_code', // legacy column (unique code for redemption)
         'expires_at',
         'status', // active, used, expired
+        'usage_limit', // max number of times this coupon can be used (default 1)
+        'times_used',  // how many times it has been used
     ];
 
     protected function casts(): array

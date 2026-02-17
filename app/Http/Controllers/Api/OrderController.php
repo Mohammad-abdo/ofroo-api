@@ -81,7 +81,7 @@ class OrderController extends Controller
         $user = $request->user();
         $cart = Cart::where('user_id', $user->id)
             ->where('id', $request->cart_id)
-            ->with('items.offer')
+            ->with(['items.offer', 'items.coupon'])
             ->firstOrFail();
 
         if ($cart->items->isEmpty()) {
@@ -147,8 +147,11 @@ class OrderController extends Controller
                     'total_price' => $cartItem->price_at_add * $cartItem->quantity,
                 ]);
 
-                // Update offer coupons remaining
-                $cartItem->offer->decrement('coupons_remaining', $cartItem->quantity);
+                if ($cartItem->coupon_id) {
+                    \App\Models\Coupon::where('id', $cartItem->coupon_id)->increment('times_used', 1);
+                } else {
+                    $cartItem->offer->consumeCoupons($cartItem->quantity);
+                }
             }
 
             // Generate coupons (status: pending for cash, paid for online)

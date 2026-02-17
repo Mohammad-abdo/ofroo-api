@@ -10,6 +10,7 @@ class CartItem extends Model
     protected $fillable = [
         'cart_id',
         'offer_id',
+        'coupon_id',
         'quantity',
         'price_at_add',
     ];
@@ -35,5 +36,13 @@ class CartItem extends Model
     public function offer(): BelongsTo
     {
         return $this->belongsTo(Offer::class);
+    }
+
+    /**
+     * Get the specific coupon (when user adds a coupon to cart).
+     */
+    public function coupon(): BelongsTo
+    {
+        return $this->belongsTo(Coupon::class);
     }
 }

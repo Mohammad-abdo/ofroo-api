@@ -74,7 +74,7 @@ class OfferService
      */
     public function createCouponForOffer(Offer $offer, array $couponData, ?UploadedFile $imageFile = null): Coupon
     {
-        $allowed = ['title', 'description', 'price', 'discount', 'discount_type', 'barcode', 'image', 'status'];
+        $allowed = ['title', 'description', 'price', 'discount', 'discount_type', 'barcode', 'image', 'status', 'usage_limit'];
         $payload = [];
         foreach ($allowed as $key) {
             if (array_key_exists($key, $couponData)) {
@@ -85,6 +85,8 @@ class OfferService
         $payload['offer_id'] = $offer->id;
         $payload['expires_at'] = $offer->end_date;
         $payload['status'] = $payload['status'] ?? 'active';
+        $payload['usage_limit'] = isset($payload['usage_limit']) ? max(1, (int) $payload['usage_limit']) : 1;
+        $payload['times_used'] = 0;
         $payload['title'] = trim((string) ($payload['title'] ?? ''));
         $payload['description'] = isset($payload['description']) ? trim((string) $payload['description']) : null;
         $payload['price'] = isset($payload['price']) ? (float) $payload['price'] : 0;

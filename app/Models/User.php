@@ -82,6 +82,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the city (via city_id).
+     */
+    public function cityRelation()
+    {
+        return $this->belongsTo(City::class, 'city_id');
+    }
+
+    /**
+     * Get the governorate (via governorate_id).
+     */
+    public function governorateRelation()
+    {
+        return $this->belongsTo(Governorate::class, 'governorate_id');
+    }
+
+    /**
      * Get the merchant profile for the user.
      */
     public function merchant()

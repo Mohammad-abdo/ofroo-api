@@ -99,4 +99,78 @@ class Offer extends Model
             ->where('start_date', '<=', now())
             ->where('end_date', '>=', now());
     }
+
+    /**
+     * Total number of coupon uses still available (sum of usage_limit - times_used for active coupons).
+     * Used when adding offer to cart to ensure we don't exceed available uses.
+     */
+    public function getAvailableCouponsCountAttribute(): int
+    {
+        if (\Schema::hasColumn('coupons', 'usage_limit') && \Schema::hasColumn('coupons', 'times_used')) {
+            if (! $this->relationLoaded('coupons')) {
+                $this->load('coupons');
+            }
+            $total = 0;
+            foreach ($this->coupons as $coupon) {
+                if (($coupon->status ?? '') !== 'active') {
+                    continue;
+                }
+                $limit = (int) ($coupon->usage_limit ?? 1);
+                $used = (int) ($coupon->times_used ?? 0);
+                $total += max(0, $limit - $used);
+            }
+            return $total;
+        }
+
+        if (\Schema::hasColumn('offers', 'coupons_remaining')) {
+            return (int) $this->coupons_remaining;
+        }
+
+        return 0;
+    }
+
+    /**
+     * Consume (increment times_used) on this offer's coupons by the given quantity.
+     * Used at checkout when order is placed.
+     */
+    public function consumeCoupons(int $quantity): void
+    {
+        if ($quantity <= 0) {
+            return;
+        }
+
+        if (! \Schema::hasColumn('coupons', 'usage_limit') || ! \Schema::hasColumn('coupons', 'times_used')) {
+            if (\Schema::hasColumn('offers', 'coupons_remaining')) {
+                $this->decrement('coupons_remaining', $quantity);
+            }
+            return;
+        }
+
+        $remaining = $quantity;
+        $coupons = $this->coupons()
+            ->where('status', 'active')
+            ->whereRaw('(times_used < usage_limit OR usage_limit IS NULL)')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($coupons as $coupon) {
+            if ($remaining <= 0) {
+                break;
+            }
+            $limit = (int) ($coupon->usage_limit ?? 1);
+            $used = (int) ($coupon->times_used ?? 0);
+            $available = max(0, $limit - $used);
+            if ($available <= 0) {
+                continue;
+            }
+            $take = min($remaining, $available);
+            $coupon->increment('times_used', $take);
+            $remaining -= $take;
+        }
+
+        // Backward compatibility: also decrement offer.coupons_remaining if column exists
+        if (\Schema::hasColumn('offers', 'coupons_remaining')) {
+            $this->decrement('coupons_remaining', $quantity);
+        }
+    }
 }

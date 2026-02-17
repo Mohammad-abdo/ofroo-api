@@ -16,12 +16,25 @@ use App\Helpers\StorageHelper;
 class UserController extends Controller
 {
     /**
-     * Get authenticated user profile
+     * Get authenticated user profile.
+     * Returns city and country as objects: city { id, name_ar, name_en, governorate_id }, country { id, name_ar, name_en }.
      */
     public function getProfile(Request $request): JsonResponse
     {
         $user = $request->user();
-        $user->load('role');
+        $user->load(['role', 'cityRelation', 'governorateRelation']);
+
+        $cityPayload = null;
+        if ($user->cityRelation) {
+            $cityPayload = [
+                'id' => $user->cityRelation->id,
+                'name_ar' => $user->cityRelation->name_ar ?? '',
+                'name_en' => $user->cityRelation->name_en ?? '',
+                'governorate_id' => $user->cityRelation->governorate_id,
+            ];
+        }
+
+        $countryPayload = $this->getCountryPayload($user);
 
         return response()->json([
             'data' => [
@@ -29,11 +42,11 @@ class UserController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
-                'avatar' => $user->avatar ?? null,
-                'avatar_url' => $user->avatar ?? null,
+                'avatar' => $user->avatar ? $this->fullAvatarUrl($user->avatar) : null,
+                'avatar_url' => $user->avatar ? $this->fullAvatarUrl($user->avatar) : null,
                 'language' => $user->language ?? 'ar',
-                'city' => $user->city,
-                'country' => $user->country ?? 'مصر',
+                'city' => $cityPayload,
+                'country' => $countryPayload,
                 'role' => $user->role ? [
                     'id' => $user->role->id,
                     'name' => $user->role->name,
@@ -45,7 +58,34 @@ class UserController extends Controller
     }
 
     /**
-     * Update user profile
+     * Country as object. Default Egypt when no country table.
+     */
+    private function getCountryPayload(User $user): array
+    {
+        return [
+            'id' => 1,
+            'name_ar' => 'مصر',
+            'name_en' => 'Egypt',
+        ];
+    }
+
+    /**
+     * Full URL for avatar (storage path may be relative).
+     */
+    private function fullAvatarUrl(?string $avatar): string
+    {
+        if (empty($avatar)) {
+            return '';
+        }
+        if (str_starts_with($avatar, 'http')) {
+            return $avatar;
+        }
+        return rtrim(config('app.url'), '/') . '/' . ltrim($avatar, '/');
+    }
+
+    /**
+     * Update user profile.
+     * Accepts body shape: name, email, phone, language, city: { id, name_ar?, name_en?, governorate_id? }, governorate: { id, name_ar?, name_en?, order_index? }, gender, avatar, type (alias for gender).
      */
     public function updateProfile(Request $request): JsonResponse
     {
@@ -66,7 +106,15 @@ class UserController extends Controller
                 Rule::unique('users')->ignore($user->id),
             ],
             'language' => 'sometimes|in:ar,en',
-            'city' => 'sometimes|string|max:255|in:القاهرة,الجيزة,الإسكندرية,المنصورة,طنطا,أسيوط,الأقصر,أسوان,بورسعيد,السويس,الإسماعيلية,شبرا الخيمة,زقازيق,بنها,كفر الشيخ,دمياط,المنيا,سوهاج,قنا,البحر الأحمر,مطروح,شمال سيناء,جنوب سيناء,الوادي الجديد,البحيرة,الدقهلية,الشرقية,القليوبية,الفيوم,بني سويف',
+            'gender' => 'sometimes|in:male,female',
+            'avatar' => 'sometimes|nullable|string|max:500',
+            'city' => 'sometimes|array',
+            'city.id' => 'sometimes|nullable|integer|exists:cities,id',
+            'governorate' => 'sometimes|array',
+            'governorate.id' => 'sometimes|nullable|integer|exists:governorates,id',
+            'city_id' => 'sometimes|nullable|exists:cities,id',
+            'governorate_id' => 'sometimes|nullable|exists:governorates,id',
+            'type' => 'sometimes|in:male,female',
         ]);
 
         if ($validator->fails()) {
@@ -76,13 +124,59 @@ class UserController extends Controller
             ], 422);
         }
 
-        $updateData = $validator->validated();
+        $updateData = array_filter([
+            'name' => $request->input('name'),
+            'email' => $request->input('email'),
+            'phone' => $request->input('phone'),
+            'language' => $request->input('language'),
+            'gender' => $request->input('gender') ?? $request->input('type'),
+            'avatar' => $request->input('avatar'),
+        ], fn ($v) => $v !== null && $v !== '');
 
-        // Keep country as Egypt
+        if ($request->has('city') && is_array($request->city) && isset($request->city['id'])) {
+            $updateData['city_id'] = (int) $request->city['id'];
+        }
+        if ($request->has('governorate') && is_array($request->governorate) && isset($request->governorate['id'])) {
+            $updateData['governorate_id'] = (int) $request->governorate['id'];
+        }
+        if ($request->filled('city_id')) {
+            $updateData['city_id'] = (int) $request->city_id;
+        }
+        if ($request->filled('governorate_id')) {
+            $updateData['governorate_id'] = (int) $request->governorate_id;
+        }
+
+        if (isset($updateData['city_id']) && ! isset($updateData['governorate_id'])) {
+            $city = \App\Models\City::find($updateData['city_id']);
+            if ($city) {
+                $updateData['governorate_id'] = $city->governorate_id;
+            }
+        }
+
         $updateData['country'] = 'مصر';
 
         $user->update($updateData);
-        $user->load('role');
+        $user->load(['role', 'cityRelation', 'governorateRelation']);
+
+        $cityPayload = null;
+        if ($user->cityRelation) {
+            $cityPayload = [
+                'id' => $user->cityRelation->id,
+                'name_ar' => $user->cityRelation->name_ar ?? '',
+                'name_en' => $user->cityRelation->name_en ?? '',
+                'governorate_id' => $user->cityRelation->governorate_id,
+            ];
+        }
+
+        $governoratePayload = null;
+        if ($user->governorateRelation) {
+            $governoratePayload = [
+                'id' => $user->governorateRelation->id,
+                'name_ar' => $user->governorateRelation->name_ar ?? '',
+                'name_en' => $user->governorateRelation->name_en ?? '',
+                'order_index' => $user->governorateRelation->order_index ?? null,
+            ];
+        }
 
         return response()->json([
             'message' => 'Profile updated successfully',
@@ -91,15 +185,18 @@ class UserController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
-                'avatar' => $user->avatar ?? null,
-                'avatar_url' => $user->avatar ?? null,
+                'avatar' => $user->avatar ? $this->fullAvatarUrl($user->avatar) : null,
+                'avatar_url' => $user->avatar ? $this->fullAvatarUrl($user->avatar) : null,
                 'language' => $user->language ?? 'ar',
-                'city' => $user->city,
-                'country' => $user->country,
+                'gender' => $user->gender ?? null,
+                'city' => $cityPayload,
+                'governorate' => $governoratePayload,
+                'country' => $this->getCountryPayload($user),
                 'role' => $user->role ? [
                     'id' => $user->role->id,
                     'name' => $user->role->name,
                 ] : null,
+                'created_at' => $user->created_at->toIso8601String(),
                 'updated_at' => $user->updated_at->toIso8601String(),
             ],
         ]);

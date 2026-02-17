@@ -143,11 +143,18 @@ class OfferController extends Controller
     /**
      * Toggle favorite status for the authenticated user.
      */
+    /**
+     * Toggle favorite (requires auth + token). Only authenticated user can add/remove favorites.
+     */
     public function toggleFavorite(Request $request, Offer $offer): JsonResponse
     {
         $user = $request->user();
-        if (!$user) {
-            return response()->json(['message' => 'Unauthenticated'], 401);
+        if (! $user) {
+            return response()->json([
+                'message' => 'Unauthenticated. You must log in to add favorites.',
+                'message_ar' => 'يجب تسجيل الدخول لإضافة العروض إلى المفضلة. الرجاء تسجيل الدخول أو إنشاء حساب.',
+                'message_en' => 'You must be logged in to add favorites.',
+            ], 401);
         }
 
         $isFavorite = $this->offerService->toggleFavorite($offer, $user->id);

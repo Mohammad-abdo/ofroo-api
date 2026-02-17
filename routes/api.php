@@ -149,22 +149,23 @@ Route::post('/test-mark-read/{id}', function ($id) {
     }
 });
 
-// Authenticated routes
+// =============================================================================
+// Authenticated routes only - كل المسارات التالية تتطلب تسجيل الدخول + Token
+// (Authorization: Bearer <token>). السلة والمفضلة والطلبات مرتبطة بالمستخدم المسجل.
+// =============================================================================
 Route::middleware('auth:sanctum')->group(function () {
-    // Auth
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
-    // Offers
+    // Offers (create/update/delete/favorite require auth)
     Route::prefix('offers')->group(function () {
         Route::get('/', [OfferController::class, 'index']);
         Route::post('/', [OfferController::class, 'store']);
         Route::get('/{offer}', [OfferController::class, 'show']);
         Route::put('/{offer}', [OfferController::class, 'update']);
         Route::delete('/{offer}', [OfferController::class, 'destroy']);
-        Route::post('/{offer}/favorite', [OfferController::class, 'toggleFavorite']);
+        Route::post('/{offer}/favorite', [OfferController::class, 'toggleFavorite']); // requires auth
         Route::post('/{offer}/status', [OfferController::class, 'toggleStatus']);
 
-        // Nested Coupons
         Route::prefix('{offer}/coupons')->group(function () {
             Route::get('/', [CouponController::class, 'index']);
             Route::post('/', [CouponController::class, 'store']);
@@ -173,7 +174,7 @@ Route::middleware('auth:sanctum')->group(function () {
         });
     });
 
-    // Cart (يتطلب تسجيل الدخول)
+    // Cart - يتطلب auth + token (لا يمكن الوصول بدون تسجيل الدخول)
     Route::prefix('cart')->middleware('auth:sanctum')->group(function () {
         Route::get('/', [CartController::class, 'index']);
         Route::post('/add', [CartController::class, 'add']);

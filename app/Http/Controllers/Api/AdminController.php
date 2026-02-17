@@ -933,6 +933,7 @@ class AdminController extends Controller
                 'barcode' => $couponData['barcode'] ?? null,
                 'image' => $couponData['image'] ?? null,
                 'status' => $couponData['status'] ?? 'active',
+                'usage_limit' => isset($couponData['usage_limit']) ? max(1, (int) $couponData['usage_limit']) : 1,
             ];
             try {
                 $this->offerService->createCouponForOffer($offer, $data, $imageFile);
