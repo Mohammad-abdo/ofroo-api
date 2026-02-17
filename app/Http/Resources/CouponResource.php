@@ -13,13 +13,17 @@ class CouponResource extends JsonResource
         $timesUsed = (int) ($this->times_used ?? 0);
         $remaining = max(0, $usageLimit - $timesUsed);
 
+        $price = (float) $this->price;
+        $priceAfterDiscount = (float) $this->price_after_discount;
+
         $arr = [
             'id' => $this->id,
             'offer_id' => (string) $this->offer_id,
             'image' => $this->image ?? '',
             'title' => $this->title ?? '',
             'description' => $this->description ?? '',
-            'price' => (float) $this->price,
+            'price' => $price,
+            'price_after_discount' => $priceAfterDiscount,
             'discount' => (float) $this->discount,
             'discount_type' => $this->discount_type ?? 'percentage',
             'barcode' => $this->barcode ?? $this->coupon_code ?? '',

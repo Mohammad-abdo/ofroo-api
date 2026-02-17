@@ -42,6 +42,9 @@ class CartController extends Controller
         $cart->load(['items.offer.merchant', 'items.offer.category', 'items.offer.coupons', 'items.coupon']);
 
         $total = $cart->items->sum(function ($item) {
+            if ($item->coupon_id && $item->relationLoaded('coupon') && $item->coupon) {
+                return (float) $item->coupon->price_after_discount * $item->quantity;
+            }
             return $item->price_at_add * $item->quantity;
         });
 
@@ -71,13 +74,17 @@ class CartController extends Controller
                     ];
 
                     if ($hasSpecificCoupon) {
+                        $priceAfterDiscount = (float) $item->coupon->price_after_discount;
+                        $qty = (int) $item->quantity;
                         return [
                             'id' => $item->id,
                             'offer_id' => (int) $item->offer_id,
                             'coupon' => (new CouponResource($item->coupon))->resolve(),
-                            'quantity' => 1,
+                            'quantity' => $qty,
                             'price_at_add' => (float) $item->price_at_add,
+                            'price_after_discount' => $priceAfterDiscount,
                             'subtotal' => (float) $item->price_at_add,
+                            'subtotal_after_discount' => round($priceAfterDiscount * $qty, 2),
                         ];
                     }
 
