@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\ReviewModerationController;
 use App\Http\Controllers\Api\RegulatoryCheckController;
 use App\Http\Controllers\Api\FinancialReportsCacheController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\AdController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -55,6 +56,7 @@ Route::get('/', function () {
             'category-name' => '/api/mobile/category-name',
             'offers' => '/api/mobile/offers',
             'merchants' => '/api/mobile/merchants',
+            'ads' => '/api/mobile/ads',
             'cart' => '/api/mobile/cart',
             'orders' => '/api/mobile/orders',
             'user' => '/api/mobile/user',
@@ -110,6 +112,12 @@ Route::get('/offers/{offer}/coupons', [CouponController::class, 'index']);
 Route::get('/merchants', [MerchantProfileController::class, 'index']);
 Route::get('/merchants/{id}/offers', [MerchantProfileController::class, 'offers']); // قبل {id} عشان يطابق الأول
 Route::get('/merchants/{id}', [MerchantProfileController::class, 'show'])->where('id', '[0-9]+');
+
+// ================================
+// 4.2 الإعلانات (Ads) - Public
+// ================================
+Route::get('/ads', [AdController::class, 'index']);
+Route::get('/ads/{id}', [AdController::class, 'show'])->where('id', '[0-9]+');
 
 // ================================
 // Protected Routes - كل ما يخص المستخدم يتطلب تسجيل الدخول (auth:sanctum)

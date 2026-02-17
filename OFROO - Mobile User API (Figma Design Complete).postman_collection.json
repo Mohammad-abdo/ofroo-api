@@ -1505,7 +1505,7 @@
                 "cart"
               ]
             },
-            "description": "Get user cart with all items, quantities, prices, totals. يتطلب مصادقة (Authorization: Bearer {{access_token}}). 401: message_ar \"يجب تسجيل الدخول لاستخدام السلة\"."
+            "description": "Get cart. يتطلب مصادقة. Response: data.items[] لكل عنصر: id, offer_id (إن وُجد)، coupon (كامل مع price, price_after_discount, discount, discount_type)، quantity, price_at_add, price_after_discount, subtotal, subtotal_after_discount. data.total = مجموع subtotal_after_discount للعناصر المرتبطة بكوبون + subtotal لغيرها. 401: message_ar / message_en."
           },
           "response": [
             {
@@ -1553,7 +1553,7 @@
                 "add"
               ]
             },
-            "description": "Add offer to cart with specified quantity. يتطلب مصادقة. 401: غير مصرح. 400: عرض غير متاح أو تم استنفاد حد استخدام الكوبون (message_ar, message_en)."
+            "description": "إضافة للسلة: (1) offer_id + quantity = إضافة كمية من العرض. (2) coupon_id (واختياري offer_id) = إضافة كوبون محدد. يتطلب مصادقة. 401/400: message_ar, message_en."
           },
           "response": [
             {
@@ -1573,6 +1573,28 @@
               "body": "{\n  \"message\": \"Offer not available or coupon usage limit exhausted.\",\n  \"message_ar\": \"العرض غير متاح أو تم استنفاد حد استخدام الكوبون\",\n  \"message_en\": \"This offer is unavailable or the coupon usage limit has been exhausted.\"\n}"
             }
           ]
+        },
+        {
+          "name": "Add Coupon to Cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"coupon_id\": 97,\n    \"offer_id\": 29\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/mobile/cart/add",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mobile", "cart", "add"]
+            },
+            "description": "إضافة كوبون محدد للسلة. Body: coupon_id (مطلوب)، offer_id (اختياري للتحقق أن الكوبون تابع لهذا العرض)."
+          },
+          "response": []
         },
         {
           "name": "Apply Discount Code",
@@ -2323,7 +2345,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"name\": \"Ahmed Ali Updated\",\n    \"email\": \"ahmed.updated@example.com\",\n    \"phone\": \"+201012345679\",\n    \"language\": \"en\",\n    \"city\": \"الجيزة\",\n    \"governorate\": \"الجيزة\",\n    \"type\": \"male\"\n}"
+              "raw": "{\n    \"name\": \"Ahmed Ali Updated\",\n    \"email\": \"ahmed.updated@example.com\",\n    \"phone\": \"+201012345679\",\n    \"language\": \"en\",\n    \"city\": { \"id\": 1, \"name_ar\": \"المعادي\", \"name_en\": \"Maadi\", \"governorate_id\": 1 },\n    \"governorate\": { \"id\": 1, \"name_ar\": \"الجيزة\", \"name_en\": \"Giza\", \"order_index\": 1 },\n    \"gender\": \"male\",\n    \"avatar\": \"https://example.com/avatar.jpg\",\n    \"type\": \"male\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/mobile/user/profile",
@@ -2337,7 +2359,7 @@
                 "profile"
               ]
             },
-            "description": "Update user profile information including name, email, phone, language, city, governorate, and type/gender."
+            "description": "Update profile. Body: name, email, phone, language, city (object with id, name_ar, name_en, governorate_id), governorate (object with id, name_ar, name_en, order_index), gender, avatar (URL), type (alias for gender). Response includes city, governorate, country as objects and gender."
           },
           "response": []
         },
