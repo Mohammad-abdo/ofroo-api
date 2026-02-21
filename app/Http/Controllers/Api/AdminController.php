@@ -2521,63 +2521,81 @@ class AdminController extends Controller
      */
     public function getOrders(Request $request): JsonResponse
     {
-        $query = Order::with(['user', 'merchant', 'items.offer', 'coupons']);
+        try {
+            $query = Order::with(['user', 'merchant'])->withCount(['items', 'coupons']);
 
-        if ($request->has('status')) {
-            $query->where('payment_status', $request->status);
+            if ($request->filled('status')) {
+                $query->where('payment_status', $request->status);
+            }
+
+            if ($request->filled('merchant_id')) {
+                $query->where('merchant_id', $request->merchant_id);
+            }
+
+            if ($request->filled('user_id')) {
+                $query->where('user_id', $request->user_id);
+            }
+
+            if ($request->filled('from')) {
+                $query->where('created_at', '>=', $request->from);
+            }
+
+            if ($request->filled('to')) {
+                $query->where('created_at', '<=', $request->to);
+            }
+
+            $orders = $query->orderBy('created_at', 'desc')
+                ->paginate((int) $request->get('per_page', 15));
+
+            $data = $orders->getCollection()->map(function ($order) {
+                $user = $order->relationLoaded('user') ? $order->user : null;
+                $merchant = $order->relationLoaded('merchant') ? $order->merchant : null;
+                return [
+                    'id' => $order->id,
+                    'user' => $user ? [
+                        'id' => $user->id,
+                        'name' => $user->name ?? '',
+                        'email' => $user->email ?? '',
+                    ] : null,
+                    'merchant' => $merchant ? [
+                        'id' => $merchant->id,
+                        'company_name' => $merchant->company_name ?? '',
+                    ] : null,
+                    'total_amount' => $order->total_amount,
+                    'payment_method' => $order->payment_method ?? 'cash',
+                    'payment_status' => $order->payment_status ?? 'pending',
+                    'items_count' => (int) ($order->items_count ?? 0),
+                    'coupons_count' => (int) ($order->coupons_count ?? 0),
+                    'created_at' => $order->created_at ? $order->created_at->toIso8601String() : null,
+                ];
+            });
+
+            return response()->json([
+                'data' => $data,
+                'meta' => [
+                    'current_page' => $orders->currentPage(),
+                    'last_page' => $orders->lastPage(),
+                    'per_page' => $orders->perPage(),
+                    'total' => $orders->total(),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Admin getOrders: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->only(['page', 'per_page', 'status', 'merchant_id', 'user_id', 'from', 'to']),
+            ]);
+            // Return 200 with empty data so the UI can still render (e.g. table missing or schema mismatch)
+            return response()->json([
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'per_page' => (int) $request->get('per_page', 15),
+                    'total' => 0,
+                ],
+                'message' => 'Orders could not be loaded. Check server logs.',
+            ]);
         }
-
-        if ($request->has('merchant_id')) {
-            $query->where('merchant_id', $request->merchant_id);
-        }
-
-        if ($request->has('user_id')) {
-            $query->where('user_id', $request->user_id);
-        }
-
-        if ($request->has('from')) {
-            $query->where('created_at', '>=', $request->from);
-        }
-
-        if ($request->has('to')) {
-            $query->where('created_at', '<=', $request->to);
-        }
-
-        $orders = $query->orderBy('created_at', 'desc')
-            ->paginate($request->get('per_page', 15));
-
-        $data = $orders->getCollection()->map(function ($order) {
-            $user = $order->user;
-            $merchant = $order->merchant;
-            return [
-                'id' => $order->id,
-                'user' => $user ? [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                ] : null,
-                'merchant' => $merchant ? [
-                    'id' => $merchant->id,
-                    'company_name' => $merchant->company_name,
-                ] : null,
-                'total_amount' => $order->total_amount,
-                'payment_method' => $order->payment_method,
-                'payment_status' => $order->payment_status,
-                'items_count' => $order->items()->count(),
-                'coupons_count' => $order->coupons()->count(),
-                'created_at' => $order->created_at ? $order->created_at->toIso8601String() : null,
-            ];
-        });
-
-        return response()->json([
-            'data' => $data,
-            'meta' => [
-                'current_page' => $orders->currentPage(),
-                'last_page' => $orders->lastPage(),
-                'per_page' => $orders->perPage(),
-                'total' => $orders->total(),
-            ],
-        ]);
     }
 
     /**
