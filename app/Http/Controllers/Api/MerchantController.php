@@ -209,13 +209,17 @@ class MerchantController extends Controller
     public function orders(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = Merchant::where('user_id', $user->id)->first();
 
-        $orders = Order::with(['user', 'items.offer', 'coupons'])
+        if (! $merchant) {
+            return response()->json(['data' => [], 'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 0]], 200);
+        }
+
+        $orders = Order::with(['user', 'items.offer'])
             ->where('merchant_id', $merchant->id)
-            ->where('payment_status', 'paid') // Only paid orders
+            ->where('payment_status', 'paid')
             ->orderBy('created_at', 'desc')
-            ->paginate($request->get('per_page', 15));
+            ->paginate((int) $request->get('per_page', 15));
 
         return response()->json([
             'data' => $orders->items(),
@@ -1881,15 +1885,19 @@ class MerchantController extends Controller
     public function getCommissionTransactions(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = Merchant::where('user_id', $user->id)->first();
 
-        // Get orders with activated coupons
-        $query = Order::with(['user', 'coupons.offer'])
+        if (! $merchant) {
+            return response()->json([
+                'data' => [],
+                'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 0],
+            ], 200);
+        }
+
+        // All paid orders (coupons table no longer has order_id after refactor)
+        $query = Order::with(['user', 'items.offer'])
             ->where('merchant_id', $merchant->id)
-            ->where('payment_status', 'paid')
-            ->whereHas('coupons', function ($q) {
-                $q->where('status', 'activated');
-            });
+            ->where('payment_status', 'paid');
 
         // Filter by period
         if ($request->has('period')) {
@@ -1905,27 +1913,16 @@ class MerchantController extends Controller
             }
         }
 
-        // Filter by status
-        if ($request->has('status') && $request->status !== 'all') {
-            // Status filter can be applied to coupons
-            $query->whereHas('coupons', function ($q) use ($request) {
-                if ($request->status === 'active') {
-                    $q->where('status', 'activated');
-                } elseif ($request->status === 'delivered') {
-                    $q->where('status', 'used');
-                }
-            });
-        }
-
-        // Search
-        if ($request->has('search') && $request->search) {
+        // Search by user name or offer title
+        if ($request->has('search') && $request->search !== '') {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->whereHas('user', function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%");
                 })
-                ->orWhereHas('coupons.offer', function ($q) use ($search) {
-                    $q->where('title_ar', 'like', "%{$search}%")
+                ->orWhereHas('items.offer', function ($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%")
+                      ->orWhere('title_ar', 'like', "%{$search}%")
                       ->orWhere('title_en', 'like', "%{$search}%");
                 });
             });
@@ -1935,19 +1932,22 @@ class MerchantController extends Controller
             ->paginate($request->get('per_page', 15));
 
         $transactions = $orders->getCollection()->map(function ($order) {
-            $commission = $order->total_amount * 0.10; // 10% commission
-            $activatedCoupons = $order->coupons->where('status', 'activated');
-            
+            $commission = (float) $order->total_amount * 0.10;
+            $firstItem = $order->items->first();
+            $offer = $firstItem?->offer;
+            $offerTitle = $offer ? ($offer->title_ar ?? $offer->title_en ?? $offer->title) : null;
+            $user = $order->user;
+
             return [
                 'id' => $order->id,
-                'created_at' => $order->created_at->toIso8601String(),
-                'description' => (($first = $activatedCoupons->first()) && $first->offer ? $first->offer->title_ar : null) ?? ($first && $first->offer ? $first->offer->title_en : null) ?? 'N/A',
-                'item' => (($first = $activatedCoupons->first()) && $first->offer ? $first->offer->title_ar : null) ?? ($first && $first->offer ? $first->offer->title_en : null) ?? 'N/A',
+                'created_at' => $order->created_at?->toIso8601String(),
+                'description' => $offerTitle ?? 'N/A',
+                'item' => $offerTitle ?? 'N/A',
                 'user' => [
-                    'id' => $order->user->id,
-                    'name' => $order->user->name,
+                    'id' => $user->id ?? null,
+                    'name' => $user->name ?? 'N/A',
                 ],
-                'customer' => $order->user->name,
+                'customer' => $user->name ?? 'N/A',
                 'branch' => $order->location_id ? 'Branch ' . $order->location_id : 'N/A',
                 'location' => $order->location_id ? 'Branch ' . $order->location_id : 'N/A',
                 'payment_method' => $order->payment_method ?? 'N/A',
