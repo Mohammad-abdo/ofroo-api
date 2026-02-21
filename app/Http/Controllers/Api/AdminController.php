@@ -32,9 +32,21 @@ class AdminController extends Controller
     public function users(Request $request): JsonResponse
     {
         $users = User::with('role')
-            ->when($request->has('role') && $request->role, function ($query) use ($request) {
-                $query->whereHas('role', function ($q) use ($request) {
-                    $q->where('name', $request->role);
+            ->when($request->has('role') && $request->role !== '', function ($query) use ($request) {
+                $role = $request->role;
+                if ($role === 'staff') {
+                    $query->whereHas('role', function ($q) {
+                        $q->whereIn('name', ['admin', 'employee', 'data_entry', 'accountant']);
+                    });
+                } else {
+                    $query->whereHas('role', function ($q) use ($role) {
+                        $q->where('name', $role);
+                    });
+                }
+            })
+            ->when(!$request->has('role') || $request->role === '', function ($query) {
+                $query->whereHas('role', function ($q) {
+                    $q->where('name', '!=', 'merchant');
                 });
             })
             ->when($request->has('search') && $request->search, function ($query) use ($request) {
@@ -198,22 +210,62 @@ class AdminController extends Controller
     }
 
     /**
-     * Create merchant (Admin)
+     * Create merchant (Admin) - full merchant details
      */
     public function createMerchant(Request $request): JsonResponse
     {
+        // Normalize empty strings to null for optional FK fields (avoids 422 on exists rule)
+        $input = $request->all();
+        foreach (['mall_id', 'category_id'] as $key) {
+            if (isset($input[$key]) && $input[$key] === '') {
+                $input[$key] = null;
+            }
+        }
+        if (!empty($input['branches']) && is_array($input['branches'])) {
+            foreach ($input['branches'] as $i => $b) {
+                if (isset($b['mall_id']) && $b['mall_id'] === '') {
+                    $input['branches'][$i]['mall_id'] = null;
+                }
+            }
+        }
+        $request->merge($input);
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email',
-            'phone' => 'nullable|string|max:20',
+            'phone' => 'nullable|string|max:50',
             'password' => 'required|string|min:8|confirmed',
+            'language' => 'nullable|in:ar,en',
+            'city' => 'nullable|string|max:255',
             'company_name' => 'required|string|max:255',
             'company_name_ar' => 'nullable|string|max:255',
             'company_name_en' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'description_ar' => 'nullable|string',
+            'description_en' => 'nullable|string',
+            'address' => 'nullable|string|max:500',
+            'address_ar' => 'nullable|string|max:500',
+            'address_en' => 'nullable|string|max:500',
             'commercial_registration' => 'nullable|string|max:255',
             'tax_number' => 'nullable|string|max:255',
-            'language' => 'nullable|in:ar,en',
-            'city' => 'required|string|max:255|in:القاهرة,الجيزة,الإسكندرية,المنصورة,طنطا,أسيوط,الأقصر,أسوان,بورسعيد,السويس,الإسماعيلية,شبرا الخيمة,زقازيق,بنها,كفر الشيخ,دمياط,المنيا,سوهاج,قنا,البحر الأحمر,مطروح,شمال سيناء,جنوب سيناء,الوادي الجديد,البحيرة,الدقهلية,الشرقية,القليوبية,الفيوم,بني سويف',
+            'whatsapp_number' => 'nullable|string|max:50',
+            'whatsapp_link' => 'nullable|string|max:500',
+            'whatsapp_enabled' => 'nullable|boolean',
+            'mall_id' => 'nullable|exists:malls,id',
+            'category_id' => 'nullable|exists:categories,id',
+            'is_approved' => 'nullable|boolean',
+            'branches' => 'nullable|array',
+            'branches.*.name' => 'required_with:branches|string|max:255',
+            'branches.*.name_ar' => 'nullable|string|max:255',
+            'branches.*.name_en' => 'nullable|string|max:255',
+            'branches.*.address' => 'nullable|string|max:500',
+            'branches.*.address_ar' => 'nullable|string|max:500',
+            'branches.*.address_en' => 'nullable|string|max:500',
+            'branches.*.phone' => 'nullable|string|max:50',
+            'branches.*.mall_id' => 'nullable|exists:malls,id',
+            'branches.*.lat' => 'nullable|numeric',
+            'branches.*.lng' => 'nullable|numeric',
+            'branches.*.is_active' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -223,9 +275,14 @@ class AdminController extends Controller
             ], 422);
         }
 
-        $merchantRole = \App\Models\Role::where('name', 'merchant')->firstOrFail();
+        $merchantRole = \App\Models\Role::where('name', 'merchant')->first();
+        if (!$merchantRole) {
+            return response()->json([
+                'message' => 'Merchant role not found. Please run: php artisan db:seed --class=RoleSeeder',
+            ], 422);
+        }
 
-        // Create user
+        try {
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
@@ -233,22 +290,62 @@ class AdminController extends Controller
             'password' => bcrypt($request->password),
             'role_id' => $merchantRole->id,
             'language' => $request->language ?? 'ar',
-            'city' => $request->city,
+            'city' => $request->city ?? '',
             'country' => 'مصر',
         ]);
 
-        // Create merchant
         $merchant = Merchant::create([
             'user_id' => $user->id,
             'company_name' => $request->company_name,
             'company_name_ar' => $request->company_name_ar,
             'company_name_en' => $request->company_name_en,
+            'description' => $request->description,
+            'description_ar' => $request->description_ar,
+            'description_en' => $request->description_en,
+            'address' => $request->address,
+            'address_ar' => $request->address_ar,
+            'address_en' => $request->address_en,
+            'phone' => $request->phone,
+            'whatsapp_number' => $request->whatsapp_number,
+            'whatsapp_link' => $request->whatsapp_link,
+            'whatsapp_enabled' => $request->boolean('whatsapp_enabled', true),
             'commercial_registration' => $request->commercial_registration,
             'tax_number' => $request->tax_number,
             'city' => $request->city,
             'country' => 'مصر',
-            'approved' => $request->is_approved ?? false,
+            'mall_id' => $request->mall_id,
+            'category_id' => $request->category_id,
+            'approved' => $request->boolean('is_approved', false),
         ]);
+
+        // Create branches only if table "branches" exists (lat/lng default 0 for NOT NULL)
+        $branchesData = $request->input('branches', []);
+        if (\Illuminate\Support\Facades\Schema::hasTable('branches') && count($branchesData) > 0) {
+            $branchTableHasMallId = \Illuminate\Support\Facades\Schema::hasColumn('branches', 'mall_id');
+            foreach ($branchesData as $b) {
+                try {
+                    $payload = [
+                        'merchant_id' => $merchant->id,
+                        'name' => $b['name'] ?? 'Branch',
+                        'name_ar' => $b['name_ar'] ?? null,
+                        'name_en' => $b['name_en'] ?? null,
+                        'address' => $b['address'] ?? null,
+                        'address_ar' => $b['address_ar'] ?? null,
+                        'address_en' => $b['address_en'] ?? null,
+                        'phone' => $b['phone'] ?? null,
+                        'lat' => isset($b['lat']) && $b['lat'] !== '' ? (float) $b['lat'] : 0,
+                        'lng' => isset($b['lng']) && $b['lng'] !== '' ? (float) $b['lng'] : 0,
+                        'is_active' => isset($b['is_active']) ? (bool) $b['is_active'] : true,
+                    ];
+                    if ($branchTableHasMallId && !empty($b['mall_id'])) {
+                        $payload['mall_id'] = $b['mall_id'];
+                    }
+                    \App\Models\Branch::create($payload);
+                } catch (\Throwable $branchEx) {
+                    \Log::warning('Admin createMerchant: branch create failed: ' . $branchEx->getMessage());
+                }
+            }
+        }
 
         return response()->json([
             'message' => 'Merchant created successfully',
@@ -258,10 +355,17 @@ class AdminController extends Controller
                 'user' => new UserResource($user->load('role')),
             ],
         ], 201);
+        } catch (\Throwable $e) {
+            \Log::error('Admin createMerchant: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'message' => 'Server error while creating merchant.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
     }
 
     /**
-     * Update merchant (Admin)
+     * Update merchant (Admin) - full merchant details
      */
     public function updateMerchant(Request $request, string $id): JsonResponse
     {
@@ -270,37 +374,57 @@ class AdminController extends Controller
         $request->validate([
             'name' => 'sometimes|string|max:255',
             'email' => 'sometimes|email|unique:users,email,' . $merchant->user_id,
-            'phone' => 'sometimes|string|max:20',
+            'phone' => 'sometimes|nullable|string|max:50',
             'company_name' => 'sometimes|string|max:255',
-            'company_name_ar' => 'sometimes|string|max:255',
-            'company_name_en' => 'sometimes|string|max:255',
-            'commercial_registration' => 'sometimes|string|max:255',
-            'tax_number' => 'sometimes|string|max:255',
-            'city' => 'sometimes|string|max:255|in:القاهرة,الجيزة,الإسكندرية,المنصورة,طنطا,أسيوط,الأقصر,أسوان,بورسعيد,السويس,الإسماعيلية,شبرا الخيمة,زقازيق,بنها,كفر الشيخ,دمياط,المنيا,سوهاج,قنا,البحر الأحمر,مطروح,شمال سيناء,جنوب سيناء,الوادي الجديد,البحيرة,الدقهلية,الشرقية,القليوبية,الفيوم,بني سويف',
+            'company_name_ar' => 'sometimes|nullable|string|max:255',
+            'company_name_en' => 'sometimes|nullable|string|max:255',
+            'description' => 'sometimes|nullable|string',
+            'description_ar' => 'sometimes|nullable|string',
+            'description_en' => 'sometimes|nullable|string',
+            'address' => 'sometimes|nullable|string|max:500',
+            'address_ar' => 'sometimes|nullable|string|max:500',
+            'address_en' => 'sometimes|nullable|string|max:500',
+            'commercial_registration' => 'sometimes|nullable|string|max:255',
+            'tax_number' => 'sometimes|nullable|string|max:255',
+            'city' => 'sometimes|nullable|string|max:255',
+            'whatsapp_number' => 'sometimes|nullable|string|max:50',
+            'whatsapp_link' => 'sometimes|nullable|string|max:500',
+            'whatsapp_enabled' => 'sometimes|boolean',
+            'mall_id' => 'sometimes|nullable|exists:malls,id',
+            'category_id' => 'sometimes|nullable|exists:categories,id',
             'is_approved' => 'sometimes|boolean',
         ]);
 
-        // Update user
         if ($merchant->user) {
-            $userData = [];
-            if ($request->has('name')) $userData['name'] = $request->name;
-            if ($request->has('email')) $userData['email'] = $request->email;
-            if ($request->has('phone')) $userData['phone'] = $request->phone;
-            if ($request->has('city')) $userData['city'] = $request->city;
-            $userData['country'] = 'مصر'; // Always Egypt
+            $userData = array_filter([
+                'name' => $request->input('name'),
+                'email' => $request->input('email'),
+                'phone' => $request->input('phone'),
+                'city' => $request->input('city'),
+            ], fn ($v) => $v !== null);
+            $userData['country'] = 'مصر';
             $merchant->user->update($userData);
         }
 
-        // Update merchant
-        $merchantData = [];
-        if ($request->has('company_name')) $merchantData['company_name'] = $request->company_name;
-        if ($request->has('company_name_ar')) $merchantData['company_name_ar'] = $request->company_name_ar;
-        if ($request->has('company_name_en')) $merchantData['company_name_en'] = $request->company_name_en;
-        if ($request->has('commercial_registration')) $merchantData['commercial_registration'] = $request->commercial_registration;
-        if ($request->has('tax_number')) $merchantData['tax_number'] = $request->tax_number;
-        if ($request->has('city')) $merchantData['city'] = $request->city;
-        if ($request->has('is_approved')) $merchantData['approved'] = $request->is_approved;
-        $merchantData['country'] = 'مصر'; // Always Egypt
+        $merchantData = ['country' => 'مصر'];
+        $merchantFields = [
+            'company_name', 'company_name_ar', 'company_name_en',
+            'description', 'description_ar', 'description_en',
+            'address', 'address_ar', 'address_en', 'phone',
+            'commercial_registration', 'tax_number', 'city',
+            'whatsapp_number', 'whatsapp_link', 'mall_id', 'category_id',
+        ];
+        foreach ($merchantFields as $key) {
+            if ($request->has($key)) {
+                $merchantData[$key] = $request->input($key);
+            }
+        }
+        if ($request->has('whatsapp_enabled')) {
+            $merchantData['whatsapp_enabled'] = $request->boolean('whatsapp_enabled');
+        }
+        if ($request->has('is_approved')) {
+            $merchantData['approved'] = $request->boolean('is_approved');
+        }
         $merchant->update($merchantData);
 
         return response()->json([
@@ -955,6 +1079,14 @@ class AdminController extends Controller
     {
         $offer = \App\Models\Offer::findOrFail($id);
 
+        $input = $request->all();
+        foreach (['merchant_id', 'category_id', 'mall_id'] as $key) {
+            if (isset($input[$key]) && (is_string($input[$key]) && trim($input[$key]) === '')) {
+                $input[$key] = null;
+            }
+        }
+        $request->merge($input);
+
         $rules = [
             'merchant_id' => 'nullable|exists:merchants,id',
             'category_id' => 'nullable|exists:categories,id',
@@ -1011,7 +1143,7 @@ class AdminController extends Controller
             $updateData['offer_images'] = $imageUrls;
         }
 
-        $offer->update(array_filter($updateData));
+        $offer->update(array_filter($updateData, fn ($v) => $v !== ''));
 
         if ($request->has('branches')) {
             $offer->branches()->sync($request->branches ?? []);
@@ -2415,17 +2547,19 @@ class AdminController extends Controller
             ->paginate($request->get('per_page', 15));
 
         $data = $orders->getCollection()->map(function ($order) {
+            $user = $order->user;
+            $merchant = $order->merchant;
             return [
                 'id' => $order->id,
-                'user' => [
-                    'id' => $order->user->id,
-                    'name' => $order->user->name,
-                    'email' => $order->user->email,
-                ],
-                'merchant' => [
-                    'id' => $order->merchant->id,
-                    'company_name' => $order->merchant->company_name,
-                ],
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ] : null,
+                'merchant' => $merchant ? [
+                    'id' => $merchant->id,
+                    'company_name' => $merchant->company_name,
+                ] : null,
                 'total_amount' => $order->total_amount,
                 'payment_method' => $order->payment_method,
                 'payment_status' => $order->payment_status,
@@ -4371,7 +4505,7 @@ class AdminController extends Controller
      */
     public function getCouponActivations(Request $request): JsonResponse
     {
-        $query = \App\Models\CouponActivation::with(['coupon', 'user', 'merchant', 'order']);
+        $query = \App\Models\ActivationReport::with(['coupon', 'user', 'merchant', 'order']);
 
         // Apply filters if needed
         if ($request->has('merchant_id')) {
@@ -4380,10 +4514,6 @@ class AdminController extends Controller
 
         if ($request->has('coupon_id')) {
             $query->where('coupon_id', $request->coupon_id);
-        }
-
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
         }
 
         if ($request->has('start_date')) {

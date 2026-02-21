@@ -35,6 +35,8 @@ class Merchant extends Model
         'mall_id',
         'logo_url',
         'category_id',
+        'commercial_registration',
+        'tax_number',
     ];
 
     protected function casts(): array

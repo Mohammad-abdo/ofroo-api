@@ -11,15 +11,20 @@ use Illuminate\Http\Request;
 class PermissionController extends Controller
 {
     /**
-     * List all permissions
+     * List all permissions (flat array for admin UI; optional grouped via ?grouped=1)
      */
     public function index(Request $request): JsonResponse
     {
-        $permissions = Permission::orderBy('group')->orderBy('name')->get()
-            ->groupBy('group');
+        $permissions = Permission::orderBy('group')->orderBy('name')->get();
+
+        if ($request->boolean('grouped')) {
+            return response()->json([
+                'data' => $permissions->groupBy('group'),
+            ]);
+        }
 
         return response()->json([
-            'data' => $permissions,
+            'data' => $permissions->values()->all(),
         ]);
     }
 
