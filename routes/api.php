@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\DocumentationController;
 use App\Http\Controllers\Api\FinancialController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\MerchantProfileController;
@@ -53,6 +54,10 @@ Route::get('/', function () {
         ],
     ]);
 });
+
+// API Documentation
+Route::get('/docs', [DocumentationController::class, 'apiDocs']);
+Route::get('/docs/postman', [DocumentationController::class, 'postmanCollection']);
 
 
 // Public routes

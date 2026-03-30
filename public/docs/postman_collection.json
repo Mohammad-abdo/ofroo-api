@@ -1,0 +1,91 @@
+{
+  "info": {
+    "name": "OFROO API",
+    "description": "OFROO Offers & Coupons Platform API\n\n## Base URL\n- Development: `http://localhost:8000/api`\n- Production: `https://ofroo.teamqeematech.site/api`\n\n## Authentication\nMost endpoints require Bearer token. Get token via `/auth/login`.\n\n## Response Format\n```json\n{\n  \"success\": true,\n  \"data\": {}\n}\n```",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"name\": \"John\",\"email\": \"john@test.com\",\"phone\": \"+201234567890\",\"password\": \"password123\",\"password_confirmation\": \"password123\"}"},
+            "url": {"raw": "{{base_url}}/auth/register", "host": ["{{base_url}}"], "path": ["auth", "register"]}
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"email\": \"john@test.com\",\"password\": \"password123\"}"},
+            "url": {"raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"]}
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}"}]},
+            "method": "POST",
+            "url": {"raw": "{{base_url}}/auth/logout", "host": ["{{base_url}}"], "path": ["auth", "logout"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Offers",
+      "item": [
+        {"name": "List Offers", "request": {"method": "GET", "url": {"raw": "{{base_url}}/offers", "host": ["{{base_url}}"], "path": ["offers"]}}},
+        {"name": "Get Offer", "request": {"method": "GET", "url": {"raw": "{{base_url}}/offers/1", "host": ["{{base_url}}"], "path": ["offers", "1"]}}},
+        {"name": "Create Offer (Merchant)", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}"}]}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title_ar\": \"خصم 50%\",\"title_en\": \"50% Off\",\"price\": 100,\"discount\": 50,\"category_id\": 1}"}, "url": {"raw": "{{base_url}}/merchant/offers", "host": ["{{base_url}}"], "path": ["merchant", "offers"]}}}
+      ]
+    },
+    {
+      "name": "Coupons",
+      "item": [
+        {"name": "List Coupons", "request": {"method": "GET", "url": {"raw": "{{base_url}}/coupons", "host": ["{{base_url}}"], "path": ["coupons"]}}},
+        {"name": "Create Coupon (Merchant)", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}"}]}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"offer_id\": 1,\"usage_limit\": 100,\"expires_at\": \"2026-12-31\"}"}, "url": {"raw": "{{base_url}}/merchant/coupons", "host": ["{{base_url}}"], "path": ["merchant", "coupons"]}}}
+      ]
+    },
+    {
+      "name": "Cart",
+      "item": [
+        {"name": "Get Cart", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}"]}, "method": "GET", "url": {"raw": "{{base_url}}/cart", "host": ["{{base_url}}"], "path": ["cart"]}}},
+        {"name": "Add to Cart", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}"}]}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"offer_id\": 1,\"quantity\": 2}"}, "url": {"raw": "{{base_url}}/cart/add", "host": ["{{base_url}}"], "path": ["cart", "add"]}}}
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {"name": "Checkout", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}"}]}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"payment_method\": \"cash\"}"}, "url": {"raw": "{{base_url}}/orders/checkout", "host": ["{{base_url}}"], "path": ["orders", "checkout"]}}},
+        {"name": "List Orders", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}"]}, "method": "GET", "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}}
+      ]
+    },
+    {
+      "name": "Merchant",
+      "item": [
+        {"name": "Get Profile", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}"]}, "method": "GET", "url": {"raw": "{{base_url}}/merchant/profile", "host": ["{{base_url}}"], "path": ["merchant", "profile"]}}},
+        {"name": "Get Statistics", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}"]}, "method": "GET", "url": {"raw": "{{base_url}}/merchant/statistics", "host": ["{{base_url}}"], "path": ["merchant", "statistics"]}}},
+        {"name": "Get Wallet", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}"]}, "method": "GET", "url": {"raw": "{{base_url}}/merchant/wallet", "host": ["{{base_url}}"], "path": ["merchant", "wallet"]}}}
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {"name": "Dashboard Stats", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{admin_token}}"]}, "method": "GET", "url": {"raw": "{{base_url}}/admin/dashboard/stats", "host": ["{{base_url}}"], "path": ["admin", "dashboard", "stats"]}}},
+        {"name": "List Users", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{admin_token}}"]}, "method": "GET", "url": {"raw": "{{base_url}}/admin/users", "host": ["{{base_url}}"], "path": ["admin", "users"]}}},
+        {"name": "List Merchants", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{admin_token}}"]}, "method": "GET", "url": {"raw": "{{base_url}}/admin/merchants", "host": ["{{base_url}}"], "path": ["admin", "merchants"]}}},
+        {"name": "Approve Merchant", "request": {"auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{admin_token}}"]}, "method": "POST", "url": {"raw": "{{base_url}}/admin/merchants/1/approve", "host": ["{{base_url}}"], "path": ["admin", "merchants", "1", "approve"]}}}
+      ]
+    }
+  ],
+  "variable": [
+    {"key": "base_url", "value": "https://ofroo.teamqeematech.site/api"},
+    {"key": "token", "value": ""},
+    {"key": "admin_token", "value": ""}
+  ]
+}
