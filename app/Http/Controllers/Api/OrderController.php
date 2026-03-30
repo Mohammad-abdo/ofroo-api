@@ -132,9 +132,8 @@ class OrderController extends Controller
             ]);
 
             // Link payment to order if exists
-            if ($payment) {
-                $paymentGatewayService = app(\App\Services\PaymentGatewayService::class);
-                $paymentGatewayService->linkPaymentToOrder($payment, $order);
+            if (isset($payment)) {
+                app(\App\Services\PaymentGatewayService::class)->linkPaymentToOrder($payment, $order);
             }
 
             // Create order items

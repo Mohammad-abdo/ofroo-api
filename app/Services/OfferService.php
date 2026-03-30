@@ -74,7 +74,11 @@ class OfferService
      */
     public function createCouponForOffer(Offer $offer, array $couponData, ?UploadedFile $imageFile = null): Coupon
     {
-        $allowed = ['title', 'description', 'price', 'discount', 'discount_type', 'barcode', 'image', 'status', 'usage_limit'];
+        $allowed = [
+            'title', 'title_ar', 'title_en', 'description', 'description_ar', 'description_en',
+            'price', 'discount', 'discount_type', 'barcode', 'image', 'status', 'usage_limit',
+            'expires_at', 'starts_at',
+        ];
         $payload = [];
         foreach ($allowed as $key) {
             if (array_key_exists($key, $couponData)) {
@@ -83,12 +87,50 @@ class OfferService
         }
 
         $payload['offer_id'] = $offer->id;
-        $payload['expires_at'] = $offer->end_date;
+        if (array_key_exists('expires_at', $couponData) && $couponData['expires_at'] !== null && $couponData['expires_at'] !== '') {
+            $payload['expires_at'] = is_string($couponData['expires_at'])
+                ? date('Y-m-d H:i:s', strtotime($couponData['expires_at']))
+                : $couponData['expires_at'];
+        } else {
+            $payload['expires_at'] = $offer->end_date;
+        }
+        if (! empty($payload['starts_at'])) {
+            $payload['starts_at'] = is_string($payload['starts_at'])
+                ? date('Y-m-d H:i:s', strtotime($payload['starts_at']))
+                : $payload['starts_at'];
+        } else {
+            $payload['starts_at'] = null;
+        }
         $payload['status'] = $payload['status'] ?? 'active';
-        $payload['usage_limit'] = isset($payload['usage_limit']) ? max(1, (int) $payload['usage_limit']) : 1;
+        if (array_key_exists('usage_limit', $couponData)) {
+            $ul = $couponData['usage_limit'];
+            if ($ul === 'unlimited' || (string) $ul === '0' || (is_numeric($ul) && (int) $ul === 0)) {
+                $payload['usage_limit'] = 0;
+            } elseif ($ul === '' || $ul === null || $ul === false) {
+                $payload['usage_limit'] = 1;
+            } else {
+                $payload['usage_limit'] = max(1, (int) $ul);
+            }
+        } else {
+            $payload['usage_limit'] = 1;
+        }
         $payload['times_used'] = 0;
+        $titleAr = trim((string) ($payload['title_ar'] ?? ''));
+        $titleEn = trim((string) ($payload['title_en'] ?? ''));
+        $payload['title_ar'] = $titleAr !== '' ? $titleAr : null;
+        $payload['title_en'] = $titleEn !== '' ? $titleEn : null;
         $payload['title'] = trim((string) ($payload['title'] ?? ''));
+        if ($payload['title'] === '' && ($titleAr !== '' || $titleEn !== '')) {
+            $payload['title'] = $titleAr !== '' ? $titleAr : $titleEn;
+        }
+        $descAr = isset($payload['description_ar']) ? trim((string) $payload['description_ar']) : '';
+        $descEn = isset($payload['description_en']) ? trim((string) $payload['description_en']) : '';
+        $payload['description_ar'] = $descAr !== '' ? $descAr : null;
+        $payload['description_en'] = $descEn !== '' ? $descEn : null;
         $payload['description'] = isset($payload['description']) ? trim((string) $payload['description']) : null;
+        if (($payload['description'] === null || $payload['description'] === '') && ($descAr !== '' || $descEn !== '')) {
+            $payload['description'] = $descAr !== '' ? $descAr : $descEn;
+        }
         $payload['price'] = isset($payload['price']) ? (float) $payload['price'] : 0;
         $payload['discount'] = isset($payload['discount']) ? (float) $payload['discount'] : 0;
 

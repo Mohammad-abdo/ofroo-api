@@ -71,6 +71,15 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Admin image uploads (kilobytes). Laravel file rule uses KB.
+    | Must be ≤ PHP upload_max_filesize and post_max_size (e.g. api/php/local.ini).
+    | Default 131072 KB = 128 MB. Override with MAX_ADMIN_IMAGE_UPLOAD_KB in .env.
+    |--------------------------------------------------------------------------
+    */
+    'max_admin_image_upload_kb' => (int) env('MAX_ADMIN_IMAGE_UPLOAD_KB', 131072),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

@@ -11,15 +11,20 @@ class Coupon extends Model
         'offer_id',
         'image',
         'title',
+        'title_ar',
+        'title_en',
         'description',
+        'description_ar',
+        'description_en',
         'price',
         'discount',
         'discount_type', // percentage | fixed
         'barcode',
         'coupon_code', // legacy column (unique code for redemption)
+        'starts_at',
         'expires_at',
         'status', // active, used, expired
-        'usage_limit', // max number of times this coupon can be used (default 1)
+        'usage_limit', // max uses; 0 = unlimited
         'times_used',  // how many times it has been used
     ];
 
@@ -28,6 +33,7 @@ class Coupon extends Model
         return [
             'price' => 'decimal:2',
             'discount' => 'decimal:2',
+            'starts_at' => 'datetime',
             'expires_at' => 'datetime',
         ];
     }
@@ -59,7 +65,7 @@ class Coupon extends Model
         $discount = (float) ($this->discount ?? 0);
         $type = strtolower((string) ($this->discount_type ?? 'percent'));
 
-        if ($type === 'fixed') {
+        if (in_array($type, ['fixed', 'amount'], true)) {
             return round(max(0, $price - $discount), 2);
         }
 

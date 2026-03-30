@@ -565,14 +565,6 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/merchants/{id}', [AdminWalletController::class, 'getMerchantWallet']);
         });
 
-        // Withdrawals Management
-        Route::prefix('withdrawals')->group(function () {
-            Route::get('/', [AdminController::class, 'withdrawals']);
-            Route::post('/{id}/approve', [AdminController::class, 'approveWithdrawal']);
-            Route::post('/{id}/reject', [AdminController::class, 'rejectWithdrawal']);
-            Route::post('/{id}/complete', [AdminController::class, 'completeWithdrawal']);
-        });
-
         // Merchant Management
         Route::prefix('merchants')->group(function () {
             Route::post('/{id}/suspend', [AdminController::class, 'suspendMerchant']);

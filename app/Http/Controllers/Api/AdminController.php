@@ -951,7 +951,7 @@ class AdminController extends Controller
             'mall_id' => 'nullable|exists:malls,id',
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
+            'price' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
@@ -967,8 +967,9 @@ class AdminController extends Controller
             unset($validationData['offer_images']);
         }
         if ($isMultipart) {
+            $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
             $rules['offer_images'] = 'nullable|array';
-            $rules['offer_images.*'] = 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120';
+            $rules['offer_images.*'] = 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
         }
 
         $validator = Validator::make($validationData, $rules);
@@ -1001,8 +1002,8 @@ class AdminController extends Controller
             'mall_id' => $request->mall_id,
             'title' => $request->title,
             'description' => $request->description,
-            'price' => $request->price,
-            'discount' => $request->discount ?? 0,
+            'price' => $request->input('price') !== null && $request->input('price') !== '' ? (float) $request->price : 0,
+            'discount' => $request->input('discount') !== null && $request->input('discount') !== '' ? (float) $request->discount : 0,
             'offer_images' => $imageUrls,
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
@@ -1048,19 +1049,8 @@ class AdminController extends Controller
                 continue;
             }
             $imageFile = $couponImageFiles[$index] ?? null;
-            $data = [
-                'title' => $couponData['title'] ?? '',
-                'description' => $couponData['description'] ?? '',
-                'price' => (float) ($couponData['price'] ?? 0),
-                'discount' => (float) ($couponData['discount'] ?? 0),
-                'discount_type' => $couponData['discount_type'] ?? 'percentage',
-                'barcode' => $couponData['barcode'] ?? null,
-                'image' => $couponData['image'] ?? null,
-                'status' => $couponData['status'] ?? 'active',
-                'usage_limit' => isset($couponData['usage_limit']) ? max(1, (int) $couponData['usage_limit']) : 1,
-            ];
             try {
-                $this->offerService->createCouponForOffer($offer, $data, $imageFile);
+                $this->offerService->createCouponForOffer($offer, $couponData, $imageFile);
             } catch (\Throwable $e) {
                 \Log::warning('Admin createOffer: failed to create coupon for offer ' . $offer->id . ': ' . $e->getMessage());
             }
@@ -1103,8 +1093,9 @@ class AdminController extends Controller
         ];
 
         if ($request->hasFile('offer_images')) {
+            $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
             $rules['offer_images'] = 'nullable|array';
-            $rules['offer_images.*'] = 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120';
+            $rules['offer_images.*'] = 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
         }
 
         $validator = Validator::make($request->all(), $rules);
@@ -1147,6 +1138,50 @@ class AdminController extends Controller
 
         if ($request->has('branches')) {
             $offer->branches()->sync($request->branches ?? []);
+        }
+
+        if ($request->has('coupons')) {
+            $couponsList = [];
+            $rawCoupons = $request->input('coupons');
+            if (is_string($rawCoupons)) {
+                $decoded = json_decode($rawCoupons, true);
+                $couponsList = is_array($decoded) ? $decoded : [];
+            } elseif (is_array($rawCoupons)) {
+                $couponsList = $rawCoupons;
+            }
+
+            $couponImageFiles = [];
+            $filesInput = $request->file('coupon_images');
+            if (is_array($filesInput)) {
+                foreach ($filesInput as $idx => $file) {
+                    if ($file && $file->isValid()) {
+                        $couponImageFiles[(int) $idx] = $file;
+                    }
+                }
+            }
+            if (empty($couponImageFiles)) {
+                $allFiles = $request->allFiles();
+                foreach ($allFiles as $key => $file) {
+                    if (preg_match('/^coupon_images\[(\d+)\]$/', $key, $m) && $file && $file->isValid()) {
+                        $couponImageFiles[(int) $m[1]] = $file;
+                    }
+                }
+            }
+            ksort($couponImageFiles);
+            $couponImageFiles = array_values($couponImageFiles);
+
+            $offer->coupons()->delete();
+            foreach ($couponsList as $index => $couponData) {
+                if (! is_array($couponData)) {
+                    continue;
+                }
+                $imageFile = $couponImageFiles[$index] ?? null;
+                try {
+                    $this->offerService->createCouponForOffer($offer, $couponData, $imageFile);
+                } catch (\Throwable $e) {
+                    \Log::warning('Admin updateOffer: failed to recreate coupon for offer ' . $offer->id . ': ' . $e->getMessage());
+                }
+            }
         }
 
         return response()->json([
@@ -1550,6 +1585,18 @@ class AdminController extends Controller
             $query->where('target_type', $request->target_type);
         }
 
+        if ($request->filled('target_id')) {
+            $query->where('target_id', $request->target_id);
+        }
+
+        if ($request->filled('model_type')) {
+            $query->where('model_type', $request->model_type);
+        }
+
+        if ($request->filled('model_id')) {
+            $query->where('model_id', $request->model_id);
+        }
+
         $logs = $query->paginate($request->get('per_page', 50));
 
         $data = $logs->getCollection()->map(function ($log) {
@@ -1870,31 +1917,58 @@ class AdminController extends Controller
         $offer = Offer::findOrFail($offerId);
 
         $validator = Validator::make($request->all(), [
-            'title' => 'required|string|max:255',
+            'title' => 'nullable|string|max:255',
+            'title_ar' => 'nullable|string|max:255',
+            'title_en' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'description_ar' => 'nullable|string',
+            'description_en' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'discount_type' => 'nullable|in:percentage,fixed,percent,amount',
             'barcode' => 'nullable|string|max:64',
             'image' => 'nullable',
-            'status' => 'nullable|in:active,used,expired',
+            'status' => 'nullable|in:active,inactive,used,expired,cancelled,pending',
+            'usage_limit' => 'nullable|integer|min:0',
+            'starts_at' => 'nullable|date',
+            'expires_at' => 'nullable|date',
         ]);
         if ($request->hasFile('image')) {
-            $validator->addRules(['image' => 'image|mimes:jpeg,png,jpg,gif|max:5120']);
+            $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
+            $validator->addRules(['image' => 'image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb]);
         }
         if ($validator->fails()) {
             return response()->json(['message' => 'Validation error', 'errors' => $validator->errors()], 422);
         }
 
+        $titleAr = $request->title_ar ? trim((string) $request->title_ar) : null;
+        $titleEn = $request->title_en ? trim((string) $request->title_en) : null;
+        $legacyTitle = $request->title ? trim((string) $request->title) : null;
+        if (! $titleAr && ! $titleEn && ! $legacyTitle) {
+            return response()->json([
+                'message' => 'Validation error',
+                'errors' => ['title' => ['Provide title, or title_ar, or title_en.']],
+            ], 422);
+        }
+
         $data = [
-            'title' => $request->title,
+            'title' => $legacyTitle ?? ($titleAr ?: $titleEn) ?? '',
+            'title_ar' => $titleAr,
+            'title_en' => $titleEn,
             'description' => $request->description,
+            'description_ar' => $request->description_ar,
+            'description_en' => $request->description_en,
             'price' => (float) $request->price,
             'discount' => (float) ($request->discount ?? 0),
             'discount_type' => in_array($request->discount_type, ['fixed', 'amount'], true) ? 'fixed' : 'percentage',
             'barcode' => $request->barcode ? trim($request->barcode) : null,
             'status' => $request->status ?? 'active',
+            'starts_at' => $request->starts_at,
+            'expires_at' => $request->expires_at,
         ];
+        if ($request->has('usage_limit')) {
+            $data['usage_limit'] = $request->input('usage_limit');
+        }
         if ($request->has('image') && is_string($request->image)) {
             $data['image'] = $request->image;
         }
@@ -2099,7 +2173,7 @@ class AdminController extends Controller
         $rules = [
             'category_id' => 'nullable|exists:categories,id',
             'mall_id' => 'nullable|exists:malls,id',
-            'usage_limit' => 'nullable|integer|min:1',
+            'usage_limit' => 'nullable|integer|min:0',
             'discount_type' => 'nullable|in:percent,amount,percentage,fixed',
             'discount_percent' => 'nullable|numeric|min:0|max:100',
             'discount_amount' => 'nullable|numeric|min:0',
@@ -2112,14 +2186,20 @@ class AdminController extends Controller
             'offer_id' => 'nullable|exists:offers,id',
             // Offer-based coupon fields (same as merchant)
             'title' => 'nullable|string|max:255',
+            'title_ar' => 'nullable|string|max:255',
+            'title_en' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'description_ar' => 'nullable|string',
+            'description_en' => 'nullable|string',
             'price' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'barcode' => 'nullable|string|max:64',
             'image' => 'nullable',
+            'starts_at' => 'nullable|date',
         ];
         if ($request->hasFile('image')) {
-            $rules['image'] = 'image|mimes:jpeg,png,jpg,gif|max:5120';
+            $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
+            $rules['image'] = 'image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
         }
         $validator = Validator::make($request->all(), $rules);
 
@@ -2152,6 +2232,11 @@ class AdminController extends Controller
         if ($request->has('description')) {
             $updateData['description'] = $request->description;
         }
+        foreach (['title_ar', 'title_en', 'description_ar', 'description_en'] as $bilingualField) {
+            if ($request->exists($bilingualField)) {
+                $updateData[$bilingualField] = $request->input($bilingualField);
+            }
+        }
         if ($request->has('price')) {
             $updateData['price'] = (float) $request->price;
         }
@@ -2176,6 +2261,10 @@ class AdminController extends Controller
 
         if ($request->has('expires_at')) {
             $updateData['expires_at'] = $request->expires_at ? date('Y-m-d H:i:s', strtotime($request->expires_at)) : null;
+        }
+
+        if ($request->has('starts_at')) {
+            $updateData['starts_at'] = $request->starts_at ? date('Y-m-d H:i:s', strtotime($request->starts_at)) : null;
         }
 
         // Legacy discount fields
@@ -3681,7 +3770,8 @@ class AdminController extends Controller
 
         // Only validate image if a file is actually present
         if ($request->hasFile('image')) {
-            $rules['image'] = 'required|image|mimes:jpeg,png,jpg,gif|max:5120'; // 5MB max
+            $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
+            $rules['image'] = 'required|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
         } else {
             $rules['image'] = 'nullable'; // Allow null/empty if no file
         }
@@ -3818,7 +3908,8 @@ class AdminController extends Controller
 
         // Only validate image if a file is actually present
         if ($request->hasFile('image')) {
-            $rules['image'] = 'required|image|mimes:jpeg,png,jpg,gif|max:5120'; // 5MB max
+            $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
+            $rules['image'] = 'required|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
         } else {
             $rules['image'] = 'nullable'; // Allow null/empty if no file
         }
@@ -4174,12 +4265,13 @@ class AdminController extends Controller
      */
     public function createBanner(Request $request): JsonResponse
     {
+        $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
         $validator = Validator::make($request->all(), [
             'title_ar' => 'required|string|max:255',
             'title_en' => 'required|string|max:255',
             'description_ar' => 'nullable|string',
             'description_en' => 'nullable|string',
-            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb,
             'link_url' => 'nullable|string|max:500',
             'position' => 'required|string|max:50',
             'is_active' => 'nullable|boolean',
@@ -4232,12 +4324,13 @@ class AdminController extends Controller
     {
         $banner = \App\Models\Ad::where('ad_type', 'banner')->findOrFail($id);
 
+        $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
         $validator = Validator::make($request->all(), [
             'title_ar' => 'sometimes|string|max:255',
             'title_en' => 'sometimes|string|max:255',
             'description_ar' => 'sometimes|string',
             'description_en' => 'sometimes|string',
-            'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb,
             'link_url' => 'sometimes|string|max:500',
             'position' => 'sometimes|string|max:50',
             'is_active' => 'sometimes|boolean',

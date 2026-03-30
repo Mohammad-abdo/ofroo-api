@@ -5,8 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OfferRequest;
 use App\Http\Requests\OfferStoreRequest;
+use App\Http\Requests\StoreLocationRequest;
+use App\Http\Requests\UpdateLocationRequest;
+use App\Http\Requests\MerchantProfileRequest;
 use App\Http\Resources\OfferResource;
 use App\Services\OfferService;
+use App\Services\MerchantStatisticsService;
+use App\Services\MerchantProfileService;
+use App\Models\ActivationReport;
 use App\Models\Ad;
 use App\Models\Coupon;
 use App\Models\Merchant;
@@ -21,7 +27,9 @@ use App\Helpers\StorageHelper;
 class MerchantController extends Controller
 {
     public function __construct(
-        protected OfferService $offerService
+        protected OfferService $offerService,
+        protected MerchantStatisticsService $statisticsService,
+        protected MerchantProfileService $profileService
     ) {}
 
     /**
@@ -611,18 +619,28 @@ class MerchantController extends Controller
     }
 
     /**
-     * Update coupon (Merchant)
+     * Update coupon (Merchant): offer-linked coupons use the same schema as admin; legacy pool coupons keep the old rules.
      */
     public function updateCoupon(Request $request, string $id): JsonResponse
     {
         $user = $request->user();
         $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
 
-        $coupon = Coupon::where('created_by', $merchant->id)
-            ->where('created_by_type', 'merchant')
-            ->findOrFail($id);
+        $coupon = Coupon::query()
+            ->where('id', $id)
+            ->where(function ($q) use ($merchant) {
+                $q->whereHas('offer', fn ($o) => $o->where('merchant_id', $merchant->id))
+                    ->orWhere(function ($q2) use ($merchant) {
+                        $q2->where('created_by', $merchant->id)
+                            ->where('created_by_type', 'merchant');
+                    });
+            })
+            ->firstOrFail();
 
-        // Prevent updating if coupon is already activated or used
+        if ($coupon->offer_id) {
+            return $this->merchantUpdateOfferLinkedCoupon($request, $coupon, $merchant);
+        }
+
         if ($coupon->status === 'activated' || $coupon->status === 'used') {
             return response()->json([
                 'message' => 'Cannot update activated or used coupon',
@@ -671,32 +689,185 @@ class MerchantController extends Controller
     }
 
     /**
-     * Delete coupon (Merchant)
+     * Update offer-linked coupon (same field rules as AdminController::updateCoupon), scoped to merchant offers.
+     */
+    private function merchantUpdateOfferLinkedCoupon(Request $request, Coupon $coupon, Merchant $merchant): JsonResponse
+    {
+        $id = (string) $coupon->id;
+
+        $rules = [
+            'category_id' => 'nullable|exists:categories,id',
+            'mall_id' => 'nullable|exists:malls,id',
+            'usage_limit' => 'nullable|integer|min:0',
+            'discount_type' => 'nullable|in:percent,amount,percentage,fixed',
+            'discount_percent' => 'nullable|numeric|min:0|max:100',
+            'discount_amount' => 'nullable|numeric|min:0',
+            'status' => 'nullable|in:pending,reserved,paid,activated,used,cancelled,expired,active,inactive',
+            'expires_at' => 'nullable|date',
+            'terms_conditions' => 'nullable|string',
+            'is_refundable' => 'nullable|boolean',
+            'coupon_code' => 'nullable|string|unique:coupons,coupon_code,' . $id,
+            'barcode_value' => 'nullable|string',
+            'offer_id' => 'nullable|exists:offers,id',
+            'title' => 'nullable|string|max:255',
+            'title_ar' => 'nullable|string|max:255',
+            'title_en' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'description_ar' => 'nullable|string',
+            'description_en' => 'nullable|string',
+            'price' => 'nullable|numeric|min:0',
+            'discount' => 'nullable|numeric|min:0',
+            'barcode' => 'nullable|string|max:64',
+            'image' => 'nullable',
+            'starts_at' => 'nullable|date',
+        ];
+        if ($request->hasFile('image')) {
+            $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
+            $rules['image'] = 'image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
+        }
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation error',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        if ($request->has('offer_id') && (int) $request->offer_id !== (int) $coupon->offer_id) {
+            $newOffer = Offer::where('id', $request->offer_id)
+                ->where('merchant_id', $merchant->id)
+                ->first();
+            if (! $newOffer) {
+                return response()->json([
+                    'message' => 'Validation error',
+                    'errors' => ['offer_id' => ['Offer not found or does not belong to your account.']],
+                ], 422);
+            }
+            if ($newOffer->coupon_id && (int) $newOffer->coupon_id !== (int) $coupon->id) {
+                return response()->json([
+                    'message' => 'This offer already has a coupon. Each offer can only have one coupon.',
+                ], 422);
+            }
+        }
+
+        $updateData = $request->only([
+            'category_id', 'mall_id', 'usage_limit', 'terms_conditions', 'is_refundable',
+            'coupon_code', 'barcode_value', 'offer_id',
+        ]);
+
+        if ($request->filled('title')) {
+            $updateData['title'] = $request->title;
+        }
+        if ($request->has('description')) {
+            $updateData['description'] = $request->description;
+        }
+        foreach (['title_ar', 'title_en', 'description_ar', 'description_en'] as $bilingualField) {
+            if ($request->exists($bilingualField)) {
+                $updateData[$bilingualField] = $request->input($bilingualField);
+            }
+        }
+        if ($request->has('price')) {
+            $updateData['price'] = (float) $request->price;
+        }
+        if ($request->has('discount')) {
+            $updateData['discount'] = (float) $request->discount;
+        }
+        if ($request->filled('discount_type')) {
+            $dt = $request->discount_type;
+            $updateData['discount_type'] = in_array($dt, ['fixed', 'amount'], true) ? 'amount' : 'percent';
+        }
+        if ($request->filled('barcode')) {
+            $updateData['barcode'] = trim($request->barcode);
+            if (empty($updateData['coupon_code'])) {
+                $updateData['coupon_code'] = $updateData['barcode'];
+            }
+        }
+        if ($request->has('status')) {
+            $updateData['status'] = in_array($request->status, ['active', 'used', 'expired'], true)
+                ? $request->status
+                : ($request->status === 'cancelled' ? 'expired' : $request->status);
+        }
+
+        if ($request->has('expires_at')) {
+            $updateData['expires_at'] = $request->expires_at ? date('Y-m-d H:i:s', strtotime($request->expires_at)) : null;
+        }
+
+        if ($request->has('starts_at')) {
+            $updateData['starts_at'] = $request->starts_at ? date('Y-m-d H:i:s', strtotime($request->starts_at)) : null;
+        }
+
+        if ($request->has('discount_type') && ! isset($updateData['discount_type'])) {
+            $dt = $request->discount_type;
+            $updateData['discount_type'] = in_array($dt, ['fixed', 'amount'], true) ? 'amount' : 'percent';
+        }
+        if ($request->has('discount_percent')) {
+            $updateData['discount_percent'] = $request->discount_percent;
+        }
+        if ($request->has('discount_amount')) {
+            $updateData['discount_amount'] = $request->discount_amount;
+        }
+
+        if ($request->hasFile('image') && $request->file('image')->isValid()) {
+            $path = $request->file('image')->store('coupons', 'public');
+            $updateData['image'] = asset('storage/'.$path);
+        } elseif ($request->filled('image') && is_string($request->image)) {
+            $updateData['image'] = $request->image;
+        }
+
+        $previousOfferId = $coupon->offer_id;
+
+        $coupon->update($updateData);
+
+        if ($request->has('offer_id')) {
+            if ($previousOfferId && (int) $previousOfferId !== (int) $request->offer_id) {
+                $oldOffer = Offer::find($previousOfferId);
+                if ($oldOffer) {
+                    $oldOffer->update(['coupon_id' => null]);
+                }
+            }
+            $newOffer = Offer::find($request->offer_id);
+            if ($newOffer && (int) $newOffer->merchant_id === (int) $merchant->id) {
+                $newOffer->update(['coupon_id' => $coupon->id]);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Coupon updated successfully',
+            'data' => new \App\Http\Resources\CouponResource($coupon->load('offer')),
+        ]);
+    }
+
+    /**
+     * Delete coupon (Merchant): offer-linked or legacy pool, same restrictions as admin for activated/used.
      */
     public function deleteCoupon(Request $request, string $id): JsonResponse
     {
         $user = $request->user();
         $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
 
-        $coupon = Coupon::where('created_by', $merchant->id)
-            ->where('created_by_type', 'merchant')
-            ->findOrFail($id);
+        $coupon = Coupon::query()
+            ->where('id', $id)
+            ->where(function ($q) use ($merchant) {
+                $q->whereHas('offer', fn ($o) => $o->where('merchant_id', $merchant->id))
+                    ->orWhere(function ($q2) use ($merchant) {
+                        $q2->where('created_by', $merchant->id)
+                            ->where('created_by_type', 'merchant');
+                    });
+            })
+            ->firstOrFail();
 
-        // Prevent deleting if coupon is activated or used
         if ($coupon->status === 'activated' || $coupon->status === 'used') {
             return response()->json([
                 'message' => 'Cannot delete activated or used coupon',
             ], 422);
         }
 
-        // Check if coupon is linked to an offer
-        if ($coupon->offer_id) {
-            return response()->json([
-                'message' => 'Cannot delete coupon that is linked to an offer',
-            ], 422);
-        }
-
+        $offer = $coupon->offer_id ? Offer::find($coupon->offer_id) : null;
         $coupon->delete();
+        if ($offer && (int) ($offer->coupon_id ?? 0) === (int) $id) {
+            $offer->update(['coupon_id' => null]);
+        }
 
         return response()->json([
             'message' => 'Coupon deleted successfully',
@@ -759,189 +930,9 @@ class MerchantController extends Controller
         $user = $request->user();
         $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
 
-        $today = now()->startOfDay();
-        $weekStart = now()->startOfWeek();
-        $monthStart = now()->startOfMonth();
+        $stats = $this->statisticsService->getStatistics($merchant);
 
-        // Today's stats
-        $todayOrders = $merchant->orders()
-            ->where('payment_status', 'paid')
-            ->where('created_at', '>=', $today)
-            ->get();
-        
-        $todayRevenue = $todayOrders->sum('total_amount');
-        $couponActivationQuery = Coupon::whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id));
-        if (\Schema::hasColumn('coupons', 'activated_at')) {
-            $todayActivations = (clone $couponActivationQuery)->whereIn('status', ['activated', 'used'])->where('activated_at', '>=', $today)->count();
-        } else {
-            $todayActivations = (clone $couponActivationQuery)->where('status', 'used')->count();
-        }
-
-        // Weekly stats
-        $weeklyOrders = $merchant->orders()
-            ->where('payment_status', 'paid')
-            ->where('created_at', '>=', $weekStart)
-            ->get();
-        
-        $weeklyRevenue = $weeklyOrders->sum('total_amount');
-        if (\Schema::hasColumn('coupons', 'activated_at')) {
-            $weeklyActivations = (clone $couponActivationQuery)->whereIn('status', ['activated', 'used'])->where('activated_at', '>=', $weekStart)->count();
-        } else {
-            $weeklyActivations = (clone $couponActivationQuery)->where('status', 'used')->count();
-        }
-
-        // Average order value
-        $totalOrdersCount = $merchant->orders()->where('payment_status', 'paid')->count();
-        $averageOrderValue = $totalOrdersCount > 0 
-            ? $merchant->orders()->where('payment_status', 'paid')->avg('total_amount')
-            : 0;
-
-        // Total stats
-        $totalOrders = $merchant->orders()->where('payment_status', 'paid')->count();
-        $totalRevenue = $merchant->orders()->where('payment_status', 'paid')->sum('total_amount');
-        $totalCommission = $totalRevenue * 0.10; // 10% commission
-        $netProfit = $totalRevenue - $totalCommission;
-
-        // Coupon stats (by offer->merchant_id; created_by/order_id may not exist after refactor)
-        $merchantCoupons = Coupon::whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id));
-        $totalCouponsActivated = (clone $merchantCoupons)->whereIn('status', ['activated', 'used'])->count();
-        $activeCoupons = (clone $merchantCoupons)->where('status', 'active')->count();
-        $expiredCoupons = (clone $merchantCoupons)->where('status', 'expired')->count();
-        $readyCoupons = (\Schema::hasColumn('coupons', 'created_by') && \Schema::hasColumn('coupons', 'created_by_type'))
-            ? Coupon::where('created_by', $merchant->id)->where('created_by_type', 'merchant')->where('status', 'paid')->count()
-            : (clone $merchantCoupons)->where('status', 'active')->count();
-
-        // Monthly revenue for chart (last 6 months)
-        $monthlyRevenue = [];
-        for ($i = 5; $i >= 0; $i--) {
-            $monthStartDate = now()->subMonths($i)->startOfMonth();
-            $monthEndDate = now()->subMonths($i)->endOfMonth();
-            
-            $monthRevenue = $merchant->orders()
-                ->where('payment_status', 'paid')
-                ->whereBetween('created_at', [$monthStartDate, $monthEndDate])
-                ->sum('total_amount');
-            
-            $monthlyRevenue[] = round($monthRevenue, 2);
-        }
-
-        // Weekly performance for chart (last 7 days)
-        $weeklyPerformance = [];
-        for ($i = 6; $i >= 0; $i--) {
-            $dayStart = now()->subDays($i)->startOfDay();
-            $dayEnd = now()->subDays($i)->endOfDay();
-            
-            $dayRevenue = $merchant->orders()
-                ->where('payment_status', 'paid')
-                ->whereBetween('created_at', [$dayStart, $dayEnd])
-                ->sum('total_amount');
-            
-            $weeklyPerformance[] = round($dayRevenue, 2);
-        }
-
-        // Recent activations (last 5) – by offer->merchant, status used/activated
-        $recentActivationsQuery = Coupon::whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id))
-            ->whereIn('status', ['activated', 'used'])
-            ->with('offer');
-        if (\Schema::hasColumn('coupons', 'activated_at')) {
-            $recentActivationsQuery->orderBy('activated_at', 'desc');
-        } else {
-            $recentActivationsQuery->orderBy('updated_at', 'desc');
-        }
-        $recentActivations = $recentActivationsQuery->limit(5)->get()->map(function ($coupon) {
-            $title = $coupon->offer->title ?? $coupon->offer->title_ar ?? $coupon->offer->title_en ?? 'N/A';
-            $time = null;
-            if (\Schema::hasColumn('coupons', 'activated_at') && $coupon->activated_at) {
-                $time = $coupon->activated_at->format('H:i');
-            }
-            return [
-                'id' => $coupon->id,
-                'customer' => 'N/A',
-                'coupon' => $title,
-                'time' => $time ?? 'N/A',
-            ];
-        });
-
-        // Best performing offers (top 3 by used/activated coupons)
-        $bestCoupons = Offer::where('merchant_id', $merchant->id)
-            ->withCount(['coupons' => fn ($q) => $q->whereIn('status', ['activated', 'used'])])
-            ->orderBy('coupons_count', 'desc')
-            ->limit(3)
-            ->get()
-            ->map(function ($offer) use ($merchant) {
-                $totalSales = $merchant->orders()->where('payment_status', 'paid')->sum('total_amount');
-                $commission = $totalSales * 0.10;
-                $profit = $totalSales - $commission;
-                $title = $offer->title ?? $offer->title_ar ?? $offer->title_en ?? 'N/A';
-                return [
-                    'id' => $offer->id,
-                    'title_ar' => $title,
-                    'title_en' => $title,
-                    'views' => 0,
-                    'bookings' => $offer->coupons_count,
-                    'sales' => round($totalSales, 2),
-                    'commission' => round($commission, 2),
-                    'profit' => round($profit, 2),
-                ];
-            });
-
-        // Ad/offer status counts
-        $adUnderReview = $merchant->offers()->where('status', 'pending')->count();
-        $adApproved = $merchant->offers()->where('status', 'active')->count();
-        $adRejected = $merchant->offers()->where('status', 'rejected')->count();
-
-        $weeklyViews = \Schema::hasColumn('offers', 'total_coupons')
-            ? ($merchant->offers()->sum('total_coupons') ?? 0)
-            : 0;
-
-        $stats = [
-            // Today's stats
-            'today_revenue' => round($todayRevenue, 2),
-            'today_activations' => $todayActivations,
-            
-            // Weekly stats
-            'weekly_revenue' => round($weeklyRevenue, 2),
-            'weekly_activations' => $weeklyActivations,
-            
-            // Average
-            'average_order_value' => round($averageOrderValue, 2),
-            
-            // Totals
-            'total_orders' => $totalOrders,
-            'total_revenue' => round($totalRevenue, 2),
-            'total_commission' => round($totalCommission, 2),
-            'net_profit' => round($netProfit, 2),
-            
-            // Coupons
-            'ready_coupons' => $readyCoupons,
-            'active_coupons' => $activeCoupons,
-            'expired_coupons' => $expiredCoupons,
-            'total_coupons_activated' => $totalCouponsActivated,
-            'total_coupons_created' => Coupon::whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id))->count(),
-            
-            // Charts data
-            'monthly_revenue' => $monthlyRevenue,
-            'weekly_performance' => $weeklyPerformance,
-            
-            // Recent data
-            'recent_activations' => $recentActivations,
-            'best_coupons' => $bestCoupons,
-            
-            // Ads
-            'ad_under_review' => $adUnderReview,
-            'ad_approved' => $adApproved,
-            'ad_rejected' => $adRejected,
-            'weekly_views' => $weeklyViews,
-            
-            // Additional stats
-            'total_offers' => $merchant->offers()->count(),
-            'active_offers' => $merchant->offers()->where('status', 'active')->count(),
-            'pending_offers' => $merchant->offers()->where('status', 'pending')->count(),
-        ];
-
-        return response()->json([
-            'data' => $stats,
-        ]);
+        return $this->success($stats);
     }
 
     /**
@@ -1016,267 +1007,26 @@ class MerchantController extends Controller
     /**
      * Update merchant profile
      */
-    public function updateProfile(Request $request): JsonResponse
+    public function updateProfile(MerchantProfileRequest $request): JsonResponse
     {
         $user = $request->user();
         $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
 
-        \Log::info('Update profile request', [
-            'merchant_id' => $merchant->id,
-            'has_logo_file' => $request->hasFile('logo'),
-            'has_logo_url' => $request->has('logo_url'),
-            'request_keys' => array_keys($request->all()),
-            'files' => $request->allFiles(),
-        ]);
+        try {
+            $logoFile = $request->hasFile('logo') ? $request->file('logo') : null;
+            $profileData = $this->profileService->updateProfile(
+                $merchant,
+                $user,
+                $request->validated(),
+                $logoFile
+            );
 
-        // Handle logo file upload if provided
-        $logoUrl = null;
-        if ($request->hasFile('logo')) {
-            try {
-                $file = $request->file('logo');
-                
-                \Log::info('Logo file received in updateProfile', [
-                    'original_name' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getMimeType(),
-                    'size' => $file->getSize(),
-                ]);
-
-                // Validate image using StorageHelper
-                $validation = StorageHelper::validateImage($file, 2);
-                if (!$validation['valid']) {
-                    return response()->json([
-                        'message' => 'Invalid image file',
-                        'error' => $validation['error'],
-                    ], 422);
-                }
-
-                // Delete old logo if exists
-                if ($merchant->logo_url) {
-                    StorageHelper::deleteFile($merchant->logo_url);
-                }
-
-                // Upload new logo using StorageHelper
-                $uploadResult = StorageHelper::uploadMerchantLogo($file, $merchant->id);
-                $logoUrl = $uploadResult['url'];
-                $logoPath = $uploadResult['path'];
-
-                \Log::info('Logo uploaded in updateProfile using StorageHelper', [
-                    'logo_url' => $logoUrl,
-                    'logo_path' => $logoPath,
-                    'logo_url_is_valid' => !empty($logoUrl) && filter_var($logoUrl, FILTER_VALIDATE_URL),
-                ]);
-            } catch (\Exception $e) {
-                \Log::error('Error uploading logo in updateProfile', [
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
-                ]);
-                return response()->json([
-                    'message' => 'Error uploading logo',
-                    'error' => $e->getMessage(),
-                ], 422);
-            }
+            return $this->updated($profileData, 'Profile updated successfully');
+        } catch (\InvalidArgumentException $e) {
+            return $this->validationError([], $e->getMessage());
+        } catch (\Exception $e) {
+            return $this->serverError('Failed to update profile', $e->getMessage());
         }
-
-        // Validate other fields (exclude logo file if it exists, as it's validated separately)
-        $validationRules = [
-            'company_name' => 'sometimes|string|max:255',
-            'company_name_ar' => 'sometimes|string|max:255',
-            'company_name_en' => 'sometimes|string|max:255',
-            'description' => 'sometimes|string|nullable',
-            'description_ar' => 'sometimes|string|nullable',
-            'description_en' => 'sometimes|string|nullable',
-            'address' => 'sometimes|string|max:500|nullable',
-            'address_ar' => 'sometimes|string|max:500|nullable',
-            'address_en' => 'sometimes|string|max:500|nullable',
-            'phone' => 'sometimes|string|max:50|nullable',
-            'whatsapp_number' => 'sometimes|string|max:50|nullable',
-            'whatsapp_link' => 'sometimes|url|max:255|nullable',
-            'whatsapp_enabled' => 'sometimes|boolean',
-            'city' => 'sometimes|string|max:255|nullable',
-            // User fields
-            'name' => 'sometimes|string|max:255',
-            'email' => 'sometimes|email|unique:users,email,' . $user->id,
-            'phone_user' => 'sometimes|string|max:50|nullable',
-        ];
-        
-        // Only validate logo_url if no file is being uploaded
-        if (!$request->hasFile('logo')) {
-            $validationRules['logo_url'] = 'sometimes|url|max:500|nullable';
-        }
-        
-        $validated = $request->validate($validationRules);
-
-        // Update merchant fields
-        $merchantData = [];
-        $merchantFields = [
-            'company_name', 'company_name_ar', 'company_name_en',
-            'description', 'description_ar', 'description_en',
-            'address', 'address_ar', 'address_en',
-            'phone', 'whatsapp_number', 'whatsapp_link', 'whatsapp_enabled', 'city'
-        ];
-        
-        foreach ($merchantFields as $field) {
-            if ($request->has($field)) {
-                $merchantData[$field] = $validated[$field] ?? null;
-            }
-        }
-
-        // Add logo_url if file was uploaded or URL was provided
-        if ($logoUrl !== null && !empty($logoUrl)) {
-            $merchantData['logo_url'] = $logoUrl;
-            \Log::info('Logo URL will be saved', [
-                'merchant_id' => $merchant->id,
-                'logo_url' => $logoUrl,
-            ]);
-        } elseif ($request->has('logo_url') && !$request->hasFile('logo')) {
-            // Only use logo_url from request if no file was uploaded
-            $merchantData['logo_url'] = $validated['logo_url'] ?? null;
-            \Log::info('Logo URL from request will be saved', [
-                'merchant_id' => $merchant->id,
-                'logo_url' => $merchantData['logo_url'],
-            ]);
-        }
-
-        \Log::info('Merchant data to update', [
-            'merchant_id' => $merchant->id,
-            'merchant_data' => $merchantData,
-            'logo_url_in_data' => $merchantData['logo_url'] ?? 'not in data',
-            'logo_url_value' => $logoUrl ?? 'null',
-        ]);
-
-        // CRITICAL: Always update logo_url separately using direct DB query if we have it
-        $logoUrlToSave = null;
-        if ($logoUrl !== null && !empty($logoUrl)) {
-            $logoUrlToSave = $logoUrl;
-            \Log::info('Logo URL from file upload will be saved', [
-                'merchant_id' => $merchant->id,
-                'logo_url' => $logoUrlToSave,
-            ]);
-        } elseif (isset($merchantData['logo_url']) && $merchantData['logo_url'] !== null) {
-            $logoUrlToSave = $merchantData['logo_url'];
-            \Log::info('Logo URL from request data will be saved', [
-                'merchant_id' => $merchant->id,
-                'logo_url' => $logoUrlToSave,
-            ]);
-        } else {
-            \Log::warning('No logo URL to save', [
-                'merchant_id' => $merchant->id,
-                'logo_url_from_upload' => $logoUrl ?? 'null',
-                'logo_url_from_data' => $merchantData['logo_url'] ?? 'not in data',
-            ]);
-        }
-        
-        if ($logoUrlToSave !== null && !empty($logoUrlToSave)) {
-            // Use direct DB update - this is the most reliable method
-            $dbUpdated = DB::table('merchants')
-                ->where('id', $merchant->id)
-                ->update([
-                    'logo_url' => $logoUrlToSave,
-                    'updated_at' => now(),
-                ]);
-            
-            \Log::info('Direct DB update for logo_url', [
-                'merchant_id' => $merchant->id,
-                'db_updated' => $dbUpdated,
-                'logo_url' => $logoUrlToSave,
-                'rows_affected' => $dbUpdated,
-            ]);
-            
-            // Remove logo_url from merchantData to avoid double update
-            if (isset($merchantData['logo_url'])) {
-                unset($merchantData['logo_url']);
-            }
-        }
-        
-        // Update other merchant fields if any
-        if (!empty($merchantData)) {
-            $updated = $merchant->update($merchantData);
-            \Log::info('Merchant update result', [
-                'merchant_id' => $merchant->id,
-                'updated' => $updated,
-            ]);
-        }
-
-        // Update user fields
-        $userData = [];
-        if ($request->has('name')) {
-            $userData['name'] = $validated['name'];
-        }
-        if ($request->has('email')) {
-            $userData['email'] = $validated['email'];
-        }
-        if ($request->has('phone_user')) {
-            $userData['phone'] = $validated['phone_user'];
-        }
-
-        if (!empty($userData)) {
-            $user->update($userData);
-        }
-
-        // Refresh to get latest data including logo_url
-        $merchant->refresh();
-        $user->refresh();
-
-        // Final verification of logo_url - query directly from DB
-        $finalMerchant = DB::table('merchants')->where('id', $merchant->id)->first();
-        $finalLogoUrl = $finalMerchant->logo_url ?? null;
-        
-        // If still null and we have logoUrl, try one more update
-        if ($finalLogoUrl === null && isset($logoUrl) && $logoUrl !== null && !empty($logoUrl)) {
-            DB::table('merchants')
-                ->where('id', $merchant->id)
-                ->update(['logo_url' => $logoUrl]);
-            $finalMerchant = DB::table('merchants')->where('id', $merchant->id)->first();
-            $finalLogoUrl = $finalMerchant->logo_url ?? $logoUrl;
-            
-            \Log::info('Final logo_url update attempt', [
-                'merchant_id' => $merchant->id,
-                'logo_url_after_final_update' => $finalLogoUrl,
-            ]);
-        }
-
-        \Log::info('Profile update completed', [
-            'merchant_id' => $merchant->id,
-            'logo_url_final' => $finalLogoUrl,
-            'logo_url_from_model' => $merchant->logo_url,
-        ]);
-
-        // Use finalLogoUrl from DB query, fallback to merchant model
-        $responseLogoUrl = $finalLogoUrl ?? $merchant->logo_url ?? null;
-        
-        \Log::info('Sending profile update response', [
-            'merchant_id' => $merchant->id,
-            'logo_url_in_response' => $responseLogoUrl,
-        ]);
-
-        return response()->json([
-            'message' => 'Profile updated successfully',
-            'data' => [
-                'id' => $merchant->id,
-                'company_name' => $merchant->company_name,
-                'company_name_ar' => $merchant->company_name_ar,
-                'company_name_en' => $merchant->company_name_en,
-                'description' => $merchant->description,
-                'description_ar' => $merchant->description_ar,
-                'description_en' => $merchant->description_en,
-                'address' => $merchant->address,
-                'address_ar' => $merchant->address_ar,
-                'address_en' => $merchant->address_en,
-                'phone' => $merchant->phone,
-                'whatsapp_number' => $merchant->whatsapp_number,
-                'whatsapp_link' => $merchant->whatsapp_link,
-                'whatsapp_enabled' => $merchant->whatsapp_enabled,
-                'city' => $merchant->city,
-                'country' => $merchant->country ?? 'مصر',
-                'logo_url' => $responseLogoUrl,
-                'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'phone' => $user->phone,
-                ],
-            ],
-        ]);
     }
 
     /**
@@ -1284,174 +1034,24 @@ class MerchantController extends Controller
      */
     public function uploadLogo(Request $request): JsonResponse
     {
+        $request->validate([
+            'logo' => 'required|image|mimes:jpeg,png,jpg,gif,webp',
+        ]);
 
+        $user = $request->user();
+        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
 
         try {
-            $user = $request->user();
-            $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+            $logoUrl = $this->profileService->uploadLogo($merchant, $request->file('logo'));
 
-            \Log::info('Upload logo request received', [
-                'merchant_id' => $merchant->id,
-                'user_id' => $user->id,
-                'has_file' => $request->hasFile('logo'),
-            ]);
-
-            $request->validate([
-                'logo' => 'required|image|mimes:jpeg,png,jpg,gif,webp',
-            ]);
-
-            if (!$request->hasFile('logo')) {
-                return response()->json([
-                    'message' => 'No logo file provided',
-                    'error' => 'Logo file is required',
-                ], 422);
-            }
-
-            $file = $request->file('logo');
-            
-            \Log::info('Logo file info', [
-                'original_name' => $file->getClientOriginalName(),
-                'mime_type' => $file->getMimeType(),
-                'size' => $file->getSize(),
-                'is_valid' => $file->isValid(),
-            ]);
-
-            // Validate image
-            $validation = StorageHelper::validateImage($file, 2);
-            if (!$validation['valid']) {
-                return response()->json([
-                    'message' => 'Invalid image file',
-                    'error' => $validation['error'],
-                ], 422);
-            }
-
-            // Delete old logo if exists
-            if ($merchant->logo_url) {
-                StorageHelper::deleteFile($merchant->logo_url);
-            }
-
-            // Upload new logo using StorageHelper
-            $uploadResult = StorageHelper::uploadMerchantLogo($file, $merchant->id);
-            $logoUrl = $uploadResult['url'];
-            $logoPath = $uploadResult['path'];
-
-            \Log::info('Logo uploaded using StorageHelper', [
+            return $this->success([
                 'logo_url' => $logoUrl,
-                'logo_path' => $logoPath,
-            ]);
-
-            // CRITICAL: Update merchant logo_url using direct DB query first
-            // This ensures it's saved regardless of model issues
-            $dbUpdated = DB::table('merchants')
-                ->where('id', $merchant->id)
-                ->update([
-                    'logo_url' => $logoUrl,
-                    'updated_at' => now(),
-                ]);
-
-            \Log::info('Direct DB update (primary method)', [
                 'merchant_id' => $merchant->id,
-                'db_updated' => $dbUpdated,
-                'rows_affected' => $dbUpdated,
-                'logo_url' => $logoUrl,
-            ]);
-
-            // Also update using model for consistency
-            $merchant->logo_url = $logoUrl;
-            $modelSaved = $merchant->save();
-
-            \Log::info('Model save attempt', [
-                'merchant_id' => $merchant->id,
-                'model_saved' => $modelSaved,
-                'logo_url' => $logoUrl,
-            ]);
-
-            // Force refresh and verify
-            $merchant->refresh();
-            
-            // Final verification - query directly from database
-            $finalMerchant = DB::table('merchants')
-                ->where('id', $merchant->id)
-                ->first();
-
-            \Log::info('Final database verification (direct query)', [
-                'merchant_id' => $finalMerchant->id ?? null,
-                'logo_url_in_db' => $finalMerchant->logo_url ?? 'NULL',
-                'logo_url_expected' => $logoUrl,
-                'match' => ($finalMerchant->logo_url ?? null) === $logoUrl,
-            ]);
-
-            // If still not saved, try one more time with fresh merchant instance
-            if (is_null($finalMerchant->logo_url) || $finalMerchant->logo_url !== $logoUrl) {
-                $freshMerchant = Merchant::find($merchant->id);
-                if ($freshMerchant) {
-                    $freshMerchant->logo_url = $logoUrl;
-                    $freshMerchant->save();
-                }
-                
-                // Force update via DB again
-                DB::table('merchants')
-                    ->where('id', $merchant->id)
-                    ->update(['logo_url' => $logoUrl]);
-                
-                // Verify again
-                $finalMerchant = DB::table('merchants')
-                    ->where('id', $merchant->id)
-                    ->first();
-                
-                \Log::info('Final save attempt with fresh instance', [
-                    'merchant_id' => $finalMerchant->id ?? null,
-                    'logo_url_after_final_save' => $finalMerchant->logo_url ?? 'NULL',
-                ]);
-            }
-
-            // Return the logo_url from database - final check
-            $returnLogoUrl = $finalMerchant->logo_url ?? $logoUrl;
-            
-            // One final attempt if still null
-            if (is_null($returnLogoUrl) || empty($returnLogoUrl)) {
-                // Last resort: Update with fresh query
-                DB::statement("UPDATE merchants SET logo_url = ? WHERE id = ?", [$logoUrl, $merchant->id]);
-                
-                $finalCheck = DB::table('merchants')
-                    ->where('id', $merchant->id)
-                    ->value('logo_url');
-                
-                $returnLogoUrl = $finalCheck ?? $logoUrl;
-                
-                \Log::info('Final fallback update', [
-                    'merchant_id' => $merchant->id,
-                    'logo_url_after_fallback' => $returnLogoUrl,
-                ]);
-            }
-
-            return response()->json([
-                'message' => 'Logo uploaded successfully',
-                'data' => [
-                    'logo_url' => $returnLogoUrl,
-                    'logo_path' => $logoPath,
-                    'merchant_id' => $merchant->id,
-                    'file_exists' => Storage::disk('public')->exists($logoPath),
-                ],
-            ], 200);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            \Log::error('Logo upload validation error', [
-                'errors' => $e->errors(),
-            ]);
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $e->errors(),
-            ], 422);
+            ], 'Logo uploaded successfully');
+        } catch (\InvalidArgumentException $e) {
+            return $this->validationError([], $e->getMessage());
         } catch (\Exception $e) {
-            \Log::error('Logo upload error', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json([
-                'message' => 'Failed to upload logo',
-                'error' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Failed to upload logo', $e->getMessage());
         }
     }
 
@@ -1799,6 +1399,40 @@ class MerchantController extends Controller
         $user = $request->user();
         $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
 
+        if ($request->filled('coupon_id')) {
+            $couponId = (int) $request->coupon_id;
+            $owns = Coupon::where('id', $couponId)
+                ->whereHas('offer', fn ($o) => $o->where('merchant_id', $merchant->id))
+                ->exists();
+            if (! $owns) {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
+
+            $query = ActivationReport::with(['coupon', 'user', 'merchant', 'order'])
+                ->where('merchant_id', $merchant->id)
+                ->where('coupon_id', $couponId);
+
+            if ($request->has('start_date')) {
+                $query->whereDate('created_at', '>=', $request->start_date);
+            }
+            if ($request->has('end_date')) {
+                $query->whereDate('created_at', '<=', $request->end_date);
+            }
+
+            $perPage = $request->get('per_page', 15);
+            $activations = $query->orderBy('created_at', 'desc')->paginate($perPage);
+
+            return response()->json([
+                'data' => $activations->items(),
+                'meta' => [
+                    'current_page' => $activations->currentPage(),
+                    'last_page' => $activations->lastPage(),
+                    'per_page' => $activations->perPage(),
+                    'total' => $activations->total(),
+                ],
+            ]);
+        }
+
         $query = Coupon::with(['offer'])
             ->whereHas('offer', function ($q) use ($merchant) {
                 $q->where('merchant_id', $merchant->id);
@@ -1998,39 +1632,85 @@ class MerchantController extends Controller
     // ==================== Routes منقولة من الأدمن لتوحيد المنطق ====================
 
     /**
-     * Store offer coupon (Merchant) - منقول من الأدمن
+     * Store offer coupon (Merchant) — same payload as admin (titles, price, discount, image, usage_limit, dates).
      */
     public function storeOfferCoupon(Request $request, $offerId): JsonResponse
     {
-        $offer = \App\Models\Offer::where('id', $offerId)
+        $offer = Offer::where('id', $offerId)
             ->where('merchant_id', auth()->user()->merchant->id)
             ->firstOrFail();
 
-        $request->validate([
-            'coupon_code' => 'required|string|max:50|unique:coupons,coupon_code',
-            'discount_type' => 'required|in:percent,fixed',
-            'discount_amount' => 'required|numeric|min:0',
-            'discount_percent' => 'nullable|integer|min:1|max:100',
-            'usage_limit' => 'nullable|integer|min:1',
-            'expires_at' => 'nullable|date|after:today',
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'title' => 'nullable|string|max:255',
+            'title_ar' => 'nullable|string|max:255',
+            'title_en' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'description_ar' => 'nullable|string',
+            'description_en' => 'nullable|string',
+            'price' => 'required|numeric|min:0',
+            'discount' => 'nullable|numeric|min:0',
+            'discount_type' => 'nullable|in:percentage,fixed,percent,amount',
+            'barcode' => 'nullable|string|max:64',
+            'image' => 'nullable',
+            'status' => 'nullable|in:active,inactive,used,expired,cancelled,pending',
+            'usage_limit' => 'nullable|integer|min:0',
+            'starts_at' => 'nullable|date',
+            'expires_at' => 'nullable|date',
         ]);
+        if ($request->hasFile('image')) {
+            $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
+            $validator->addRules(['image' => 'image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb]);
+        }
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Validation error', 'errors' => $validator->errors()], 422);
+        }
 
-        $coupon = new \App\Models\Coupon();
-        $coupon->offer_id = $offer->id;
-        $coupon->merchant_id = auth()->user()->merchant->id;
-        $coupon->coupon_code = $request->coupon_code;
-        $coupon->discount_type = $request->discount_type;
-        $coupon->discount_amount = $request->discount_amount;
-        $coupon->discount_percent = $request->discount_percent;
-        $coupon->usage_limit = $request->usage_limit ?? 1;
-        $coupon->expires_at = $request->expires_at;
-        $coupon->status = 'active';
-        $coupon->save();
+        $titleAr = $request->title_ar ? trim((string) $request->title_ar) : null;
+        $titleEn = $request->title_en ? trim((string) $request->title_en) : null;
+        $legacyTitle = $request->title ? trim((string) $request->title) : null;
+        if (! $titleAr && ! $titleEn && ! $legacyTitle) {
+            return response()->json([
+                'message' => 'Validation error',
+                'errors' => ['title' => ['Provide title, or title_ar, or title_en.']],
+            ], 422);
+        }
 
-        return response()->json([
-            'message' => 'Coupon created successfully for offer',
-            'data' => $coupon,
-        ], 201);
+        $data = [
+            'title' => $legacyTitle ?? ($titleAr ?: $titleEn) ?? '',
+            'title_ar' => $titleAr,
+            'title_en' => $titleEn,
+            'description' => $request->description,
+            'description_ar' => $request->description_ar,
+            'description_en' => $request->description_en,
+            'price' => (float) $request->price,
+            'discount' => (float) ($request->discount ?? 0),
+            'discount_type' => in_array($request->discount_type, ['fixed', 'amount'], true) ? 'fixed' : 'percentage',
+            'barcode' => $request->barcode ? trim($request->barcode) : null,
+            'status' => $request->status ?? 'active',
+            'starts_at' => $request->starts_at,
+            'expires_at' => $request->expires_at,
+        ];
+        if ($request->has('usage_limit')) {
+            $data['usage_limit'] = $request->input('usage_limit');
+        }
+        if ($request->has('image') && is_string($request->image)) {
+            $data['image'] = $request->image;
+        }
+
+        try {
+            $coupon = $this->offerService->createCouponForOffer($offer, $data, $request->file('image'));
+
+            if (! $offer->coupon_id) {
+                $offer->update(['coupon_id' => $coupon->id]);
+            }
+
+            return response()->json([
+                'message' => 'Coupon created successfully',
+                'data' => new \App\Http\Resources\CouponResource($coupon->load('offer')),
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], 422);
+        }
     }
 
     /**

@@ -15,6 +15,7 @@ class Offer extends Model
     protected $fillable = [
         'merchant_id',
         'category_id',
+        'coupon_id',
         'mall_id',
         'title',
         'description',

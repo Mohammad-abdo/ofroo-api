@@ -109,7 +109,8 @@ class OfferStoreRequest extends FormRequest
             $rules['offer_images'] = 'nullable|array';
             $rules['offer_images.*'] = 'nullable';
             $rules['coupon_images'] = 'nullable|array';
-            $rules['coupon_images.*'] = 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120';
+            $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
+            $rules['coupon_images.*'] = 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
         } else {
             $rules['offer_images'] = 'nullable|array';
         }

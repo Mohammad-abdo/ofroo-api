@@ -9,31 +9,53 @@ class CouponResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $usageLimit = (int) ($this->usage_limit ?? 1);
+        $usageLimitRaw = $this->usage_limit;
+        if ($usageLimitRaw === null) {
+            $usageLimit = 1;
+            $unlimited = false;
+        } else {
+            $usageLimit = (int) $usageLimitRaw;
+            $unlimited = $usageLimit === 0;
+        }
         $timesUsed = (int) ($this->times_used ?? 0);
-        $remaining = max(0, $usageLimit - $timesUsed);
+        if ($unlimited) {
+            $remaining = null;
+            $isExhausted = false;
+        } else {
+            $remaining = max(0, $usageLimit - $timesUsed);
+            $isExhausted = $remaining <= 0;
+        }
 
         $price = (float) $this->price;
         $priceAfterDiscount = (float) $this->price_after_discount;
+
+        $dt = strtolower((string) ($this->discount_type ?? 'percent'));
+        $discountTypeLabel = in_array($dt, ['amount', 'fixed'], true) ? 'fixed' : 'percentage';
 
         $arr = [
             'id' => $this->id,
             'offer_id' => (string) $this->offer_id,
             'image' => $this->image ?? '',
             'title' => $this->title ?? '',
+            'title_ar' => $this->title_ar ?? '',
+            'title_en' => $this->title_en ?? '',
             'description' => $this->description ?? '',
+            'description_ar' => $this->description_ar ?? '',
+            'description_en' => $this->description_en ?? '',
             'price' => $price,
             'price_after_discount' => $priceAfterDiscount,
             'discount' => (float) $this->discount,
-            'discount_type' => $this->discount_type ?? 'percentage',
+            'discount_type' => $discountTypeLabel,
             'barcode' => $this->barcode ?? $this->coupon_code ?? '',
             'coupon_code' => $this->coupon_code ?? $this->barcode ?? '',
+            'starts_at' => $this->starts_at ? $this->starts_at->toIso8601String() : '',
             'expires_at' => $this->expires_at ? $this->expires_at->toIso8601String() : '',
             'status' => $this->status ?? '',
-            'usage_limit' => $usageLimit,
+            'usage_limit' => $unlimited ? 0 : $usageLimit,
+            'usage_unlimited' => $unlimited,
             'times_used' => $timesUsed,
             'usage_remaining' => $remaining,
-            'is_exhausted' => $remaining <= 0,
+            'is_exhausted' => $isExhausted,
             'created_at' => $this->created_at ? $this->created_at->toIso8601String() : '',
         ];
         if ($this->relationLoaded('offer')) {
