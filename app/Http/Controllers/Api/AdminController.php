@@ -26,6 +26,28 @@ class AdminController extends Controller
     ) {
         $this->offerService = $this->offerService ?? app(OfferService::class);
     }
+
+    /**
+     * Map bilingual fields into DB columns: `title` = Arabic (primary), `title_en` = English.
+     */
+    protected function mergeOfferBilingualTitles(Request $request): void
+    {
+        if (! $request->hasAny(['title_ar', 'title_en', 'title'])) {
+            return;
+        }
+        $titleAr = trim((string) $request->input('title_ar', ''));
+        $titleEn = trim((string) $request->input('title_en', ''));
+        $legacy = trim((string) $request->input('title', ''));
+        if ($titleAr === '' && $legacy !== '') {
+            $titleAr = $legacy;
+        }
+        $primary = $titleAr !== '' ? $titleAr : $titleEn;
+        $request->merge([
+            'title' => $primary,
+            'title_en' => $titleEn !== '' ? $titleEn : null,
+        ]);
+    }
+
     /**
      * List users
      */
@@ -906,7 +928,9 @@ class AdminController extends Controller
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
                     $q->where('title', 'like', "%{$search}%")
+                        ->orWhere('title_en', 'like', "%{$search}%")
                         ->orWhere('description', 'like', "%{$search}%")
+                        ->orWhere('description_en', 'like', "%{$search}%")
                         ->orWhereHas('merchant', function ($merchantQuery) use ($search) {
                             $merchantQuery->where('company_name', 'like', "%{$search}%")
                                 ->orWhere('company_name_ar', 'like', "%{$search}%")
@@ -945,11 +969,15 @@ class AdminController extends Controller
      */
     public function createOffer(Request $request): JsonResponse
     {
+        $this->mergeOfferBilingualTitles($request);
+
         $rules = [
             'merchant_id' => 'required|exists:merchants,id',
             'category_id' => 'required|exists:categories,id',
             'mall_id' => 'nullable|exists:malls,id',
             'title' => 'required|string|max:255',
+            'title_ar' => 'nullable|string|max:255',
+            'title_en' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'price' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
@@ -1076,12 +1104,15 @@ class AdminController extends Controller
             }
         }
         $request->merge($input);
+        $this->mergeOfferBilingualTitles($request);
 
         $rules = [
             'merchant_id' => 'nullable|exists:merchants,id',
             'category_id' => 'nullable|exists:categories,id',
             'mall_id' => 'nullable|exists:malls,id',
             'title' => 'nullable|string|max:255',
+            'title_ar' => 'nullable|string|max:255',
+            'title_en' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'price' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
@@ -1104,7 +1135,7 @@ class AdminController extends Controller
         }
 
         $updateData = $request->only([
-            'merchant_id', 'category_id', 'mall_id', 'title', 'description',
+            'merchant_id', 'category_id', 'mall_id', 'title', 'title_en', 'description',
             'price', 'discount', 'start_date', 'end_date', 'status',
         ]);
 

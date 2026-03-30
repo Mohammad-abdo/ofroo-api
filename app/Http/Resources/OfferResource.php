@@ -21,7 +21,12 @@ class OfferResource extends JsonResource
         return [
             'id' => $this->id,
             'title' => $this->title ?? '',
+            /** Arabic / primary title (same as DB `title` after refactor) */
+            'title_ar' => $this->title ?? '',
+            'title_en' => $this->title_en ?? '',
             'description' => $this->description ?? '',
+            'description_ar' => $this->description ?? '',
+            'description_en' => $this->description_en ?? '',
             'merchant_id' => (string) $this->merchant_id,
             'category_id' => (string) $this->category_id,
             'mall_id' => $this->mall_id !== null ? (string) $this->mall_id : null,

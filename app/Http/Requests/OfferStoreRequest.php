@@ -38,11 +38,20 @@ class OfferStoreRequest extends FormRequest
         if ($user && $user->merchant && !$this->filled('merchant_id')) {
             $this->merge(['merchant_id' => $user->merchant->id]);
         }
-        // Map legacy field names to new (so clients sending title_ar, start_at, etc. still pass)
         $merge = [];
-        if (!$this->filled('title') && $this->filled('title_ar')) {
-            $merge['title'] = $this->title_ar;
+        // Bilingual offer title: DB `title` = Arabic (primary), `title_en` = English
+        if ($this->hasAny(['title_ar', 'title_en', 'title'])) {
+            $titleAr = trim((string) ($this->input('title_ar') ?? ''));
+            $titleEn = trim((string) ($this->input('title_en') ?? ''));
+            $legacyTitle = trim((string) ($this->input('title') ?? ''));
+            if ($titleAr === '' && $legacyTitle !== '') {
+                $titleAr = $legacyTitle;
+            }
+            $primaryTitle = $titleAr !== '' ? $titleAr : $titleEn;
+            $merge['title'] = $primaryTitle;
+            $merge['title_en'] = $titleEn !== '' ? $titleEn : null;
         }
+        // Map legacy field names to new (so clients sending title_ar, start_at, etc. still pass)
         if (!$this->filled('description') && $this->filled('description_ar')) {
             $merge['description'] = $this->description_ar;
         }
@@ -80,6 +89,8 @@ class OfferStoreRequest extends FormRequest
     {
         $rules = [
             'title' => 'required|string|max:255',
+            'title_ar' => 'nullable|string|max:255',
+            'title_en' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'merchant_id' => 'required|exists:merchants,id',
             'category_id' => 'required|exists:categories,id',
