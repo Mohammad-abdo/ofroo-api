@@ -592,6 +592,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Review Moderation
         Route::prefix('reviews')->group(function () {
             Route::get('/', [ReviewModerationController::class, 'index']);
+            Route::put('/{id}', [ReviewModerationController::class, 'update']);
             Route::post('/{id}/moderate', [ReviewModerationController::class, 'moderate']);
             Route::post('/{id}/restore', [ReviewModerationController::class, 'restore']);
         });
