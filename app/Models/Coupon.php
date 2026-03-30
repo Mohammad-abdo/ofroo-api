@@ -46,6 +46,16 @@ class Coupon extends Model
         return $this->belongsTo(Offer::class);
     }
 
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     /**
      * Scope a query to only include active coupons.
      */
