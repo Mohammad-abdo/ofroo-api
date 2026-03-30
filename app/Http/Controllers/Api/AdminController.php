@@ -2978,6 +2978,12 @@ class AdminController extends Controller
             $query->where('created_at', '<=', $request->to);
         }
 
+        if ($request->filled('merchant_id')) {
+            $query->whereHas('order', function ($q) use ($request) {
+                $q->where('merchant_id', $request->merchant_id);
+            });
+        }
+
         $payments = $query->orderBy('created_at', 'desc')
             ->paginate($request->get('per_page', 15));
 
