@@ -49,6 +49,27 @@ class AdminController extends Controller
     }
 
     /**
+     * Map bilingual fields: `description` = Arabic (primary), `description_en` = English.
+     */
+    protected function mergeOfferBilingualDescriptions(Request $request): void
+    {
+        if (! $request->hasAny(['description_ar', 'description_en', 'description'])) {
+            return;
+        }
+        $descAr = trim((string) $request->input('description_ar', ''));
+        $descEn = trim((string) $request->input('description_en', ''));
+        $legacy = trim((string) $request->input('description', ''));
+        if ($descAr === '' && $legacy !== '') {
+            $descAr = $legacy;
+        }
+        $primary = $descAr !== '' ? $descAr : $descEn;
+        $request->merge([
+            'description' => $primary !== '' ? $primary : null,
+            'description_en' => $descEn !== '' ? $descEn : null,
+        ]);
+    }
+
+    /**
      * List users
      */
     public function users(Request $request): JsonResponse
@@ -970,6 +991,7 @@ class AdminController extends Controller
     public function createOffer(Request $request): JsonResponse
     {
         $this->mergeOfferBilingualTitles($request);
+        $this->mergeOfferBilingualDescriptions($request);
 
         $rules = [
             'merchant_id' => 'required|exists:merchants,id',
@@ -979,6 +1001,8 @@ class AdminController extends Controller
             'title_ar' => 'nullable|string|max:255',
             'title_en' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'description_ar' => 'nullable|string',
+            'description_en' => 'nullable|string',
             'price' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'start_date' => 'required|date',
@@ -1029,7 +1053,9 @@ class AdminController extends Controller
             'category_id' => $request->category_id,
             'mall_id' => $request->mall_id,
             'title' => $request->title,
+            'title_en' => $request->input('title_en'),
             'description' => $request->description,
+            'description_en' => $request->input('description_en'),
             'price' => $request->input('price') !== null && $request->input('price') !== '' ? (float) $request->price : 0,
             'discount' => $request->input('discount') !== null && $request->input('discount') !== '' ? (float) $request->discount : 0,
             'offer_images' => $imageUrls,
@@ -1105,6 +1131,7 @@ class AdminController extends Controller
         }
         $request->merge($input);
         $this->mergeOfferBilingualTitles($request);
+        $this->mergeOfferBilingualDescriptions($request);
 
         $rules = [
             'merchant_id' => 'nullable|exists:merchants,id',
@@ -1114,6 +1141,8 @@ class AdminController extends Controller
             'title_ar' => 'nullable|string|max:255',
             'title_en' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'description_ar' => 'nullable|string',
+            'description_en' => 'nullable|string',
             'price' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'start_date' => 'nullable|date',
@@ -1135,7 +1164,7 @@ class AdminController extends Controller
         }
 
         $updateData = $request->only([
-            'merchant_id', 'category_id', 'mall_id', 'title', 'title_en', 'description',
+            'merchant_id', 'category_id', 'mall_id', 'title', 'title_en', 'description', 'description_en',
             'price', 'discount', 'start_date', 'end_date', 'status',
         ]);
 
