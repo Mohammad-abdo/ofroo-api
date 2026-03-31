@@ -15,6 +15,7 @@ use App\Models\Offer;
 use App\Services\OfferService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
@@ -134,9 +135,9 @@ class AdminController extends Controller
     public function merchants(Request $request): JsonResponse
     {
         try {
-            $query = Merchant::with(['user']);
+            $query = Merchant::with(['user'])
+                ->withCount(['offers']);
 
-            // فلتر الموافقة فقط عند إرسال المعامل صراحة (عند عدم الإرسال = عرض الكل)
             if ($request->has('approved') && $request->get('approved') !== '' && $request->get('approved') !== null) {
                 $query->where('approved', $request->boolean('approved'));
             }
@@ -164,7 +165,17 @@ class AdminController extends Controller
             $merchants = $query->orderBy('created_at', 'desc')
                 ->paginate($request->get('per_page', 15));
 
-            $data = $merchants->getCollection()->map(function ($merchant) {
+            $merchantIds = $merchants->pluck('id')->toArray();
+            $couponCounts = Coupon::query()
+                ->join('offers', 'coupons.offer_id', '=', 'offers.id')
+                ->whereIn('offers.merchant_id', $merchantIds)
+                ->whereNull('offers.deleted_at')
+                ->selectRaw('offers.merchant_id as merchant_id, COUNT(*) as count')
+                ->groupBy('offers.merchant_id')
+                ->pluck('count', 'merchant_id')
+                ->toArray();
+
+            $data = $merchants->getCollection()->map(function ($merchant) use ($couponCounts) {
                 $isSuspended = $merchant->suspended_until && $merchant->suspended_until->isFuture();
                 $isActive = ! ($merchant->is_blocked ?? false) && ! $isSuspended;
 
@@ -188,8 +199,8 @@ class AdminController extends Controller
                         'email' => $merchant->user->email,
                         'phone' => $merchant->user->phone ?? null,
                     ] : null,
-                    'total_offers' => $merchant->offers()->count(),
-                    'created_coupons_count' => \App\Models\Coupon::whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id))->count(),
+                    'total_offers' => $merchant->offers_count ?? $merchant->offers()->count(),
+                    'created_coupons_count' => $couponCounts[$merchant->id] ?? 0,
                     'created_at' => $merchant->created_at ? $merchant->created_at->toIso8601String() : null,
                 ];
             });
@@ -585,14 +596,16 @@ class AdminController extends Controller
      */
     public function getSettings(Request $request): JsonResponse
     {
-        $settings = Setting::all()->mapWithKeys(function ($setting) {
-            return [$setting->key => [
-                'value' => $setting->value,
-                'type' => $setting->type,
-                'description' => $setting->description,
-                'description_ar' => $setting->description_ar,
-                'description_en' => $setting->description_en,
-            ]];
+        $settings = Cache::remember('app_settings', 3600, function () {
+            return Setting::all()->mapWithKeys(function ($setting) {
+                return [$setting->key => [
+                    'value' => $setting->value,
+                    'type' => $setting->type,
+                    'description' => $setting->description,
+                    'description_ar' => $setting->description_ar,
+                    'description_en' => $setting->description_en,
+                ]];
+            });
         });
 
         return response()->json([

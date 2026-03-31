@@ -231,13 +231,138 @@ class WalletService
             $order->user
         );
 
+        // Update merchant wallet total_earned and total_commission_paid
+        $wallet = MerchantWallet::where('merchant_id', $merchant->id)->first();
+        if ($wallet) {
+            $wallet->increment('total_earned', $netAmount);
+            $wallet->increment('total_commission_paid', $commissionAmount);
+        }
+
         // Create commission record
         \App\Models\Commission::create([
             'order_id' => $order->id,
             'merchant_id' => $merchant->id,
             'commission_rate' => $commissionRate,
             'commission_amount' => $commissionAmount,
+            'status' => 'completed',
         ]);
+    }
+
+    /**
+     * Refund order - reverse payment from wallets
+     */
+    public function refundToWallet(Order $order, ?User $initiatedBy = null): void
+    {
+        $merchant = $order->merchant;
+        $commissionRate = \App\Services\FeatureFlagService::getCommissionRate();
+        $commissionAmount = $order->total_amount * $commissionRate;
+        $netAmount = $order->total_amount - $commissionAmount;
+
+        // Debit merchant wallet (reverse the credit)
+        $this->debitMerchantWallet(
+            $merchant,
+            $netAmount,
+            'refund',
+            $order,
+            "Refund for Order #{$order->id}",
+            $initiatedBy
+        );
+
+        // Debit admin wallet (reverse the commission)
+        $this->debitAdminWallet(
+            $commissionAmount,
+            'refund',
+            $order,
+            "Commission refund for Order #{$order->id}",
+            $initiatedBy
+        );
+
+        // Update merchant wallet totals
+        $wallet = MerchantWallet::where('merchant_id', $merchant->id)->first();
+        if ($wallet) {
+            $wallet->decrement('total_earned', $netAmount);
+            $wallet->decrement('total_commission_paid', $commissionAmount);
+        }
+
+        // Update commission record
+        $commission = \App\Models\Commission::where('order_id', $order->id)->first();
+        if ($commission) {
+            $commission->update(['status' => 'refunded']);
+        }
+    }
+
+    /**
+     * Get minimum withdrawal amount
+     */
+    public function getMinimumWithdrawal(): float
+    {
+        return (float) \App\Models\Setting::getValue('minimum_withdrawal', 100);
+    }
+
+    /**
+     * Get withdrawal fee
+     */
+    public function getWithdrawalFee(): float
+    {
+        return (float) \App\Models\Setting::getValue('withdrawal_fee', 0);
+    }
+
+    /**
+     * Get withdrawal fee percentage
+     */
+    public function getWithdrawalFeePercent(): float
+    {
+        return (float) \App\Models\Setting::getValue('withdrawal_fee_percent', 0);
+    }
+
+    /**
+     * Calculate withdrawal fee
+     */
+    public function calculateWithdrawalFee(float $amount): float
+    {
+        $fixedFee = $this->getWithdrawalFee();
+        $percentFee = $this->getWithdrawalFeePercent();
+
+        $fee = $fixedFee + ($amount * $percentFee / 100);
+
+        return round($fee, 2);
+    }
+
+    /**
+     * Check if withdrawal is allowed
+     */
+    public function canWithdraw(Merchant $merchant, float $amount): array
+    {
+        $wallet = MerchantWallet::where('merchant_id', $merchant->id)->first();
+
+        if (!$wallet) {
+            return ['allowed' => false, 'message' => 'Wallet not found'];
+        }
+
+        if ($wallet->is_frozen) {
+            return ['allowed' => false, 'message' => 'Wallet is frozen'];
+        }
+
+        $availableBalance = $wallet->balance - $wallet->reserved_balance;
+
+        if ($availableBalance < $amount) {
+            return [
+                'allowed' => false,
+                'message' => 'Insufficient balance',
+                'available' => $availableBalance,
+            ];
+        }
+
+        $minimum = $this->getMinimumWithdrawal();
+        if ($amount < $minimum) {
+            return [
+                'allowed' => false,
+                'message' => "Minimum withdrawal is {$minimum} EGP",
+                'minimum' => $minimum,
+            ];
+        }
+
+        return ['allowed' => true];
     }
 
     /**

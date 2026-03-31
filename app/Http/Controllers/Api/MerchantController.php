@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OfferRequest;
 use App\Http\Requests\OfferStoreRequest;
+use App\Http\Requests\OfferUpdateRequest;
 use App\Http\Requests\StoreLocationRequest;
 use App\Http\Requests\UpdateLocationRequest;
 use App\Http\Requests\MerchantProfileRequest;
@@ -113,7 +114,7 @@ class MerchantController extends Controller
     /**
      * Update offer (new schema)
      */
-    public function updateOffer(OfferStoreRequest $request, string $id): JsonResponse
+    public function updateOffer(OfferUpdateRequest $request, string $id): JsonResponse
     {
         $merchant = $request->user()->merchant;
         if (!$merchant) {
@@ -135,7 +136,7 @@ class MerchantController extends Controller
      * Prepare offer data for create/update: upload images, attach coupon image files.
      * Reads both offer_images and legacy "images" so data is never lost.
      */
-    protected function prepareMerchantOfferData(OfferStoreRequest $request): array
+    protected function prepareMerchantOfferData(Request $request): array
     {
         $data = $request->validated();
 

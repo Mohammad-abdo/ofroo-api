@@ -37,6 +37,16 @@ class WalletTransaction extends Model
         return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
+    public function creator(): BelongsTo
+    {
+        return $this->createdBy();
+    }
+
+    public function wallet(): MorphTo
+    {
+        return $this->morphTo('wallet', 'wallet_type', 'wallet_id');
+    }
+
     public function related(): MorphTo
     {
         return $this->morphTo('related', 'related_type', 'related_id');

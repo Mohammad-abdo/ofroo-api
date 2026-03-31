@@ -27,7 +27,7 @@ class AuthController extends Controller
     public function register(RegisterRequest $request): JsonResponse
     {
         $userRole = Role::where('name', 'user')->first();
-        
+
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
@@ -97,7 +97,7 @@ class AuthController extends Controller
     public function login(LoginRequest $request): JsonResponse
     {
         $credentials = $request->only(['email', 'phone', 'password']);
-        
+
         // Find user by email or phone
         $user = null;
         if ($request->email) {
@@ -203,29 +203,42 @@ class AuthController extends Controller
             'phone' => 'required_without:email|string|exists:users,phone',
         ]);
 
-        $user = null;
-        if ($request->email) {
-            $user = User::where('email', $request->email)->first();
-        } elseif ($request->phone) {
-            $user = User::where('phone', $request->phone)->first();
+        if ($request->email && $request->phone) {
+            return response()->json(['message' => 'Send either email or phone, not both'], 422);
         }
+
+        $user = $request->email
+            ? User::where('email', $request->email)->first()
+            : User::where('phone', $request->phone)->first();
 
         if (!$user) {
             return response()->json(['message' => 'User not found'], 404);
         }
 
-        // OTP ثابت للتجربة
-        $otp = '123456';
+        // منع السبام
+        if ($user->otp_expires_at && now()->lt($user->otp_expires_at->subMinutes(9))) {
+            return response()->json([
+                'message' => 'Please wait before requesting another OTP'
+            ], 429);
+        }
+
+        // OTP generation
+        if (config('app.otp_test_mode')) {
+            $otp = config('app.otp_test_code');
+        } else {
+            $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        }
+
         $user->update([
-            'otp_code' => $otp,
-            'otp_expires_at' => now()->addDays(2),
+            'otp_code' => Hash::make($otp),
+            'otp_expires_at' => now()->addMinutes(10),
         ]);
 
         return response()->json([
             'message' => 'OTP sent successfully',
+            'otp' => config('app.debug') ? $otp : null,
         ]);
     }
-
     /**
      * Verify OTP: توكن في الهيدر أو phone/email في الـ body + otp. 123456 مقبول دائماً للتجربة.
      */
@@ -262,13 +275,10 @@ class AuthController extends Controller
             ], 404);
         }
 
-        $isTestOtp = $request->otp === '123456';
-        $otpValid = $isTestOtp
-            || (
-                (string) $user->otp_code === (string) $request->otp
-                && $user->otp_expires_at
-                && $user->otp_expires_at->greaterThanOrEqualTo(now())
-            );
+        $otpValid = $user->otp_code
+            && $user->otp_expires_at
+            && $user->otp_expires_at->greaterThanOrEqualTo(now())
+            && Hash::check($request->otp, $user->otp_code);
 
         if (!$otpValid) {
             return response()->json(['message' => 'Invalid or expired OTP'], 400);
@@ -296,7 +306,7 @@ class AuthController extends Controller
     public function registerMerchant(\App\Http\Requests\MerchantRegisterRequest $request): JsonResponse
     {
         $merchantRole = Role::where('name', 'merchant')->first();
-        
+
         // Create user
         $user = User::create([
             'name' => $request->name,

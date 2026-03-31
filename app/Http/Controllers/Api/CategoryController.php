@@ -7,6 +7,7 @@ use App\Http\Resources\OfferResource;
 use App\Models\Category;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class CategoryController extends Controller
 {
@@ -43,26 +44,28 @@ class CategoryController extends Controller
     {
         $user = $request->user();
         $language = $request->get('language', $user ? $user->language : null) ?? 'ar';
+        $cacheKey = 'categories_with_offers_' . $language;
 
-        $categories = Category::whereNull('parent_id')
-            ->with(['offers' => fn ($q) => $q->where('status', 'active')->whereNotNull('category_id')->with(['merchant', 'category', 'branches', 'coupons'])])
-            ->orderBy('order_index')
-            ->get();
+        $data = Cache::remember($cacheKey, 3600, function () use ($language, $request) {
+            $categories = Category::whereNull('parent_id')
+                ->with(['offers' => fn ($q) => $q->where('status', 'active')->whereNotNull('category_id')->with(['merchant', 'category', 'branches', 'coupons'])])
+                ->orderBy('order_index')
+                ->get();
 
-        $data = $categories->map(function ($category) use ($language, $request) {
-            // Only offers that belong to this category (category_id = this category id)
-            $offersForCategory = $category->offers->where('category_id', $category->id)->values();
-            $children = $offersForCategory->map(fn ($offer) => (new OfferResource($offer))->toArray($request))->all();
+            return $categories->map(function ($category) use ($language, $request) {
+                $offersForCategory = $category->offers->where('category_id', $category->id)->values();
+                $children = $offersForCategory->map(fn ($offer) => (new OfferResource($offer))->toArray($request))->all();
 
-            return [
-                'id' => $category->id,
-                'name' => $language === 'ar' ? ($category->name_ar ?? $category->name_en) : ($category->name_en ?? $category->name_ar),
-                'name_ar' => $category->name_ar,
-                'name_en' => $category->name_en,
-                'order_index' => $category->order_index,
-                'image' => $category->image_url,
-                'children' => $children,
-            ];
+                return [
+                    'id' => $category->id,
+                    'name' => $language === 'ar' ? ($category->name_ar ?? $category->name_en) : ($category->name_en ?? $category->name_ar),
+                    'name_ar' => $category->name_ar,
+                    'name_en' => $category->name_en,
+                    'order_index' => $category->order_index,
+                    'image' => $category->image_url,
+                    'children' => $children,
+                ];
+            })->toArray();
         });
 
         return response()->json([

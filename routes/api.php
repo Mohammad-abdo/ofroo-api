@@ -26,6 +26,9 @@ use App\Http\Controllers\Api\ReviewModerationController;
 use App\Http\Controllers\Api\RegulatoryCheckController;
 use App\Http\Controllers\Api\FinancialReportsCacheController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\CommissionController;
+use App\Http\Controllers\Api\WalletManagementController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -193,7 +196,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [OrderController::class, 'index']);
         Route::get('/{id}', [OrderController::class, 'show']);
         Route::get('/{id}/coupons', [OrderController::class, 'getOrderCoupons']);
-        Route::post('/checkout', [OrderController::class, 'checkout']);
+        Route::post('/checkout', [OrderController::class, 'checkout'])->middleware('throttle:5,1');
         Route::post('/{id}/cancel', [OrderController::class, 'cancel']);
     });
 
@@ -221,7 +224,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     // Search
-    Route::get('/search', [OfferController::class, 'search']);
+    Route::get('/search', [OfferController::class, 'search'])->middleware('throttle:30,1');
 
     // WhatsApp Contact
     Route::get('/offers/{id}/whatsapp', [OfferController::class, 'whatsappContact']);
@@ -269,7 +272,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::prefix('offers')->group(function () {
             Route::get('/', [MerchantController::class, 'offers']);
             Route::get('/{id}', [MerchantController::class, 'getOffer']);
-            Route::post('/', [MerchantController::class, 'createOffer']);
+            Route::post('/', [MerchantController::class, 'createOffer'])->middleware('throttle:20,1');
             Route::put('/{id}', [MerchantController::class, 'updateOffer']);
             Route::delete('/{id}', [MerchantController::class, 'deleteOffer']);
             
@@ -434,7 +437,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/', [AdminController::class, 'offers']);
             Route::post('/{offerId}/coupons', [AdminController::class, 'storeOfferCoupon']);
             Route::get('/{id}', [AdminController::class, 'getOffer']);
-            Route::post('/', [AdminController::class, 'createOffer']);
+            Route::post('/', [AdminController::class, 'createOffer'])->middleware('throttle:20,1');
             Route::put('/{id}', [AdminController::class, 'updateOffer']);
             Route::delete('/{id}', [AdminController::class, 'deleteOffer']);
             Route::post('/{id}/approve', [AdminController::class, 'approveOffer']);
@@ -469,6 +472,32 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Coupon Activations (Admin) - منقول من التاجر
         Route::get('/coupon-activations', [AdminController::class, 'getCouponActivations']);
+
+        // Dashboard Stats (unified endpoint)
+        Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
+        Route::get('/dashboard/overview', [DashboardController::class, 'overview']);
+        Route::post('/dashboard/refresh', [DashboardController::class, 'refresh']);
+
+        // Wallet Management
+        Route::prefix('wallet')->group(function () {
+            Route::get('/', [WalletManagementController::class, 'index']);
+            Route::get('/transactions', [WalletManagementController::class, 'transactions']);
+            Route::post('/adjust', [WalletManagementController::class, 'adjust']);
+            Route::get('/merchants', [WalletManagementController::class, 'allMerchantWallets']);
+            Route::get('/merchants/{merchantId}', [WalletManagementController::class, 'merchantWallet']);
+            Route::post('/merchants/{merchantId}/freeze', [WalletManagementController::class, 'freezeMerchant']);
+            Route::post('/merchants/{merchantId}/unfreeze', [WalletManagementController::class, 'unfreezeMerchant']);
+            Route::get('/settings', [WalletManagementController::class, 'settings']);
+            Route::put('/settings', [WalletManagementController::class, 'updateSettings']);
+        });
+
+        // Commission Management
+        Route::prefix('commissions')->group(function () {
+            Route::get('/', [CommissionController::class, 'index']);
+            Route::get('/by-merchant', [CommissionController::class, 'byMerchant']);
+            Route::get('/summary', [CommissionController::class, 'summary']);
+            Route::get('/export', [CommissionController::class, 'export']);
+        });
 
         Route::prefix('reports')->group(function () {
             Route::get('/sales', [AdminController::class, 'salesReport']);

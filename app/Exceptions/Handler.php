@@ -102,7 +102,8 @@ class Handler extends ExceptionHandler
                 'success' => false,
                 'message' => 'Server error',
                 'error' => $e->getMessage(),
-                'trace' => $e->getTrace(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
             ], 500);
         }
 
