@@ -1165,13 +1165,21 @@ class AdminController extends Controller
             'branches.*' => 'exists:branches,id',
         ];
 
-        if ($request->hasFile('offer_images')) {
+        // Same as createOffer: multipart may send existing image URLs + new files in offer_images[].
+        // Validating $request->all() would require every entry to be an image file → 422 on URLs.
+        $contentType = $request->header('Content-Type', '');
+        $isMultipart = ! empty($contentType) && str_contains(strtolower($contentType), 'multipart/form-data');
+        $validationData = $request->all();
+        if ($isMultipart && isset($validationData['offer_images'])) {
+            unset($validationData['offer_images']);
+        }
+        if ($isMultipart) {
             $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
             $rules['offer_images'] = 'nullable|array';
             $rules['offer_images.*'] = 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
         }
 
-        $validator = Validator::make($request->all(), $rules);
+        $validator = Validator::make($validationData, $rules);
         if ($validator->fails()) {
             return response()->json(['message' => 'Validation error', 'errors' => $validator->errors()], 422);
         }
@@ -1186,7 +1194,7 @@ class AdminController extends Controller
             $files = $request->file('offer_images');
             $files = is_array($files) ? $files : [$files];
             foreach ($files as $image) {
-                if ($image && $image->isValid()) {
+                if ($image instanceof \Illuminate\Http\UploadedFile && $image->isValid()) {
                     $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
                     $imagePath = $image->storeAs('offers', $imageName, 'public');
                     $imageUrls[] = asset('storage/' . $imagePath);
