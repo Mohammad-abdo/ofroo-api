@@ -44,9 +44,17 @@ class QrActivationService
         }
 
         if ($coupon->offer && (int) $coupon->offer->merchant_id !== (int) $merchant->id) {
+            Log::info('QR ownership mismatch', [
+                'scanned_code' => $couponCode,
+                'coupon_id' => $coupon->id,
+                'offer_id' => $coupon->offer_id,
+                'offer_merchant_id' => $coupon->offer->merchant_id,
+                'current_merchant_id' => $merchant->id,
+                'current_user_id' => $merchant->user_id,
+            ]);
             return [
                 'success' => false,
-                'message' => 'Coupon does not belong to this merchant',
+                'message' => 'Coupon does not belong to this merchant (coupon offer merchant #' . $coupon->offer->merchant_id . ', you are merchant #' . $merchant->id . ')',
                 'coupon' => new \App\Http\Resources\CouponResource($coupon),
             ];
         }
