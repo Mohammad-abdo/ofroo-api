@@ -11,20 +11,8 @@ use Illuminate\Support\Facades\Log;
 
 class QrActivationService
 {
-    /**
-     * Activate coupon by QR code scan
-     */
-    private function findCouponByCode(string $couponCode, Merchant $merchant): ?Coupon
+    private function findCouponByCode(string $couponCode): ?Coupon
     {
-        $coupon = Coupon::with('offer')
-            ->where(function ($q) use ($couponCode) {
-                $q->where('coupon_code', $couponCode)->orWhere('barcode', $couponCode);
-            })
-            ->whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id))
-            ->first();
-
-        if ($coupon) return $coupon;
-
         return Coupon::with('offer')
             ->where(function ($q) use ($couponCode) {
                 $q->where('coupon_code', $couponCode)->orWhere('barcode', $couponCode);
@@ -34,7 +22,7 @@ class QrActivationService
 
     public function activateCoupon(string $couponCode, Merchant $merchant, ?User $activatedBy, array $metadata = []): array
     {
-        $coupon = $this->findCouponByCode($couponCode, $merchant);
+        $coupon = $this->findCouponByCode($couponCode);
 
         if (!$coupon) {
             return [
@@ -43,18 +31,11 @@ class QrActivationService
             ];
         }
 
-        if ($coupon->offer && (int) $coupon->offer->merchant_id !== (int) $merchant->id) {
-            Log::info('QR ownership mismatch', [
-                'scanned_code' => $couponCode,
-                'coupon_id' => $coupon->id,
-                'offer_id' => $coupon->offer_id,
-                'offer_merchant_id' => $coupon->offer->merchant_id,
-                'current_merchant_id' => $merchant->id,
-                'current_user_id' => $merchant->user_id,
-            ]);
+        $offerMerchantId = $coupon->offer->merchant_id ?? null;
+        if ($offerMerchantId && (int) $offerMerchantId !== (int) $merchant->id) {
             return [
                 'success' => false,
-                'message' => 'Coupon does not belong to this merchant (coupon offer merchant #' . $coupon->offer->merchant_id . ', you are merchant #' . $merchant->id . ')',
+                'message' => 'This coupon belongs to another merchant. You can only activate coupons from your own offers.',
                 'coupon' => new \App\Http\Resources\CouponResource($coupon),
             ];
         }
@@ -67,25 +48,27 @@ class QrActivationService
             ];
         }
 
-        if ($coupon->status === 'activated') {
-            return [
-                'success' => false,
-                'message' => 'Coupon already activated',
-                'coupon' => $coupon,
-            ];
-        }
-
         if ($coupon->status === 'used') {
             return [
                 'success' => false,
                 'message' => 'Coupon already used',
+                'coupon' => new \App\Http\Resources\CouponResource($coupon),
             ];
         }
 
-        if ($coupon->status === 'cancelled' || $coupon->status === 'expired' || $coupon->status === 'inactive') {
+        if ($coupon->status === 'activated') {
+            return [
+                'success' => false,
+                'message' => 'Coupon already activated',
+                'coupon' => new \App\Http\Resources\CouponResource($coupon),
+            ];
+        }
+
+        if (in_array($coupon->status, ['cancelled', 'expired', 'inactive'])) {
             return [
                 'success' => false,
                 'message' => 'Coupon is ' . $coupon->status,
+                'coupon' => new \App\Http\Resources\CouponResource($coupon),
             ];
         }
 
@@ -94,7 +77,7 @@ class QrActivationService
             return [
                 'success' => false,
                 'message' => 'Coupon cannot be activated with current status: ' . $coupon->status,
-                'current_status' => $coupon->status,
+                'coupon' => new \App\Http\Resources\CouponResource($coupon),
             ];
         }
 
@@ -106,7 +89,6 @@ class QrActivationService
             }
             $coupon->update($updateData);
 
-            // Create activation report
             ActivationReport::create([
                 'coupon_id' => $coupon->id,
                 'merchant_id' => $merchant->id,
@@ -139,9 +121,6 @@ class QrActivationService
 
             DB::commit();
 
-            // TODO: Send notifications to user and merchant
-            // dispatch(new SendCouponActivatedNotification($coupon));
-
             return [
                 'success' => true,
                 'message' => 'Coupon activated successfully',
@@ -150,7 +129,7 @@ class QrActivationService
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('QR Activation failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'message' => 'Activation failed: ' . $e->getMessage(),
@@ -158,12 +137,9 @@ class QrActivationService
         }
     }
 
-    /**
-     * Validate QR code without activating
-     */
     public function validateQrCode(string $couponCode, Merchant $merchant): array
     {
-        $coupon = $this->findCouponByCode($couponCode, $merchant);
+        $coupon = $this->findCouponByCode($couponCode);
 
         if (!$coupon) {
             return [
@@ -172,10 +148,11 @@ class QrActivationService
             ];
         }
 
-        if ($coupon->offer && (int) $coupon->offer->merchant_id !== (int) $merchant->id) {
+        $offerMerchantId = $coupon->offer->merchant_id ?? null;
+        if ($offerMerchantId && (int) $offerMerchantId !== (int) $merchant->id) {
             return [
                 'valid' => false,
-                'message' => 'Coupon does not belong to this merchant',
+                'message' => 'This coupon belongs to another merchant. You can only scan coupons from your own offers.',
             ];
         }
 
@@ -189,5 +166,3 @@ class QrActivationService
         ];
     }
 }
-
-
