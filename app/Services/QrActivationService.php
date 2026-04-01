@@ -16,8 +16,9 @@ class QrActivationService
      */
     public function activateCoupon(string $couponCode, Merchant $merchant, ?User $activatedBy, array $metadata = []): array
     {
-        $coupon = Coupon::where('coupon_code', $couponCode)
-            ->orWhere('barcode_value', $couponCode)
+        $coupon = Coupon::with('offer')
+            ->where('coupon_code', $couponCode)
+            ->orWhere('barcode', $couponCode)
             ->first();
 
         if (!$coupon) {
@@ -27,15 +28,13 @@ class QrActivationService
             ];
         }
 
-        // Validate coupon belongs to merchant
-        if ($coupon->offer->merchant_id !== $merchant->id) {
+        if ($coupon->offer && $coupon->offer->merchant_id !== $merchant->id) {
             return [
                 'success' => false,
                 'message' => 'Coupon does not belong to this merchant',
             ];
         }
 
-        // Check status
         if ($coupon->status === 'activated') {
             return [
                 'success' => false,
@@ -51,39 +50,36 @@ class QrActivationService
             ];
         }
 
-        if ($coupon->status === 'cancelled' || $coupon->status === 'expired') {
+        if ($coupon->status === 'cancelled' || $coupon->status === 'expired' || $coupon->status === 'inactive') {
             return [
                 'success' => false,
                 'message' => 'Coupon is ' . $coupon->status,
             ];
         }
 
-        // Only activate if status is 'reserved' or 'paid'
-        if (!in_array($coupon->status, ['reserved', 'paid'])) {
+        $activatableStatuses = ['reserved', 'paid', 'active', 'pending'];
+        if (!in_array($coupon->status, $activatableStatuses)) {
             return [
                 'success' => false,
-                'message' => 'Coupon status must be reserved or paid to activate',
+                'message' => 'Coupon cannot be activated with current status: ' . $coupon->status,
                 'current_status' => $coupon->status,
             ];
         }
 
         DB::beginTransaction();
         try {
-            // Update coupon
-            $coupon->update([
-                'status' => 'activated',
-                'activated_at' => now(),
-                'activated_by' => $activatedBy ? $activatedBy->id : null,
-                'activation_device_id' => $metadata['device_id'] ?? null,
-                'activation_ip' => $metadata['ip_address'] ?? null,
-            ]);
+            $updateData = ['status' => 'used'];
+            if ($coupon->usage_limit && $coupon->usage_limit > 0) {
+                $updateData['times_used'] = ($coupon->times_used ?? 0) + 1;
+            }
+            $coupon->update($updateData);
 
             // Create activation report
             ActivationReport::create([
                 'coupon_id' => $coupon->id,
                 'merchant_id' => $merchant->id,
-                'user_id' => $coupon->user_id,
-                'order_id' => $coupon->order_id,
+                'user_id' => $coupon->user_id ?? null,
+                'order_id' => $coupon->order_id ?? null,
                 'activation_method' => 'qr_scan',
                 'device_id' => $metadata['device_id'] ?? null,
                 'ip_address' => $metadata['ip_address'] ?? null,
@@ -93,18 +89,21 @@ class QrActivationService
                 'notes' => $metadata['notes'] ?? null,
             ]);
 
-            // Log activity
-            $activityLogService = app(ActivityLogService::class);
-            $activityLogService->log(
-                $activatedBy ? $activatedBy->id : null,
-                'coupon_activated',
-                Coupon::class,
-                $coupon->id,
-                "Coupon {$couponCode} activated by merchant {$merchant->id}",
-                null,
-                ['status' => 'activated'],
-                $metadata
-            );
+            try {
+                $activityLogService = app(ActivityLogService::class);
+                $activityLogService->log(
+                    $activatedBy ? $activatedBy->id : null,
+                    'coupon_activated',
+                    Coupon::class,
+                    $coupon->id,
+                    "Coupon {$couponCode} activated by merchant {$merchant->id}",
+                    null,
+                    ['status' => 'used'],
+                    $metadata
+                );
+            } catch (\Exception $e) {
+                Log::warning('Activity log failed during QR activation: ' . $e->getMessage());
+            }
 
             DB::commit();
 
@@ -114,7 +113,7 @@ class QrActivationService
             return [
                 'success' => true,
                 'message' => 'Coupon activated successfully',
-                'coupon' => $coupon->fresh(),
+                'coupon' => new \App\Http\Resources\CouponResource($coupon->fresh()->load('offer')),
             ];
         } catch (\Exception $e) {
             DB::rollBack();
@@ -132,8 +131,9 @@ class QrActivationService
      */
     public function validateQrCode(string $couponCode, Merchant $merchant): array
     {
-        $coupon = Coupon::where('coupon_code', $couponCode)
-            ->orWhere('barcode_value', $couponCode)
+        $coupon = Coupon::with('offer')
+            ->where('coupon_code', $couponCode)
+            ->orWhere('barcode', $couponCode)
             ->first();
 
         if (!$coupon) {
@@ -143,17 +143,19 @@ class QrActivationService
             ];
         }
 
-        if ($coupon->offer->merchant_id !== $merchant->id) {
+        if ($coupon->offer && $coupon->offer->merchant_id !== $merchant->id) {
             return [
                 'valid' => false,
                 'message' => 'Coupon does not belong to this merchant',
             ];
         }
 
+        $activatable = ['reserved', 'paid', 'active', 'pending'];
+
         return [
             'valid' => true,
-            'coupon' => $coupon,
-            'can_activate' => in_array($coupon->status, ['reserved', 'paid']),
+            'coupon' => new \App\Http\Resources\CouponResource($coupon),
+            'can_activate' => in_array($coupon->status, $activatable),
             'status' => $coupon->status,
         ];
     }

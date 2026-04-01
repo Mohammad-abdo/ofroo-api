@@ -2165,22 +2165,51 @@ class AdminController extends Controller
      */
     public function createCoupon(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'category_id' => 'required|exists:categories,id',
-            'mall_id' => 'required|exists:malls,id',
-            'coupon_code' => 'nullable|string|unique:coupons,coupon_code',
-            'usage_limit' => 'required|integer|min:1',
-            'discount_type' => 'required|in:percent,amount',
-            'discount_percent' => 'nullable|required_if:discount_type,percent|numeric|min:0|max:100',
-            'discount_amount' => 'nullable|required_if:discount_type,amount|numeric|min:0',
-            'status' => 'nullable|in:pending,reserved,paid,activated,used,cancelled,expired,active,inactive', // Allow old values for backward compatibility
-            'expires_at' => 'nullable|date',
-            'terms_conditions' => 'nullable|string',
-            'is_refundable' => 'nullable|boolean',
-            'offer_id' => 'nullable|exists:offers,id',
-            'barcode_value' => 'nullable|string',
-        ]);
+        $isOfferBased = $request->filled('offer_id') && !$request->filled('category_id');
 
+        if ($isOfferBased) {
+            $rules = [
+                'offer_id'       => 'required|exists:offers,id',
+                'title'          => 'nullable|string|max:255',
+                'title_ar'       => 'nullable|string|max:255',
+                'title_en'       => 'nullable|string|max:255',
+                'description'    => 'nullable|string',
+                'description_ar' => 'nullable|string',
+                'description_en' => 'nullable|string',
+                'price'          => 'required|numeric|min:0',
+                'discount'       => 'nullable|numeric|min:0',
+                'discount_type'  => 'nullable|in:percent,amount,percentage,fixed',
+                'barcode'        => 'nullable|string|max:64',
+                'coupon_code'    => 'nullable|string|unique:coupons,coupon_code',
+                'usage_limit'    => 'nullable|integer|min:0',
+                'status'         => 'nullable|in:active,inactive,used,expired,pending',
+                'starts_at'      => 'nullable|date',
+                'expires_at'     => 'nullable|date',
+                'image'          => 'nullable',
+            ];
+            if ($request->hasFile('image')) {
+                $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
+                $rules['image'] = 'image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
+            }
+        } else {
+            $rules = [
+                'category_id'      => 'required|exists:categories,id',
+                'mall_id'          => 'required|exists:malls,id',
+                'coupon_code'      => 'nullable|string|unique:coupons,coupon_code',
+                'usage_limit'      => 'required|integer|min:1',
+                'discount_type'    => 'required|in:percent,amount,percentage,fixed',
+                'discount_percent' => 'nullable|required_if:discount_type,percent|numeric|min:0|max:100',
+                'discount_amount'  => 'nullable|required_if:discount_type,amount|numeric|min:0',
+                'status'           => 'nullable|in:pending,reserved,paid,activated,used,cancelled,expired,active,inactive',
+                'expires_at'       => 'nullable|date',
+                'terms_conditions' => 'nullable|string',
+                'is_refundable'    => 'nullable|boolean',
+                'offer_id'         => 'nullable|exists:offers,id',
+                'barcode_value'    => 'nullable|string',
+            ];
+        }
+
+        $validator = Validator::make($request->all(), $rules);
         if ($validator->fails()) {
             return response()->json([
                 'message' => 'Validation error',
@@ -2188,54 +2217,64 @@ class AdminController extends Controller
             ], 422);
         }
 
-        // Check if offer already has a coupon
-        if ($request->has('offer_id')) {
-            $offer = Offer::findOrFail($request->offer_id);
-            if ($offer->coupon_id) {
-                return response()->json([
-                    'message' => 'This offer already has a coupon. Each offer can only have one coupon.',
-                ], 422);
+        if ($isOfferBased) {
+            $dt = $request->input('discount_type', 'percent');
+            $mappedDt = in_array($dt, ['fixed', 'amount'], true) ? 'amount' : 'percent';
+            $barcodeVal = $request->input('barcode') ?: ('CPN-' . strtoupper(uniqid()));
+            $imagePath = null;
+            if ($request->hasFile('image') && $request->file('image')->isValid()) {
+                $imagePath = asset('storage/' . $request->file('image')->store('coupons', 'public'));
+            } elseif ($request->filled('image') && is_string($request->image)) {
+                $imagePath = $request->image;
             }
+
+            $coupon = Coupon::create([
+                'offer_id'       => $request->offer_id,
+                'title'          => $request->input('title', $request->input('title_ar', '')),
+                'title_ar'       => $request->input('title_ar'),
+                'title_en'       => $request->input('title_en'),
+                'description'    => $request->input('description', $request->input('description_ar', '')),
+                'description_ar' => $request->input('description_ar'),
+                'description_en' => $request->input('description_en'),
+                'price'          => (float) $request->price,
+                'discount'       => (float) ($request->discount ?? 0),
+                'discount_type'  => $mappedDt,
+                'barcode'        => $barcodeVal,
+                'coupon_code'    => $request->input('coupon_code', $barcodeVal),
+                'usage_limit'    => (int) ($request->usage_limit ?? 0),
+                'times_used'     => 0,
+                'status'         => $request->input('status', 'active'),
+                'starts_at'      => $request->starts_at ? date('Y-m-d H:i:s', strtotime($request->starts_at)) : null,
+                'expires_at'     => $request->expires_at ? date('Y-m-d H:i:s', strtotime($request->expires_at)) : null,
+                'image'          => $imagePath,
+            ]);
+        } else {
+            $couponCode = $request->coupon_code ?? 'CPN-' . strtoupper(uniqid());
+            $coupon = Coupon::create([
+                'category_id'      => $request->category_id,
+                'mall_id'          => $request->mall_id,
+                'offer_id'         => $request->offer_id,
+                'coupon_code'      => $couponCode,
+                'barcode_value'    => $request->barcode_value ?? $couponCode,
+                'usage_limit'      => $request->usage_limit,
+                'times_used'       => 0,
+                'status'           => $request->input('status', 'pending'),
+                'expires_at'       => $request->expires_at ? date('Y-m-d H:i:s', strtotime($request->expires_at)) : null,
+                'terms_conditions' => $request->terms_conditions,
+                'is_refundable'    => $request->boolean('is_refundable', false),
+                'discount_type'    => $request->input('discount_type', 'percent'),
+                'discount_percent' => $request->discount_type === 'percent' ? $request->discount_percent : null,
+                'discount_amount'  => $request->discount_type === 'amount' ? $request->discount_amount : null,
+                'created_by'       => auth()->id(),
+                'created_by_type'  => 'admin',
+            ]);
         }
 
-        // Generate coupon code if not provided
-        $couponCode = $request->coupon_code ?? 'CPN-' . strtoupper(uniqid());
-
-        // Map old status values to new ones for backward compatibility
-        $status = $request->status ?? 'pending';
-        if (!in_array($status, ['pending', 'reserved', 'paid', 'activated', 'used', 'cancelled', 'expired'])) {
-            // Map old status values
-            if ($status === 'active') {
-                $status = 'pending';
-            } elseif ($status === 'inactive') {
-                $status = 'cancelled';
-            } else {
-                $status = 'pending'; // Default to pending if invalid
+        if ($request->filled('offer_id')) {
+            $offer = Offer::find($request->offer_id);
+            if ($offer) {
+                $offer->update(['coupon_id' => $coupon->id]);
             }
-        }
-
-        $coupon = Coupon::create([
-            'category_id' => $request->category_id,
-            'mall_id' => $request->mall_id,
-            'offer_id' => $request->offer_id,
-            'coupon_code' => $couponCode,
-            'barcode_value' => $request->barcode_value ?? $couponCode,
-            'usage_limit' => $request->usage_limit,
-            'times_used' => 0,
-            'status' => $request->status ?? 'pending',
-            'expires_at' => $request->expires_at ? date('Y-m-d H:i:s', strtotime($request->expires_at)) : null,
-            'terms_conditions' => $request->terms_conditions,
-            'is_refundable' => $request->boolean('is_refundable', false),
-            'discount_type' => $request->discount_type ?? 'percent',
-            'discount_percent' => $request->discount_type === 'percent' ? $request->discount_percent : null,
-            'discount_amount' => $request->discount_type === 'amount' ? $request->discount_amount : null,
-            'created_by' => auth()->id(),
-            'created_by_type' => 'admin',
-        ]);
-
-        // If coupon is assigned to offer, update the offer
-        if ($request->has('offer_id')) {
-            $offer->update(['coupon_id' => $coupon->id]);
         }
 
         return response()->json([
@@ -2258,7 +2297,7 @@ class AdminController extends Controller
             'discount_type' => 'nullable|in:percent,amount,percentage,fixed',
             'discount_percent' => 'nullable|numeric|min:0|max:100',
             'discount_amount' => 'nullable|numeric|min:0',
-            'status' => 'nullable|in:pending,reserved,paid,activated,used,cancelled,expired,active',
+            'status' => 'nullable|in:pending,reserved,paid,activated,used,cancelled,expired,active,inactive',
             'expires_at' => 'nullable|date',
             'terms_conditions' => 'nullable|string',
             'is_refundable' => 'nullable|boolean',
@@ -2335,9 +2374,7 @@ class AdminController extends Controller
             }
         }
         if ($request->has('status')) {
-            $updateData['status'] = in_array($request->status, ['active', 'used', 'expired'], true)
-                ? $request->status
-                : ($request->status === 'cancelled' ? 'expired' : $request->status);
+            $updateData['status'] = $request->status;
         }
 
         if ($request->has('expires_at')) {

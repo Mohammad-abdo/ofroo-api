@@ -489,39 +489,59 @@ class MerchantController extends Controller
         $user = $request->user();
         $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
 
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
-            'category_id' => 'required|exists:categories,id',
-            'mall_id' => 'nullable|exists:malls,id',
-            'coupon_code' => 'nullable|string|unique:coupons,coupon_code',
-            'usage_limit' => 'required|integer|min:1',
-            'discount_type' => 'nullable|in:percent,amount',
-            'discount_percent' => [
-                'nullable',
-                'numeric',
-                'min:0',
-                'max:100',
-                function ($attribute, $value, $fail) use ($request) {
-                    if ($request->discount_type === 'percent' && !$value) {
-                        $fail('Discount percent is required when discount type is percent.');
-                    }
-                },
-            ],
-            'discount_amount' => [
-                'nullable',
-                'numeric',
-                'min:0',
-                function ($attribute, $value, $fail) use ($request) {
-                    if ($request->discount_type === 'amount' && !$value) {
-                        $fail('Discount amount is required when discount type is amount.');
-                    }
-                },
-            ],
-            'status' => 'nullable|in:pending,reserved,paid,activated,used,cancelled,expired',
-            'expires_at' => 'nullable|date|after:today',
-            'terms_conditions' => 'nullable|string',
-            'is_refundable' => 'nullable|boolean',
-        ]);
+        $isOfferBased = $request->filled('offer_id') && !$request->filled('category_id');
 
+        if ($isOfferBased) {
+            $rules = [
+                'offer_id'       => 'required|exists:offers,id',
+                'title'          => 'nullable|string|max:255',
+                'title_ar'       => 'nullable|string|max:255',
+                'title_en'       => 'nullable|string|max:255',
+                'description'    => 'nullable|string',
+                'description_ar' => 'nullable|string',
+                'description_en' => 'nullable|string',
+                'price'          => 'required|numeric|min:0',
+                'discount'       => 'nullable|numeric|min:0',
+                'discount_type'  => 'nullable|in:percent,amount,percentage,fixed',
+                'barcode'        => 'nullable|string|max:64',
+                'coupon_code'    => 'nullable|string|unique:coupons,coupon_code',
+                'usage_limit'    => 'nullable|integer|min:0',
+                'status'         => 'nullable|in:active,inactive,used,expired,pending',
+                'starts_at'      => 'nullable|date',
+                'expires_at'     => 'nullable|date',
+                'image'          => 'nullable',
+            ];
+            if ($request->hasFile('image')) {
+                $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
+                $rules['image'] = 'image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
+            }
+
+            $offer = Offer::where('id', $request->offer_id)
+                ->where('merchant_id', $merchant->id)
+                ->first();
+            if (!$offer) {
+                return response()->json([
+                    'message' => 'Validation error',
+                    'errors' => ['offer_id' => ['Offer not found or does not belong to your account.']],
+                ], 422);
+            }
+        } else {
+            $rules = [
+                'category_id'      => 'required|exists:categories,id',
+                'mall_id'          => 'nullable|exists:malls,id',
+                'coupon_code'      => 'nullable|string|unique:coupons,coupon_code',
+                'usage_limit'      => 'required|integer|min:1',
+                'discount_type'    => 'nullable|in:percent,amount,percentage,fixed',
+                'discount_percent' => 'nullable|numeric|min:0|max:100',
+                'discount_amount'  => 'nullable|numeric|min:0',
+                'status'           => 'nullable|in:pending,reserved,paid,activated,used,cancelled,expired,active,inactive',
+                'expires_at'       => 'nullable|date',
+                'terms_conditions' => 'nullable|string',
+                'is_refundable'    => 'nullable|boolean',
+            ];
+        }
+
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
         if ($validator->fails()) {
             return response()->json([
                 'message' => 'Validation error',
@@ -529,36 +549,63 @@ class MerchantController extends Controller
             ], 422);
         }
 
-        // Generate coupon code if not provided
-        $couponCode = $request->coupon_code ?? 'CPN-' . strtoupper(uniqid());
+        if ($isOfferBased) {
+            $dt = $request->input('discount_type', 'percent');
+            $mappedDt = in_array($dt, ['fixed', 'amount'], true) ? 'amount' : 'percent';
+            $barcodeVal = $request->input('barcode') ?: ('CPN-' . strtoupper(uniqid()));
+            $imagePath = null;
+            if ($request->hasFile('image') && $request->file('image')->isValid()) {
+                $imagePath = asset('storage/' . $request->file('image')->store('coupons', 'public'));
+            } elseif ($request->filled('image') && is_string($request->image)) {
+                $imagePath = $request->image;
+            }
 
-        // Ensure status is valid (only pending, reserved, paid, activated, used, cancelled, expired)
-        $validStatuses = ['pending', 'reserved', 'paid', 'activated', 'used', 'cancelled', 'expired'];
-        $status = $request->status && in_array($request->status, $validStatuses) 
-            ? $request->status 
-            : 'pending';
+            $coupon = Coupon::create([
+                'offer_id'       => $request->offer_id,
+                'title'          => $request->input('title', $request->input('title_ar', '')),
+                'title_ar'       => $request->input('title_ar'),
+                'title_en'       => $request->input('title_en'),
+                'description'    => $request->input('description', $request->input('description_ar', '')),
+                'description_ar' => $request->input('description_ar'),
+                'description_en' => $request->input('description_en'),
+                'price'          => (float) $request->price,
+                'discount'       => (float) ($request->discount ?? 0),
+                'discount_type'  => $mappedDt,
+                'barcode'        => $barcodeVal,
+                'coupon_code'    => $request->input('coupon_code', $barcodeVal),
+                'usage_limit'    => (int) ($request->usage_limit ?? 0),
+                'times_used'     => 0,
+                'status'         => $request->input('status', 'active'),
+                'starts_at'      => $request->starts_at ? date('Y-m-d H:i:s', strtotime($request->starts_at)) : null,
+                'expires_at'     => $request->expires_at ? date('Y-m-d H:i:s', strtotime($request->expires_at)) : null,
+                'image'          => $imagePath,
+            ]);
 
-        $coupon = Coupon::create([
-            'category_id' => $request->category_id,
-            'mall_id' => $request->mall_id,
-            'coupon_code' => $couponCode,
-            'barcode_value' => $request->barcode_value ?? $couponCode,
-            'usage_limit' => $request->usage_limit,
-            'times_used' => 0,
-            'discount_type' => $request->discount_type ?? 'percent',
-            'discount_percent' => $request->discount_percent,
-            'discount_amount' => $request->discount_amount,
-            'status' => $status,
-            'expires_at' => $request->expires_at,
-            'terms_conditions' => $request->terms_conditions,
-            'is_refundable' => $request->boolean('is_refundable', false),
-            'created_by' => $merchant->id,
-            'created_by_type' => 'merchant',
-        ]);
+            $offer->update(['coupon_id' => $coupon->id]);
+        } else {
+            $couponCode = $request->coupon_code ?? 'CPN-' . strtoupper(uniqid());
+            $coupon = Coupon::create([
+                'category_id'      => $request->category_id,
+                'mall_id'          => $request->mall_id,
+                'coupon_code'      => $couponCode,
+                'barcode_value'    => $request->barcode_value ?? $couponCode,
+                'usage_limit'      => $request->usage_limit,
+                'times_used'       => 0,
+                'discount_type'    => $request->input('discount_type', 'percent'),
+                'discount_percent' => $request->discount_percent,
+                'discount_amount'  => $request->discount_amount,
+                'status'           => $request->input('status', 'pending'),
+                'expires_at'       => $request->expires_at,
+                'terms_conditions' => $request->terms_conditions,
+                'is_refundable'    => $request->boolean('is_refundable', false),
+                'created_by'       => $merchant->id,
+                'created_by_type'  => 'merchant',
+            ]);
+        }
 
         return response()->json([
             'message' => 'Coupon created successfully',
-            'data' => new \App\Http\Resources\CouponResource($coupon->load(['category'])),
+            'data' => new \App\Http\Resources\CouponResource($coupon->load(['offer'])),
         ], 201);
     }
 

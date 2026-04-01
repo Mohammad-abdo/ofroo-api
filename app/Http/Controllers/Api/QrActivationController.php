@@ -75,7 +75,6 @@ class QrActivationController extends Controller
             'qr_code' => 'required_without:coupon_code|string',
         ]);
         
-        // Use qr_code if provided, otherwise use coupon_code
         $code = $request->qr_code ?? $request->coupon_code;
 
         $user = $request->user();
@@ -83,7 +82,16 @@ class QrActivationController extends Controller
 
         $result = $this->qrService->validateQrCode($code, $merchant);
 
-        return response()->json($result);
+        if (!($result['valid'] ?? false)) {
+            return response()->json(['message' => $result['message'] ?? 'Invalid code'], 400);
+        }
+
+        return response()->json([
+            'valid' => true,
+            'data' => $result['coupon'] ?? null,
+            'can_activate' => $result['can_activate'] ?? false,
+            'status' => $result['status'] ?? null,
+        ]);
     }
 
     /**
