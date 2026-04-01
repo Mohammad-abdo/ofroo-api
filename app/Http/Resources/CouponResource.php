@@ -58,11 +58,18 @@ class CouponResource extends JsonResource
             'is_exhausted' => $isExhausted,
             'created_at' => $this->created_at ? $this->created_at->toIso8601String() : '',
         ];
-        if ($this->relationLoaded('offer')) {
-            $arr['offer'] = $this->offer ? [
-                'id' => $this->offer->id,
-                'title' => $this->offer->title ?? $this->offer->title_ar ?? $this->offer->title_en ?? null,
-            ] : null;
+        if ($this->relationLoaded('offer') && $this->offer) {
+            $o = $this->offer;
+            $arr['offer'] = [
+                'id' => $o->id,
+                'merchant_id' => $o->merchant_id ?? null,
+                'title' => $o->title ?? $o->title_ar ?? $o->title_en ?? null,
+                'title_ar' => $o->title_ar ?? $o->title ?? null,
+                'title_en' => $o->title_en ?? $o->title ?? null,
+                'status' => $o->status ?? null,
+                'start_date' => $o->start_date ?? null,
+                'end_date' => $o->end_date ?? null,
+            ];
         }
         return $arr;
     }
