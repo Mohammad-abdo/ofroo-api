@@ -39,30 +39,47 @@ class AdminWalletController extends Controller
     }
 
     /**
-     * Get admin wallet transactions
+     * Get wallet transactions (admin wallet and/or all merchant wallets).
+     *
+     * Query: wallet_type=admin|merchant, type (transaction_type), from/from_date, to/to_date, search (note), per_page, page
      */
     public function transactions(Request $request): JsonResponse
     {
-        $wallet = AdminWallet::getOrCreate();
+        $walletType = $request->get('wallet_type', 'admin');
 
-        $query = WalletTransaction::where('wallet_id', $wallet->id)
-            ->where('wallet_type', 'admin')
+        $query = WalletTransaction::query()
             ->with('createdBy')
             ->orderBy('created_at', 'desc');
 
-        if ($request->has('from')) {
-            $query->where('created_at', '>=', $request->from);
+        if ($walletType === 'merchant') {
+            $query->where('wallet_type', 'merchant');
+        } else {
+            $wallet = AdminWallet::getOrCreate();
+            $query->where('wallet_id', $wallet->id)
+                ->where('wallet_type', 'admin');
         }
 
-        if ($request->has('to')) {
-            $query->where('created_at', '<=', $request->to);
+        $from = $request->get('from_date') ?? $request->get('from');
+        $to = $request->get('to_date') ?? $request->get('to');
+        if ($from) {
+            $query->where('created_at', '>=', $from);
+        }
+        if ($to) {
+            $query->where('created_at', '<=', str_contains((string) $to, ' ') ? $to : $to.' 23:59:59');
         }
 
-        if ($request->has('type')) {
+        if ($request->filled('type')) {
             $query->where('transaction_type', $request->type);
         }
 
-        $transactions = $query->paginate($request->get('per_page', 50));
+        if ($request->filled('search')) {
+            $term = '%'.addcslashes($request->search, '%_\\').'%';
+            $query->where('note', 'like', $term);
+        }
+
+        $perPage = min(100, max(1, (int) $request->get('per_page', 15)));
+
+        $transactions = $query->paginate($perPage);
 
         return response()->json([
             'data' => $transactions->items(),

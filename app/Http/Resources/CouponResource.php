@@ -7,6 +7,25 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class CouponResource extends JsonResource
 {
+    /**
+     * Prefer non-empty scannable code: barcode, coupon_code, then legacy barcode_value.
+     * Note: ?? does not treat '' as missing, so we must trim and fall through explicitly.
+     */
+    protected function resolveScannableCode(): string
+    {
+        foreach (['barcode', 'coupon_code', 'barcode_value'] as $col) {
+            $v = $this->resource->getAttribute($col);
+            if ($v !== null && $v !== '') {
+                $s = trim((string) $v);
+                if ($s !== '') {
+                    return $s;
+                }
+            }
+        }
+
+        return '';
+    }
+
     public function toArray(Request $request): array
     {
         $usageLimitRaw = $this->usage_limit;
@@ -32,6 +51,8 @@ class CouponResource extends JsonResource
         $dt = strtolower((string) ($this->discount_type ?? 'percent'));
         $discountTypeLabel = in_array($dt, ['amount', 'fixed'], true) ? 'fixed' : 'percentage';
 
+        $scannable = $this->resolveScannableCode();
+
         $arr = [
             'id' => $this->id,
             'offer_id' => (string) $this->offer_id,
@@ -46,8 +67,10 @@ class CouponResource extends JsonResource
             'price_after_discount' => $priceAfterDiscount,
             'discount' => (float) $this->discount,
             'discount_type' => $discountTypeLabel,
-            'barcode' => $this->barcode ?? $this->coupon_code ?? '',
-            'coupon_code' => $this->coupon_code ?? $this->barcode ?? '',
+            // Single canonical value for UIs (barcode image, QR, scan)
+            'barcode' => $scannable,
+            'coupon_code' => $scannable,
+            'barcode_value' => $this->barcode_value !== null && $this->barcode_value !== '' ? (string) $this->barcode_value : '',
             'starts_at' => $this->starts_at ? $this->starts_at->toIso8601String() : '',
             'expires_at' => $this->expires_at ? $this->expires_at->toIso8601String() : '',
             'status' => $this->status ?? '',
