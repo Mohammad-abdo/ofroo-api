@@ -29,7 +29,7 @@ class QrActivationController extends Controller
             'device_id' => 'nullable|string',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
-            'location_id' => 'nullable|exists:store_locations,id',
+            'location_id' => 'nullable|integer',
         ]);
         
         // Use qr_code if provided, otherwise use coupon_code

@@ -14,12 +14,27 @@ class QrActivationService
     /**
      * Activate coupon by QR code scan
      */
-    public function activateCoupon(string $couponCode, Merchant $merchant, ?User $activatedBy, array $metadata = []): array
+    private function findCouponByCode(string $couponCode, Merchant $merchant): ?Coupon
     {
         $coupon = Coupon::with('offer')
-            ->where('coupon_code', $couponCode)
-            ->orWhere('barcode', $couponCode)
+            ->where(function ($q) use ($couponCode) {
+                $q->where('coupon_code', $couponCode)->orWhere('barcode', $couponCode);
+            })
+            ->whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id))
             ->first();
+
+        if ($coupon) return $coupon;
+
+        return Coupon::with('offer')
+            ->where(function ($q) use ($couponCode) {
+                $q->where('coupon_code', $couponCode)->orWhere('barcode', $couponCode);
+            })
+            ->first();
+    }
+
+    public function activateCoupon(string $couponCode, Merchant $merchant, ?User $activatedBy, array $metadata = []): array
+    {
+        $coupon = $this->findCouponByCode($couponCode, $merchant);
 
         if (!$coupon) {
             return [
@@ -28,10 +43,19 @@ class QrActivationService
             ];
         }
 
-        if ($coupon->offer && $coupon->offer->merchant_id !== $merchant->id) {
+        if ($coupon->offer && (int) $coupon->offer->merchant_id !== (int) $merchant->id) {
             return [
                 'success' => false,
                 'message' => 'Coupon does not belong to this merchant',
+                'coupon' => new \App\Http\Resources\CouponResource($coupon),
+            ];
+        }
+
+        if (!$coupon->offer) {
+            return [
+                'success' => false,
+                'message' => 'Coupon has no linked offer',
+                'coupon' => new \App\Http\Resources\CouponResource($coupon),
             ];
         }
 
@@ -131,10 +155,7 @@ class QrActivationService
      */
     public function validateQrCode(string $couponCode, Merchant $merchant): array
     {
-        $coupon = Coupon::with('offer')
-            ->where('coupon_code', $couponCode)
-            ->orWhere('barcode', $couponCode)
-            ->first();
+        $coupon = $this->findCouponByCode($couponCode, $merchant);
 
         if (!$coupon) {
             return [
@@ -143,7 +164,7 @@ class QrActivationService
             ];
         }
 
-        if ($coupon->offer && $coupon->offer->merchant_id !== $merchant->id) {
+        if ($coupon->offer && (int) $coupon->offer->merchant_id !== (int) $merchant->id) {
             return [
                 'valid' => false,
                 'message' => 'Coupon does not belong to this merchant',
