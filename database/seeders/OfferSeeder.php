@@ -8,6 +8,7 @@ use App\Models\Coupon;
 use App\Models\Merchant;
 use App\Models\Offer;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema;
 use Faker\Factory as Faker;
 
 class OfferSeeder extends Seeder
@@ -100,6 +101,7 @@ class OfferSeeder extends Seeder
     public function run(): void
     {
         $faker = Faker::create('ar_EG');
+        $fakerEn = Faker::create('en_US');
         $categories = Category::whereNull('parent_id')->orderBy('order_index')->get();
         $merchants = Merchant::where('approved', true)->get();
         $titlesByCategory = $this->getTitlesByCategory();
@@ -128,16 +130,14 @@ class OfferSeeder extends Seeder
                 $status = $faker->randomElement(['active', 'active', 'active', 'pending', 'expired', 'draft']);
                 $startDate = $faker->dateTimeBetween('-30 days', 'now');
                 $endDate = $faker->dateTimeBetween('now', '+60 days');
+                $descMain = $faker->realText(300);
+                $descAr = $faker->realText(200);
+                $descEn = $fakerEn->text(200);
 
-                $offer = Offer::create([
+                // After migration 2026_02_01_111754: title_ar→title, description_ar→description (no title_ar / description_ar columns).
+                $offerAttrs = [
                     'merchant_id' => $merchant->id,
                     'category_id' => $category->id,
-                    'title' => $title['ar'],
-                    'title_ar' => $title['ar'],
-                    'title_en' => $title['en'],
-                    'description' => $faker->realText(300),
-                    'description_ar' => $faker->realText(200),
-                    'description_en' => $faker->text(200),
                     'price' => $price,
                     'discount' => $discountPercent,
                     'offer_images' => [
@@ -146,7 +146,34 @@ class OfferSeeder extends Seeder
                     'start_date' => $startDate,
                     'end_date' => $endDate,
                     'status' => $status,
-                ]);
+                ];
+                if (Schema::hasColumn('offers', 'title_ar')) {
+                    $offerAttrs['title_ar'] = $title['ar'];
+                    $offerAttrs['title_en'] = $title['en'];
+                    $offerAttrs['description_ar'] = $descAr;
+                    $offerAttrs['description_en'] = $descEn;
+                    if (Schema::hasColumn('offers', 'description')) {
+                        $offerAttrs['description'] = $descMain;
+                    }
+                } else {
+                    $offerAttrs['title'] = $title['ar'];
+                    $offerAttrs['title_en'] = $title['en'];
+                    $offerAttrs['description'] = $descMain;
+                    $offerAttrs['description_en'] = $descEn;
+                }
+
+                if (Schema::hasColumn('offers', 'images') && ! Schema::hasColumn('offers', 'offer_images')) {
+                    $offerAttrs['images'] = $offerAttrs['offer_images'];
+                    unset($offerAttrs['offer_images']);
+                }
+                if (Schema::hasColumn('offers', 'start_at') && ! Schema::hasColumn('offers', 'start_date')) {
+                    $offerAttrs['start_at'] = $startDate;
+                    $offerAttrs['end_at'] = $endDate;
+                    unset($offerAttrs['start_date'], $offerAttrs['end_date']);
+                }
+
+                // forceCreate: legacy DB may use title_ar/description_ar columns not in $fillable
+                $offer = Offer::forceCreate($offerAttrs);
 
                 if ($branch) {
                     $offer->branches()->sync([$branch->id]);
