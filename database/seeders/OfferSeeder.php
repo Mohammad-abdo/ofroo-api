@@ -133,7 +133,11 @@ class OfferSeeder extends Seeder
                     'merchant_id' => $merchant->id,
                     'category_id' => $category->id,
                     'title' => $title['ar'],
+                    'title_ar' => $title['ar'],
+                    'title_en' => $title['en'],
                     'description' => $faker->realText(300),
+                    'description_ar' => $faker->realText(200),
+                    'description_en' => $faker->text(200),
                     'price' => $price,
                     'discount' => $discountPercent,
                     'offer_images' => [

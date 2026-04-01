@@ -123,6 +123,22 @@ class PermissionSeeder extends Seeder
             // Warnings
             ['name' => 'warnings.view', 'group' => 'warnings', 'group_ar' => 'التحذيرات', 'group_en' => 'Warnings', 'name_ar' => 'عرض التحذيرات', 'name_en' => 'View warnings', 'description' => 'View merchant warnings', 'description_ar' => 'عرض تحذيرات التجار', 'description_en' => 'View merchant warnings'],
             ['name' => 'warnings.manage', 'group' => 'warnings', 'group_ar' => 'التحذيرات', 'group_en' => 'Warnings', 'name_ar' => 'إدارة التحذيرات', 'name_en' => 'Manage warnings', 'description' => 'Add or remove warnings', 'description_ar' => 'إضافة أو إزالة التحذيرات', 'description_en' => 'Add or remove warnings'],
+
+            // Wallets
+            ['name' => 'wallets.view', 'group' => 'wallets', 'group_ar' => 'المحافظ', 'group_en' => 'Wallets', 'name_ar' => 'عرض المحافظ', 'name_en' => 'View wallets', 'description' => 'View admin and merchant wallets', 'description_ar' => 'عرض محافظ المشرف والتجار', 'description_en' => 'View admin and merchant wallets'],
+            ['name' => 'wallets.manage', 'group' => 'wallets', 'group_ar' => 'المحافظ', 'group_en' => 'Wallets', 'name_ar' => 'إدارة المحافظ', 'name_en' => 'Manage wallets', 'description' => 'Adjust balances, freeze wallets', 'description_ar' => 'تعديل الأرصدة وتجميد المحافظ', 'description_en' => 'Adjust balances, freeze wallets'],
+            ['name' => 'wallets.transactions', 'group' => 'wallets', 'group_ar' => 'المحافظ', 'group_en' => 'Wallets', 'name_ar' => 'عرض المعاملات', 'name_en' => 'View transactions', 'description' => 'View wallet transactions', 'description_ar' => 'عرض معاملات المحافظ', 'description_en' => 'View wallet transactions'],
+
+            // Commissions
+            ['name' => 'commissions.view', 'group' => 'commissions', 'group_ar' => 'العمولات', 'group_en' => 'Commissions', 'name_ar' => 'عرض العمولات', 'name_en' => 'View commissions', 'description' => 'View commission records', 'description_ar' => 'عرض سجلات العمولات', 'description_en' => 'View commission records'],
+            ['name' => 'commissions.pay', 'group' => 'commissions', 'group_ar' => 'العمولات', 'group_en' => 'Commissions', 'name_ar' => 'دفع العمولات', 'name_en' => 'Pay commissions', 'description' => 'Process commission payments to merchants', 'description_ar' => 'معالجة دفع العمولات للتجار', 'description_en' => 'Process commission payments to merchants'],
+
+            // Merchant Staff
+            ['name' => 'staff.view', 'group' => 'staff', 'group_ar' => 'الموظفين', 'group_en' => 'Staff', 'name_ar' => 'عرض الموظفين', 'name_en' => 'View staff', 'description' => 'View merchant staff list', 'description_ar' => 'عرض قائمة موظفي التاجر', 'description_en' => 'View merchant staff list'],
+            ['name' => 'staff.manage', 'group' => 'staff', 'group_ar' => 'الموظفين', 'group_en' => 'Staff', 'name_ar' => 'إدارة الموظفين', 'name_en' => 'Manage staff', 'description' => 'Add, edit, delete merchant staff', 'description_ar' => 'إضافة وتعديل وحذف موظفي التاجر', 'description_en' => 'Add, edit, delete merchant staff'],
+
+            // Activity Logs
+            ['name' => 'activity_logs.view', 'group' => 'activity_logs', 'group_ar' => 'سجل النشاط', 'group_en' => 'Activity Logs', 'name_ar' => 'عرض سجل النشاط', 'name_en' => 'View activity logs', 'description' => 'View system activity logs', 'description_ar' => 'عرض سجل نشاط النظام', 'description_en' => 'View system activity logs'],
         ];
 
         foreach ($permissions as $item) {

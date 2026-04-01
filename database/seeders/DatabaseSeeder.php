@@ -9,45 +9,54 @@ class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
         $this->call([
-            // Locations first (users/merchants need city_id, governorate_id)
+            // 1. Foundation: locations, permissions, roles, users
             GovernorateSeeder::class,
-            // Permissions before roles (for role_permissions pivot)
             PermissionSeeder::class,
-            // Core seeders
             RoleSeeder::class,
             UserSeeder::class,
+
+            // 2. Business entities
             CategorySeeder::class,
             MerchantSeeder::class,
+
+            // 3. Products & coupons
             OfferSeeder::class,
             CouponSeeder::class,
 
-            // Order and cart seeders
+            // 4. Orders & payments
             OrderSeeder::class,
             CartSeeder::class,
 
-            // Financial seeders
+            // 5. Financial (wallets, commissions, withdrawals, expenses)
             FinancialSeeder::class,
+            WalletSeeder::class,
 
-            // Review and loyalty seeders
+            // 6. Reviews & loyalty
             ReviewSeeder::class,
             LoyaltySeeder::class,
 
-            // Support seeders
+            // 7. Support tickets
             SupportSeeder::class,
 
-            // Settings seeders
+            // 8. Settings & payment gateways
             SettingsSeeder::class,
 
-            // Wallet seeders
-            WalletSeeder::class,
+            // 9. Merchant staff (employees, coupon activation staff)
+            MerchantStaffSeeder::class,
 
-            // Activity logs
+            // 10. Ads & banners
+            AdSeeder::class,
+
+            // 11. Warnings
+            WarningSeeder::class,
+
+            // 12. Admin notifications
+            NotificationSeeder::class,
+
+            // 13. Activity logs (last — references all other entities)
             ActivityLogSeeder::class,
         ]);
     }

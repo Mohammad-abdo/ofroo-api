@@ -63,6 +63,9 @@ class RoleSeeder extends Seeder
                     'orders.view', 'orders.update', 'sales.view',
                     'reports.view', 'notifications.view', 'notifications.send',
                     'reviews.view', 'support.view', 'support.assign',
+                    'wallets.view', 'wallets.transactions',
+                    'commissions.view', 'warnings.view',
+                    'staff.view', 'activity_logs.view',
                 ],
             ],
             [
@@ -99,6 +102,8 @@ class RoleSeeder extends Seeder
                     'withdrawals.view', 'withdrawals.approve',
                     'invoices.view', 'invoices.generate',
                     'merchants.view',
+                    'wallets.view', 'wallets.manage', 'wallets.transactions',
+                    'commissions.view', 'commissions.pay',
                 ],
             ],
         ];
