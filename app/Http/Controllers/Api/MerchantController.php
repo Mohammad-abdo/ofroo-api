@@ -24,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use App\Helpers\StorageHelper;
+use App\Support\ImageUploadRules;
 
 class MerchantController extends Controller
 {
@@ -513,7 +514,7 @@ class MerchantController extends Controller
             ];
             if ($request->hasFile('image')) {
                 $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
-                $rules['image'] = 'image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
+                $rules['image'] = ImageUploadRules::fileMax($maxKb);
             }
 
             $offer = Offer::where('id', $request->offer_id)
@@ -773,7 +774,7 @@ class MerchantController extends Controller
         ];
         if ($request->hasFile('image')) {
             $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
-            $rules['image'] = 'image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
+            $rules['image'] = ImageUploadRules::fileMax($maxKb);
         }
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
 
@@ -1085,7 +1086,7 @@ class MerchantController extends Controller
     public function uploadLogo(Request $request): JsonResponse
     {
         $request->validate([
-            'logo' => 'required|image|mimes:jpeg,png,jpg,gif,webp',
+            'logo' => ImageUploadRules::requiredFileMax(2048),
         ]);
 
         $user = $request->user();
@@ -1709,7 +1710,7 @@ class MerchantController extends Controller
         ]);
         if ($request->hasFile('image')) {
             $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
-            $validator->addRules(['image' => 'image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb]);
+            $validator->addRules(['image' => ImageUploadRules::fileMax($maxKb)]);
         }
         if ($validator->fails()) {
             return response()->json(['message' => 'Validation error', 'errors' => $validator->errors()], 422);

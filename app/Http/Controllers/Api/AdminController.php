@@ -13,6 +13,7 @@ use App\Models\Coupon;
 use App\Models\Category;
 use App\Models\Offer;
 use App\Services\OfferService;
+use App\Support\ImageUploadRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -619,7 +620,7 @@ class AdminController extends Controller
     public function uploadLogo(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'logo' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'logo' => ImageUploadRules::requiredFileMax(2048),
         ]);
 
         if ($validator->fails()) {
@@ -636,7 +637,7 @@ class AdminController extends Controller
         }
 
         $file = $request->file('logo');
-        
+
         // Upload logo
         $logoName = 'app_logo_' . time() . '.' . $file->getClientOriginalExtension();
         $path = $file->storeAs('settings', $logoName, 'public');
@@ -814,7 +815,7 @@ class AdminController extends Controller
             'order_index' => 'nullable|integer',
         ];
         if ($request->hasFile('image')) {
-            $rules['image'] = 'image|mimes:jpeg,png,jpg,gif,webp|max:2048';
+            $rules['image'] = ImageUploadRules::fileMax(2048);
         }
         $validator = Validator::make($request->all(), $rules);
 
@@ -861,7 +862,7 @@ class AdminController extends Controller
             'remove_image' => 'nullable|string|in:1,true',
         ];
         if ($request->hasFile('image')) {
-            $rules['image'] = 'image|mimes:jpeg,png,jpg,gif,webp|max:2048';
+            $rules['image'] = ImageUploadRules::fileMax(2048);
         }
         $validator = Validator::make($request->all(), $rules);
 
@@ -1034,7 +1035,7 @@ class AdminController extends Controller
         if ($isMultipart) {
             $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
             $rules['offer_images'] = 'nullable|array';
-            $rules['offer_images.*'] = 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
+            $rules['offer_images.*'] = ImageUploadRules::nullableFileMax($maxKb);
         }
 
         $validator = Validator::make($validationData, $rules);
@@ -1176,7 +1177,7 @@ class AdminController extends Controller
         if ($isMultipart) {
             $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
             $rules['offer_images'] = 'nullable|array';
-            $rules['offer_images.*'] = 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
+            $rules['offer_images.*'] = ImageUploadRules::nullableFileMax($maxKb);
         }
 
         $validator = Validator::make($validationData, $rules);
@@ -2016,7 +2017,7 @@ class AdminController extends Controller
         ]);
         if ($request->hasFile('image')) {
             $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
-            $validator->addRules(['image' => 'image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb]);
+            $validator->addRules(['image' => ImageUploadRules::fileMax($maxKb)]);
         }
         if ($validator->fails()) {
             return response()->json(['message' => 'Validation error', 'errors' => $validator->errors()], 422);
@@ -2189,7 +2190,7 @@ class AdminController extends Controller
             ];
             if ($request->hasFile('image')) {
                 $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
-                $rules['image'] = 'image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
+                $rules['image'] = ImageUploadRules::fileMax($maxKb);
             }
         } else {
             $rules = [
@@ -2319,7 +2320,7 @@ class AdminController extends Controller
         ];
         if ($request->hasFile('image')) {
             $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
-            $rules['image'] = 'image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
+            $rules['image'] = ImageUploadRules::fileMax($maxKb);
         }
         $validator = Validator::make($request->all(), $rules);
 
@@ -3711,7 +3712,7 @@ class AdminController extends Controller
     public function markNotificationAsRead(Request $request, string $id): JsonResponse
     {
         $notification = \App\Models\AdminNotification::findOrFail($id);
-        
+
         // إضافة حقل read_at إذا لم يكن موجوداً
         if (!$notification->read_at) {
             $notification->update([
@@ -3895,7 +3896,7 @@ class AdminController extends Controller
         // Only validate image if a file is actually present
         if ($request->hasFile('image')) {
             $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
-            $rules['image'] = 'required|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
+            $rules['image'] = ImageUploadRules::requiredFileMax($maxKb);
         } else {
             $rules['image'] = 'nullable'; // Allow null/empty if no file
         }
@@ -4033,7 +4034,7 @@ class AdminController extends Controller
         // Only validate image if a file is actually present
         if ($request->hasFile('image')) {
             $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
-            $rules['image'] = 'required|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
+            $rules['image'] = ImageUploadRules::requiredFileMax($maxKb);
         } else {
             $rules['image'] = 'nullable'; // Allow null/empty if no file
         }
@@ -4182,7 +4183,7 @@ class AdminController extends Controller
             'description_ar' => 'nullable|string',
             'description_en' => 'nullable|string',
             // Support both file upload and URL
-            'image' => 'nullable|file|mimes:jpeg,jpg,png,gif,webp|max:10240', // 10MB max
+            'image' => ImageUploadRules::nullableFileMax(10240), // 10MB max
             'video' => 'nullable|file|mimes:mp4,avi,mov,webm|max:51200', // 50MB max for videos
             'image_url' => 'nullable|string|max:500',
             'video_url' => 'nullable|string|max:500',
@@ -4294,7 +4295,7 @@ class AdminController extends Controller
             'description_ar' => 'sometimes|string',
             'description_en' => 'sometimes|string',
             // Support both file upload and URL for updates
-            'image' => 'sometimes|file|mimes:jpeg,jpg,png,gif,webp|max:10240',
+            'image' => ImageUploadRules::sometimesFileMax(10240),
             'video' => 'sometimes|file|mimes:mp4,avi,mov,webm|max:51200',
             'image_url' => 'sometimes|string|max:500',
             'video_url' => 'sometimes|string|max:500',
@@ -4395,7 +4396,7 @@ class AdminController extends Controller
             'title_en' => 'required|string|max:255',
             'description_ar' => 'nullable|string',
             'description_en' => 'nullable|string',
-            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb,
+            'image' => ImageUploadRules::requiredFileMax($maxKb),
             'link_url' => 'nullable|string|max:500',
             'position' => 'required|string|max:50',
             'is_active' => 'nullable|boolean',
@@ -4454,7 +4455,7 @@ class AdminController extends Controller
             'title_en' => 'sometimes|string|max:255',
             'description_ar' => 'sometimes|string',
             'description_en' => 'sometimes|string',
-            'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb,
+            'image' => ImageUploadRules::sometimesFileMax($maxKb),
             'link_url' => 'sometimes|string|max:500',
             'position' => 'sometimes|string|max:50',
             'is_active' => 'sometimes|boolean',
@@ -4478,7 +4479,7 @@ class AdminController extends Controller
             $path = $file->storeAs('banners', $fileName, 'public');
             $data['image_url'] = asset('storage/' . $path);
         }
-        
+
         if (isset($data['title_en'])) {
             $data['title'] = $data['title_en'];
         }
@@ -4665,7 +4666,7 @@ class AdminController extends Controller
     {
         try {
             \Log::info('getMerchantsForSelect called');
-            
+
             $merchants = Merchant::select('id', 'company_name', 'company_name_ar', 'company_name_en')
                 ->where('approved', true)
                 ->whereNull('is_blocked') // Handle null values
@@ -4688,10 +4689,10 @@ class AdminController extends Controller
             return response()->json([
                 'data' => $data,
             ]);
-            
+
         } catch (\Exception $e) {
             \Log::error('Error in getMerchantsForSelect: ' . $e->getMessage());
-            
+
             return response()->json([
                 'message' => 'Error fetching merchants for select',
                 'error' => config('app.debug') ? $e->getMessage() : 'Something went wrong'

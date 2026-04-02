@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\ImageUploadRules;
 use Illuminate\Foundation\Http\FormRequest;
 
 class OfferStoreRequest extends FormRequest
@@ -131,7 +132,7 @@ class OfferStoreRequest extends FormRequest
             $rules['offer_images.*'] = 'nullable';
             $rules['coupon_images'] = 'nullable|array';
             $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
-            $rules['coupon_images.*'] = 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:'.$maxKb;
+            $rules['coupon_images.*'] = ImageUploadRules::nullableFileMax($maxKb);
         } else {
             $rules['offer_images'] = 'nullable|array';
         }

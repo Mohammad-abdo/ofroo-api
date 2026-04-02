@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use App\Helpers\StorageHelper;
+use App\Support\ImageUploadRules;
 
 class UserController extends Controller
 {
@@ -282,7 +283,7 @@ class UserController extends Controller
         $user = $request->user();
 
         $validator = Validator::make($request->all(), [
-            'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'avatar' => ImageUploadRules::requiredFileMax(2048),
         ]);
 
         if ($validator->fails()) {

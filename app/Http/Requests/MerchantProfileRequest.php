@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\ImageUploadRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -34,7 +35,7 @@ class MerchantProfileRequest extends FormRequest
             'whatsapp_enabled' => 'sometimes|boolean',
             'city' => 'sometimes|string|max:255|nullable',
             'logo_url' => 'sometimes|url|max:500|nullable',
-            'logo' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'logo' => ImageUploadRules::sometimesFileMax(2048),
             'name' => 'sometimes|string|max:255',
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users')->ignore($userId)],
             'phone_user' => 'sometimes|string|max:50|nullable',
@@ -44,8 +45,8 @@ class MerchantProfileRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'logo.image' => 'Logo must be an image file',
-            'logo.mimes' => 'Logo must be a file of type: jpeg, png, jpg, gif, webp',
+            'logo.file' => 'Logo must be a valid file',
+            'logo.mimes' => 'Logo must be a supported image type',
             'logo.max' => 'Logo must not be greater than 2MB',
             'logo_url.url' => 'Logo URL must be a valid URL',
         ];
