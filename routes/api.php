@@ -318,6 +318,7 @@ Route::middleware('auth:sanctum')->group(function () {
         });
 
         Route::get('/statistics', [MerchantController::class, 'statistics']);
+        Route::get('/me/activations', [MerchantController::class, 'myActivationHistory']);
 
         // Profile Management
         Route::get('/profile', [MerchantController::class, 'getProfile']);

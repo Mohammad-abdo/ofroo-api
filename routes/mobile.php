@@ -267,7 +267,8 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // ===== الإحصائيات =====
         Route::get('/statistics', [MerchantController::class, 'statistics']);
-        
+        Route::get('/me/activations', [MerchantController::class, 'myActivationHistory']);
+
         // ===== Profile Management =====
         Route::get('/profile', [MerchantController::class, 'getProfile']);
         Route::put('/profile', [MerchantController::class, 'updateProfile']);

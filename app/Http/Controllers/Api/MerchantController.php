@@ -25,6 +25,7 @@ use App\Services\CommissionRateResolver;
 use App\Services\FeatureFlagService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use App\Helpers\StorageHelper;
@@ -1013,6 +1014,54 @@ class MerchantController extends Controller
         }
 
         return $this->success($stats);
+    }
+
+    /**
+     * Paginated coupon activations performed by the current user (store owner or staff) for this merchant.
+     */
+    public function myActivationHistory(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $merchant = $this->resolveMerchant($request);
+
+        if (! Schema::hasColumn('activation_reports', 'activated_by_user_id')) {
+            return response()->json([
+                'success' => true,
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'per_page' => 15,
+                    'total' => 0,
+                ],
+            ]);
+        }
+
+        $perPage = min(50, max(5, (int) $request->get('per_page', 10)));
+
+        $paginator = ActivationReport::query()
+            ->where('merchant_id', $merchant->id)
+            ->where('activated_by_user_id', $user->id)
+            ->with(['coupon.offer'])
+            ->orderByDesc('created_at')
+            ->paginate($perPage);
+
+        $data = collect($paginator->items())->map(function (ActivationReport $row) {
+            $c = $row->coupon;
+
+            return [
+                'id' => $row->id,
+                'created_at' => $row->created_at?->toIso8601String(),
+                'activation_method' => $row->activation_method,
+                'coupon_code' => $c?->coupon_code,
+                'coupon_title' => $c && $c->offer
+                    ? ($c->offer->title_ar ?? $c->offer->title_en ?? $c->offer->title)
+                    : null,
+                'price' => $c ? (float) $c->price : null,
+            ];
+        })->values();
+
+        return $this->successWithPagination($paginator, $data);
     }
 
     /**
