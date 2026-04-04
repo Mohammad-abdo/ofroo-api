@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -103,6 +104,31 @@ class User extends Authenticatable
     public function merchant()
     {
         return $this->hasOne(Merchant::class);
+    }
+
+    /**
+     * Active staff row for merchant portal (coupon employees, etc.).
+     */
+    public function activeMerchantStaff(): HasOne
+    {
+        return $this->hasOne(MerchantStaff::class)->where('is_active', true);
+    }
+
+    /**
+     * Merchant account for /api/merchant/* — owner row or staff employer.
+     */
+    public function merchantForPortal(): ?Merchant
+    {
+        $owned = $this->merchant()->first();
+        if ($owned) {
+            return $owned;
+        }
+        $staff = $this->activeMerchantStaff()->first();
+        if ($staff && $staff->is_active) {
+            return Merchant::query()->find($staff->merchant_id);
+        }
+
+        return null;
     }
 
     /**

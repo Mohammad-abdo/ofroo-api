@@ -63,6 +63,9 @@ class CartController extends Controller
                         'discount' => (float) ($offer->discount ?? 0),
                         'offer_images' => $offer->offer_images ?? [],
                         'status' => $offer->status ?? '',
+                        'is_expired' => $offer->isExpired(),
+                        'is_not_started' => $offer->isNotYetStarted(),
+                        'effective_status' => $offer->effectiveStatus(),
                         'merchant' => $offer->relationLoaded('merchant') && $offer->merchant ? [
                             'id' => $offer->merchant->id,
                             'company_name' => $offer->merchant->company_name ?? '',
@@ -141,13 +144,28 @@ class CartController extends Controller
 
         $offer = Offer::with('coupons')->findOrFail($request->offer_id);
 
-        $available = $offer->available_coupons_count;
-        if ($available <= 0 && \Schema::hasColumn('offers', 'coupons_remaining')) {
-            $available = (int) $offer->coupons_remaining;
+        if ($offer->start_date && $offer->start_date->isFuture()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Offer has not started yet.',
+                'message_ar' => 'لم يبدأ هذا العرض بعد.',
+                'message_en' => 'This offer has not started yet.',
+            ], 400);
         }
+        if ($offer->end_date && $offer->end_date->isPast()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Offer has expired.',
+                'message_ar' => 'انتهت صلاحية العرض.',
+                'message_en' => 'This offer has expired.',
+            ], 400);
+        }
+
+        $available = $offer->available_coupons_count;
 
         if ($offer->status !== 'active' || $available < $request->quantity) {
             return response()->json([
+                'success' => false,
                 'message' => 'Offer not available or coupon usage limit exhausted.',
                 'message_ar' => 'العرض غير متاح أو تم استنفاد حد استخدام الكوبون',
                 'message_en' => 'This offer is unavailable or the coupon usage limit has been exhausted.',
@@ -163,6 +181,7 @@ class CartController extends Controller
             $cartItem->update([
                 'quantity' => $cartItem->quantity + $request->quantity,
             ]);
+            $lineTotalQuantity = (int) $cartItem->fresh()->quantity;
         } else {
             CartItem::create([
                 'cart_id' => $cart->id,
@@ -170,10 +189,20 @@ class CartController extends Controller
                 'quantity' => $request->quantity,
                 'price_at_add' => $offer->price,
             ]);
+            $lineTotalQuantity = (int) $request->quantity;
         }
 
         return response()->json([
+            'success' => true,
             'message' => 'Item added to cart successfully',
+            'message_ar' => 'تمت إضافة العنصر إلى السلة',
+            'message_en' => 'Item added to cart successfully',
+            'data' => [
+                'cart_id' => $cart->id,
+                'offer_id' => (int) $offer->id,
+                'quantity_added' => (int) $request->quantity,
+                'line_total_quantity' => $lineTotalQuantity,
+            ],
         ]);
     }
 

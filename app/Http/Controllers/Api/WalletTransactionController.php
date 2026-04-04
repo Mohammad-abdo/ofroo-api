@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\ResolvesMerchantPortal;
 use App\Http\Controllers\Controller;
-use App\Models\Merchant;
 use App\Models\MerchantWallet;
 use App\Models\WalletTransaction;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +17,7 @@ class WalletTransactionController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
         
         $wallet = MerchantWallet::firstOrCreate(
             ['merchant_id' => $merchant->id],
@@ -60,7 +60,7 @@ class WalletTransactionController extends Controller
     public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
         
         $wallet = MerchantWallet::where('merchant_id', $merchant->id)->firstOrFail();
 

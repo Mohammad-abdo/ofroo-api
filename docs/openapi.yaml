@@ -1,8 +1,13 @@
 openapi: 3.0.0
 info:
   title: OFROO API
-  description: OFROO Local Coupons & Offers API Documentation
-  version: 1.0.0
+  description: |
+    OFROO Coupons & Offers API. **Mobile app** uses the same route shapes under base URL `/api/mobile` (e.g. `POST /api/mobile/auth/otp/request`).
+
+    **Offer & coupon responses** include: `is_expired`, `is_not_started`, `effective_status`, `status_label_ar`, `status_label_en`.
+
+    **Swagger UI:** open `/docs/swagger.html` on the app host (see `DocumentationController` / deployment notes).
+  version: 1.1.0
   contact:
     name: OFROO Support
     email: support@ofroo.com
@@ -16,6 +21,8 @@ servers:
 tags:
   - name: Authentication
     description: User authentication endpoints
+  - name: OTP
+    description: Phone/email OTP (SMS/WhatsApp/log via OTP_PHONE_DRIVER)
   - name: Offers
     description: Public offers endpoints
   - name: Cart
@@ -124,6 +131,108 @@ paths:
                   token:
                     type: string
 
+  /auth/otp/request:
+    post:
+      tags:
+        - OTP
+      summary: Request OTP (sends to phone via queue or email)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [phone]
+                  properties:
+                    phone:
+                      type: string
+                      example: "+201234567890"
+                - type: object
+                  required: [email]
+                  properties:
+                    email:
+                      type: string
+                      format: email
+      responses:
+        '200':
+          description: OTP queued/sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpRequestResponse'
+        '404':
+          description: User not found
+        '429':
+          description: Resend cooldown
+
+  /auth/otp/verify:
+    post:
+      tags:
+        - OTP
+      summary: Verify OTP and receive token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp]
+              properties:
+                otp:
+                  type: string
+                  example: "123456"
+                phone:
+                  type: string
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpVerifyResponse'
+        '400':
+          description: Invalid or expired OTP
+
+  /admin/merchants/{id}/commission:
+    put:
+      tags:
+        - Admin
+      summary: Update merchant commission rule (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [commission_mode]
+              properties:
+                commission_mode:
+                  type: string
+                  enum: [platform, custom, waived]
+                commission_custom_percent:
+                  type: number
+                  format: float
+                  description: Required when commission_mode is custom (0–100)
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantCommissionResponse'
+
   /offers:
     get:
       tags:
@@ -188,11 +297,14 @@ paths:
             type: integer
       responses:
         '200':
-          description: Offer details
+          description: Offer details (wrapped in `data`)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Offer'
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Offer'
 
   /cart:
     get:
@@ -233,6 +345,14 @@ paths:
       responses:
         '200':
           description: Item added to cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartAddResponse'
+        '400':
+          description: Offer unavailable, expired, or stock exhausted
+        '401':
+          description: Unauthenticated
 
   /orders/checkout:
     post:
@@ -425,46 +545,85 @@ components:
 
     Offer:
       type: object
+      description: OfferResource shape (public & merchant lists)
       properties:
         id:
           type: integer
+        title:
+          type: string
         title_ar:
           type: string
         title_en:
+          type: string
+        description:
           type: string
         description_ar:
           type: string
         description_en:
           type: string
+        merchant_id:
+          type: string
+        category_id:
+          type: string
+        mall_id:
+          type: string
+          nullable: true
         price:
           type: number
           format: float
-        original_price:
+        discount:
           type: number
           format: float
-        discount_percent:
-          type: integer
-        images:
+        offer_images:
           type: array
           items:
             type: string
-        total_coupons:
-          type: integer
-        coupons_remaining:
-          type: integer
-        start_at:
+        start_date:
           type: string
           format: date-time
-        end_at:
+          nullable: true
+        end_date:
           type: string
           format: date-time
+          nullable: true
+        location: {}
         status:
           type: string
-          enum: [draft, pending, active, expired]
+          example: active
+        is_expired:
+          type: boolean
+          description: true if status is expired or end_date is in the past
+        is_not_started:
+          type: boolean
+        effective_status:
+          type: string
+          enum: [expired, not_started, active, disabled, pending]
+        status_label_ar:
+          type: string
+          description: Human-readable; non-empty when expired or not started
+        status_label_en:
+          type: string
+        is_favorite:
+          type: boolean
         merchant:
           $ref: '#/components/schemas/Merchant'
         category:
           $ref: '#/components/schemas/Category'
+        mall: {}
+        branches:
+          type: array
+          items: {}
+        coupons:
+          type: array
+          items:
+            $ref: '#/components/schemas/Coupon'
+        terms_conditions_ar:
+          type: string
+        terms_conditions_en:
+          type: string
+        created_at:
+          type: string
+          format: date-time
 
     Merchant:
       type: object
@@ -501,13 +660,46 @@ components:
           type: number
           format: float
 
+    OfferInCart:
+      type: object
+      description: Nested offer in cart index response
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: float
+        discount:
+          type: number
+          format: float
+        offer_images:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+        is_expired:
+          type: boolean
+        is_not_started:
+          type: boolean
+        effective_status:
+          type: string
+        merchant: {}
+        category: {}
+
     CartItem:
       type: object
       properties:
         id:
           type: integer
         offer:
-          $ref: '#/components/schemas/Offer'
+          $ref: '#/components/schemas/OfferInCart'
+        coupon:
+          $ref: '#/components/schemas/Coupon'
         quantity:
           type: integer
         price_at_add:
@@ -555,16 +747,96 @@ components:
 
     Coupon:
       type: object
+      description: CouponResource shape
       properties:
         id:
           type: integer
+        offer_id:
+          type: string
+        image:
+          type: string
+        title:
+          type: string
+        title_ar:
+          type: string
+        title_en:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: float
+        price_after_discount:
+          type: number
+          format: float
+        discount:
+          type: number
+          format: float
+        discount_type:
+          type: string
+          enum: [percentage, fixed]
+        barcode:
+          type: string
         coupon_code:
           type: string
         barcode_value:
           type: string
+        starts_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
         status:
           type: string
-          enum: [reserved, activated, used, cancelled, expired]
+          enum: [active, inactive, used, activated, expired, cancelled, pending]
+        is_expired:
+          type: boolean
+        is_not_started:
+          type: boolean
+        effective_status:
+          type: string
+        status_label_ar:
+          type: string
+        status_label_en:
+          type: string
+        usage_limit:
+          type: integer
+        usage_unlimited:
+          type: boolean
+        times_used:
+          type: integer
+        usage_remaining:
+          type: integer
+          nullable: true
+        is_exhausted:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        offer:
+          type: object
+          properties:
+            id:
+              type: integer
+            title_ar:
+              type: string
+            title_en:
+              type: string
+            status:
+              type: string
+            start_date:
+              type: string
+              format: date-time
+            end_date:
+              type: string
+              format: date-time
+            is_expired:
+              type: boolean
+            is_not_started:
+              type: boolean
+            effective_status:
+              type: string
         reserved_at:
           type: string
           format: date-time
@@ -574,6 +846,81 @@ components:
         used_at:
           type: string
           format: date-time
-        offer:
-          $ref: '#/components/schemas/Offer'
+
+    OtpRequestResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        message_ar:
+          type: string
+        message_en:
+          type: string
+        otp:
+          type: string
+          nullable: true
+          description: Only when APP_DEBUG is true
+
+    OtpVerifyResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+
+    CartAddResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        message_ar:
+          type: string
+        message_en:
+          type: string
+        data:
+          type: object
+          properties:
+            cart_id:
+              type: integer
+            offer_id:
+              type: integer
+            quantity_added:
+              type: integer
+            line_total_quantity:
+              type: integer
+
+    MerchantCommissionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        message_ar:
+          type: string
+        data:
+          type: object
+          properties:
+            commission_mode:
+              type: string
+              enum: [platform, custom, waived]
+            commission_custom_percent:
+              type: number
+              format: float
+              nullable: true
+            effective_commission_percent:
+              type: number
+              format: float
+            platform_default_commission_percent:
+              type: number
+              format: float
 

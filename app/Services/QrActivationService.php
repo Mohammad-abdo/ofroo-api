@@ -93,6 +93,7 @@ class QrActivationService
                 'coupon_id' => $coupon->id,
                 'merchant_id' => $merchant->id,
                 'user_id' => $coupon->user_id ?? null,
+                'activated_by_user_id' => $activatedBy?->id,
                 'order_id' => $coupon->order_id ?? null,
                 'activation_method' => 'qr_scan',
                 'device_id' => $metadata['device_id'] ?? null,

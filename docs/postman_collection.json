@@ -168,9 +168,31 @@
                             "host": ["{{base_url}}"],
                             "path": ["auth", "otp", "request"]
                         },
-                        "description": "Request OTP code for email verification or password reset."
+                        "description": "Send **either** `email` or `phone` (not both). User must exist. Queues delivery (SMS/WhatsApp/log per `OTP_PHONE_DRIVER`, or email). Repeat within cooldown returns **429**."
                     },
-                    "response": []
+                    "response": [
+                        {
+                            "name": "200 OTP sent",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [{"key": "Content-Type", "value": "application/json"}],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"email\": \"ahmed@example.com\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/auth/otp/request",
+                                    "host": ["{{base_url}}"],
+                                    "path": ["auth", "otp", "request"]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [{"key": "Content-Type", "value": "application/json"}],
+                            "body": "{\n  \"success\": true,\n  \"message\": \"OTP sent successfully\",\n  \"message_ar\": \"تم إرسال رمز التحقق\",\n  \"message_en\": \"OTP sent successfully\",\n  \"otp\": null\n}"
+                        }
+                    ]
                 },
                 {
                     "name": "Verify OTP",
@@ -212,9 +234,31 @@
                             "host": ["{{base_url}}"],
                             "path": ["auth", "otp", "verify"]
                         },
-                        "description": "Verify OTP code. Returns authentication token if successful."
+                        "description": "Verify OTP. Body: `otp` (required) plus `phone` or `email` to identify user, **or** send `Authorization: Bearer` for an existing session user. Returns `token` and `user` (resource shape)."
                     },
-                    "response": []
+                    "response": [
+                        {
+                            "name": "200 Verified",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [{"key": "Content-Type", "value": "application/json"}],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"email\": \"ahmed@example.com\",\n  \"otp\": \"123456\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/auth/otp/verify",
+                                    "host": ["{{base_url}}"],
+                                    "path": ["auth", "otp", "verify"]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [{"key": "Content-Type", "value": "application/json"}],
+                            "body": "{\n  \"message\": \"OTP verified successfully\",\n  \"token\": \"1|examplePlainTextToken\",\n  \"user\": {\n    \"id\": 1,\n    \"name\": \"Ahmed\",\n    \"email\": \"ahmed@example.com\",\n    \"phone\": \"+201234567890\",\n    \"role\": { \"id\": 2, \"name\": \"customer\" }\n  }\n}"
+                        }
+                    ]
                 },
                 {
                     "name": "Logout",
@@ -390,9 +434,58 @@
                             "host": ["{{base_url}}"],
                             "path": ["cart", "add"]
                         },
-                        "description": "Add an offer to the shopping cart with specified quantity."
+                        "description": "Add offer line (`offer_id` + `quantity`) or single `coupon_id`. Returns `success` and `data` with `cart_id`, `offer_id`, `quantity_added`, `line_total_quantity`. **400** if offer not started, expired, or unavailable."
                     },
-                    "response": []
+                    "response": [
+                        {
+                            "name": "200 Added",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {"key": "Authorization", "value": "Bearer {{auth_token}}"},
+                                    {"key": "Content-Type", "value": "application/json"}
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"offer_id\": 1,\n  \"quantity\": 2\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/cart/add",
+                                    "host": ["{{base_url}}"],
+                                    "path": ["cart", "add"]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [{"key": "Content-Type", "value": "application/json"}],
+                            "body": "{\n  \"success\": true,\n  \"message\": \"Item added to cart successfully\",\n  \"message_ar\": \"تمت إضافة العنصر إلى السلة\",\n  \"message_en\": \"Item added to cart successfully\",\n  \"data\": {\n    \"cart_id\": 3,\n    \"offer_id\": 1,\n    \"quantity_added\": 2,\n    \"line_total_quantity\": 2\n  }\n}"
+                        },
+                        {
+                            "name": "400 Offer expired",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {"key": "Authorization", "value": "Bearer {{auth_token}}"},
+                                    {"key": "Content-Type", "value": "application/json"}
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"offer_id\": 99,\n  \"quantity\": 1\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/cart/add",
+                                    "host": ["{{base_url}}"],
+                                    "path": ["cart", "add"]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [{"key": "Content-Type", "value": "application/json"}],
+                            "body": "{\n  \"success\": false,\n  \"message\": \"Offer has expired.\",\n  \"message_ar\": \"انتهت صلاحية العرض.\",\n  \"message_en\": \"This offer has expired.\"\n}"
+                        }
+                    ]
                 },
                 {
                     "name": "Update Cart Item",
@@ -1526,6 +1619,63 @@
                                 "description": "Block or unblock a merchant. Also blocks the associated user account."
                             },
                             "response": []
+                        },
+                        {
+                            "name": "Update Merchant Commission",
+                            "request": {
+                                "method": "PUT",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"commission_mode\": \"custom\",\n  \"commission_custom_percent\": 8.5\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/admin/merchants/1/commission",
+                                    "host": ["{{base_url}}"],
+                                    "path": ["admin", "merchants", "1", "commission"]
+                                },
+                                "description": "`commission_mode`: `platform` (default rate), `custom` (requires `commission_custom_percent` 0–100), or `waived` (0% effective)."
+                            },
+                            "response": [
+                                {
+                                    "name": "200 Updated",
+                                    "originalRequest": {
+                                        "method": "PUT",
+                                        "header": [
+                                            {"key": "Authorization", "value": "Bearer {{auth_token}}"},
+                                            {"key": "Content-Type", "value": "application/json"}
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"commission_mode\": \"custom\",\n  \"commission_custom_percent\": 8.5\n}"
+                                        },
+                                        "url": {
+                                            "raw": "{{base_url}}/admin/merchants/1/commission",
+                                            "host": ["{{base_url}}"],
+                                            "path": ["admin", "merchants", "1", "commission"]
+                                        }
+                                    },
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [{"key": "Content-Type", "value": "application/json"}],
+                                    "body": "{\n  \"success\": true,\n  \"message\": \"Commission settings updated successfully.\",\n  \"message_ar\": \"تم تحديث إعدادات العمولة.\",\n  \"data\": {\n    \"commission_mode\": \"custom\",\n    \"commission_custom_percent\": 8.5,\n    \"effective_commission_percent\": 8.5,\n    \"platform_default_commission_percent\": 10\n  }\n}"
+                                }
+                            ]
                         }
                     ]
                 },

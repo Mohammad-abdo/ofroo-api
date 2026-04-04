@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\OfferResource;
+use App\Models\MerchantStaff;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,7 @@ class UserController extends Controller
     public function getProfile(Request $request): JsonResponse
     {
         $user = $request->user();
-        $user->load(['role', 'cityRelation', 'governorateRelation']);
+        $user->load(['role', 'cityRelation', 'governorateRelation', 'activeMerchantStaff']);
 
         $cityPayload = null;
         if ($user->cityRelation) {
@@ -53,6 +54,7 @@ class UserController extends Controller
                     'id' => $user->role->id,
                     'name' => $user->role->name,
                 ] : null,
+                'merchant_staff' => MerchantStaff::toApiArray($user->activeMerchantStaff),
                 'created_at' => $user->created_at->toIso8601String(),
                 'updated_at' => $user->updated_at->toIso8601String(),
             ],

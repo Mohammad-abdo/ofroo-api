@@ -44,4 +44,29 @@ class MerchantStaff extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /**
+     * Shape for API / SPA (user profile, login).
+     */
+    public static function toApiArray(?self $staff): ?array
+    {
+        if (! $staff) {
+            return null;
+        }
+
+        return [
+            'id' => $staff->id,
+            'merchant_id' => $staff->merchant_id,
+            'role' => $staff->role,
+            'role_ar' => $staff->role_ar,
+            'role_en' => $staff->role_en,
+            'permissions' => $staff->permissions,
+            'can_create_offers' => (bool) $staff->can_create_offers,
+            'can_edit_offers' => (bool) $staff->can_edit_offers,
+            'can_activate_coupons' => (bool) $staff->can_activate_coupons,
+            'can_view_reports' => (bool) $staff->can_view_reports,
+            'can_manage_staff' => (bool) $staff->can_manage_staff,
+            'is_active' => (bool) $staff->is_active,
+        ];
+    }
 }

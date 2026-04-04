@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\ResolvesMerchantPortal;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantInvoice;
@@ -11,6 +12,8 @@ use Illuminate\Http\Request;
 
 class InvoiceController extends Controller
 {
+    use ResolvesMerchantPortal;
+
     protected InvoiceService $invoiceService;
 
     public function __construct(InvoiceService $invoiceService)
@@ -24,7 +27,7 @@ class InvoiceController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $invoices = $this->invoiceService->getMerchantInvoices($merchant, [
             'year' => $request->get('year'),

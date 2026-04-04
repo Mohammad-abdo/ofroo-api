@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\ResolvesMerchantPortal;
 use App\Http\Controllers\Controller;
-use App\Models\Merchant;
 use App\Models\MerchantWallet;
 use App\Models\FinancialTransaction;
 use App\Models\Withdrawal;
@@ -14,6 +14,8 @@ use Illuminate\Http\Request;
 
 class FinancialController extends Controller
 {
+    use ResolvesMerchantPortal;
+
     protected FinancialService $financialService;
 
     public function __construct(FinancialService $financialService)
@@ -27,7 +29,7 @@ class FinancialController extends Controller
     public function getWallet(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $wallet = $this->financialService->getOrCreateWallet($merchant);
 
@@ -52,7 +54,7 @@ class FinancialController extends Controller
     public function getTransactions(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $query = FinancialTransaction::where('merchant_id', $merchant->id)
             ->orderBy('created_at', 'desc');
@@ -92,7 +94,7 @@ class FinancialController extends Controller
     public function getEarningsReport(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $period = $request->get('period', 'month'); // day, week, month, year
         $from = $request->get('from');
@@ -130,6 +132,7 @@ class FinancialController extends Controller
      */
     public function recordExpense(Request $request): JsonResponse
     {
+        $this->assertMerchantOwner($request);
         $request->validate([
             'expense_type' => 'required|string|in:advertising,subscription,fees,other',
             'amount' => 'required|numeric|min:0',
@@ -141,7 +144,7 @@ class FinancialController extends Controller
         ]);
 
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $expense = $this->financialService->recordExpense($merchant, $request->all());
 
@@ -157,7 +160,7 @@ class FinancialController extends Controller
     public function getExpenses(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $query = Expense::where('merchant_id', $merchant->id)
             ->orderBy('expense_date', 'desc');
@@ -192,6 +195,7 @@ class FinancialController extends Controller
      */
     public function requestWithdrawal(Request $request): JsonResponse
     {
+        $this->assertMerchantOwner($request);
         $request->validate([
             'amount' => 'required|numeric|min:1',
             'withdrawal_method' => 'required|string|in:bank_transfer,paypal,other',
@@ -199,7 +203,7 @@ class FinancialController extends Controller
         ]);
 
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         try {
             $withdrawal = $this->financialService->requestWithdrawal($merchant, $request->all());
@@ -221,7 +225,7 @@ class FinancialController extends Controller
     public function getWithdrawals(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $query = Withdrawal::where('merchant_id', $merchant->id)
             ->orderBy('created_at', 'desc');
@@ -249,7 +253,7 @@ class FinancialController extends Controller
     public function getSalesTracking(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $query = \App\Models\Order::with(['user', 'items.offer'])
             ->where('merchant_id', $merchant->id)

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AppCouponSetting;
 use App\Models\Coupon;
 use Illuminate\Support\Str;
 
@@ -27,7 +28,10 @@ class CouponService
         if (!isset($data['barcode'])) {
             $data['barcode'] = $this->generateUniqueBarcode();
         }
-        
+        if (! isset($data['coupon_setting_id'])) {
+            $data['coupon_setting_id'] = AppCouponSetting::current()->id;
+        }
+
         return Coupon::create($data);
     }
 

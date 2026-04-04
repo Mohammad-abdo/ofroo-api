@@ -11,6 +11,7 @@ class ActivationReport extends Model
         'coupon_id',
         'merchant_id',
         'user_id',
+        'activated_by_user_id',
         'order_id',
         'activation_method',
         'device_id',
@@ -42,6 +43,11 @@ class ActivationReport extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function activatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'activated_by_user_id');
     }
 
     public function order(): BelongsTo

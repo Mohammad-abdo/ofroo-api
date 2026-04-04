@@ -7,6 +7,8 @@ use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\MobileRegisterRequest;
 use App\Http\Resources\UserResource;
+use App\Jobs\SendOtpEmail;
+use App\Jobs\SendOtpPhoneNotification;
 use App\Models\City;
 use App\Models\LoginAttempt;
 use App\Models\Role;
@@ -14,6 +16,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -158,7 +161,7 @@ class AuthController extends Controller
             );
         }
 
-        $user->load('role');
+        $user->load(['role', 'activeMerchantStaff']);
 
         return response()->json([
             'message' => 'Login successful',
@@ -215,16 +218,17 @@ class AuthController extends Controller
             return response()->json(['message' => 'User not found'], 404);
         }
 
-        // منع السبام
-        if ($user->otp_expires_at && now()->lt($user->otp_expires_at->subMinutes(9))) {
+        $resendKey = 'otp-resend:'.$user->id;
+        if (Cache::has($resendKey)) {
             return response()->json([
-                'message' => 'Please wait before requesting another OTP'
+                'message' => 'Please wait before requesting another OTP',
+                'message_ar' => 'يرجى الانتظار قبل طلب رمز تحقق جديد',
+                'message_en' => 'Please wait before requesting another OTP',
             ], 429);
         }
 
-        // OTP generation
-        if (config('app.otp_test_mode')) {
-            $otp = config('app.otp_test_code');
+        if (config('otp.test_mode')) {
+            $otp = (string) config('otp.test_code', '123456');
         } else {
             $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         }
@@ -234,8 +238,23 @@ class AuthController extends Controller
             'otp_expires_at' => now()->addMinutes(10),
         ]);
 
+        Cache::put(
+            $resendKey,
+            true,
+            now()->addSeconds((int) config('otp.resend_cooldown_seconds', 45))
+        );
+
+        if ($request->filled('phone')) {
+            SendOtpPhoneNotification::dispatch($user->id, $otp, $user->language ?? 'ar');
+        } else {
+            SendOtpEmail::dispatch($user, $otp, $user->language ?? 'ar');
+        }
+
         return response()->json([
+            'success' => true,
             'message' => 'OTP sent successfully',
+            'message_ar' => 'تم إرسال رمز التحقق',
+            'message_en' => 'OTP sent successfully',
             'otp' => config('app.debug') ? $otp : null,
         ]);
     }
@@ -275,12 +294,17 @@ class AuthController extends Controller
             ], 404);
         }
 
-        $otpValid = $user->otp_code
+        $testBypass = (bool) config('app.otp_test_bypass')
+            && $request->otp === (string) config('otp.test_code', '123456');
+
+        $otpValid = $testBypass || (
+            $user->otp_code
             && $user->otp_expires_at
             && $user->otp_expires_at->greaterThanOrEqualTo(now())
-            && Hash::check($request->otp, $user->otp_code);
+            && Hash::check($request->otp, $user->otp_code)
+        );
 
-        if (!$otpValid) {
+        if (! $otpValid) {
             return response()->json(['message' => 'Invalid or expired OTP'], 400);
         }
 
@@ -343,10 +367,24 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
+            'success' => true,
             'message' => 'Merchant registered successfully. Waiting for admin approval.',
+            'message_ar' => 'تم التسجيل بنجاح. في انتظار موافقة الإدارة.',
+            'message_en' => 'Merchant registered successfully. Waiting for admin approval.',
+            'token' => $token,
+            'data' => [
+                'token' => $token,
+                'user' => (new UserResource($user))->resolve(),
+                'merchant' => [
+                    'id' => $merchant->id,
+                    'company_name' => $merchant->company_name,
+                    'company_name_ar' => $merchant->company_name_ar,
+                    'company_name_en' => $merchant->company_name_en,
+                    'approved' => (bool) $merchant->approved,
+                ],
+            ],
             'user' => new UserResource($user),
             'merchant' => $merchant,
-            'token' => $token,
         ], 201);
     }
 
@@ -392,10 +430,25 @@ class AuthController extends Controller
         $activityLogService->logLogin($user->id);
 
         return response()->json([
+            'success' => true,
             'message' => 'Login successful',
+            'message_ar' => 'تم تسجيل الدخول بنجاح',
+            'message_en' => 'Login successful',
+            'token' => $token,
+            'data' => [
+                'token' => $token,
+                'user' => (new UserResource($user))->resolve(),
+                'merchant' => [
+                    'id' => $merchant->id,
+                    'company_name' => $merchant->company_name,
+                    'company_name_ar' => $merchant->company_name_ar,
+                    'company_name_en' => $merchant->company_name_en,
+                    'approved' => (bool) $merchant->approved,
+                    'status' => $merchant->status ?? null,
+                ],
+            ],
             'user' => new UserResource($user),
             'merchant' => $merchant,
-            'token' => $token,
         ]);
     }
 }

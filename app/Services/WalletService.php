@@ -208,7 +208,7 @@ class WalletService
     public function processOrderPayment(Order $order): void
     {
         $merchant = $order->merchant;
-        $commissionRate = \App\Services\FeatureFlagService::getCommissionRate();
+        $commissionRate = \App\Services\CommissionRateResolver::effectiveDecimalRate($merchant);
         $commissionAmount = $order->total_amount * $commissionRate;
         $netAmount = $order->total_amount - $commissionAmount;
 
@@ -254,9 +254,15 @@ class WalletService
     public function refundToWallet(Order $order, ?User $initiatedBy = null): void
     {
         $merchant = $order->merchant;
-        $commissionRate = \App\Services\FeatureFlagService::getCommissionRate();
-        $commissionAmount = $order->total_amount * $commissionRate;
-        $netAmount = $order->total_amount - $commissionAmount;
+        $commissionRow = \App\Models\Commission::where('order_id', $order->id)->first();
+        if ($commissionRow) {
+            $commissionAmount = (float) $commissionRow->commission_amount;
+            $netAmount = (float) $order->total_amount - $commissionAmount;
+        } else {
+            $commissionRate = \App\Services\CommissionRateResolver::effectiveDecimalRate($merchant);
+            $commissionAmount = (float) $order->total_amount * $commissionRate;
+            $netAmount = (float) $order->total_amount - $commissionAmount;
+        }
 
         // Debit merchant wallet (reverse the credit)
         $this->debitMerchantWallet(

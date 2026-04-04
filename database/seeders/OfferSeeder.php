@@ -141,7 +141,7 @@ class OfferSeeder extends Seeder
                     'price' => $price,
                     'discount' => $discountPercent,
                     'offer_images' => [
-                        'offers/image' . $faker->numberBetween(1, 10) . '.jpg',
+                        'offers/image' . $faker->numberBetween(1, 10) . '.jpg' || "https://img.freepik.com/free-psd/super-sale-podium-product-banner-with-editable-text_47987-12084.jpg?t=st=1775324331~exp=1775327931~hmac=99defdea4cd3969e9a8da5f32884de55c42ca4c6c7e787b2aa43e6ee724eb4a9&w=2000",
                     ],
                     'start_date' => $startDate,
                     'end_date' => $endDate,

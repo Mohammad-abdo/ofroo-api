@@ -37,6 +37,11 @@ class OfferResource extends JsonResource
             'end_date' => $this->end_date ? $this->end_date->toIso8601String() : null,
             'location' => $this->location ?? '',
             'status' => $this->status ?? '',
+            'is_expired' => $this->resource->isExpired(),
+            'is_not_started' => $this->resource->isNotYetStarted(),
+            'effective_status' => $this->resource->effectiveStatus(),
+            'status_label_ar' => $this->offerStatusLabelAr(),
+            'status_label_en' => $this->offerStatusLabelEn(),
             'is_favorite' => $user ? $this->favoritedBy()->where('user_id', $user->id)->exists() : false,
             'merchant' => $merchantData,
             'category' => $this->when($this->relationLoaded('category') && $this->category, fn () => new CategoryResource($this->category)),
@@ -47,5 +52,29 @@ class OfferResource extends JsonResource
             'terms_conditions_en' => $this->terms_conditions_en ?? '',
             'created_at' => $this->created_at ? $this->created_at->toIso8601String() : '',
         ];
+    }
+
+    private function offerStatusLabelAr(): string
+    {
+        if ($this->resource->isExpired()) {
+            return 'هذا العرض منتهي';
+        }
+        if ($this->resource->isNotYetStarted()) {
+            return 'العرض لم يبدأ بعد';
+        }
+
+        return '';
+    }
+
+    private function offerStatusLabelEn(): string
+    {
+        if ($this->resource->isExpired()) {
+            return 'This offer has expired';
+        }
+        if ($this->resource->isNotYetStarted()) {
+            return 'This offer has not started yet';
+        }
+
+        return '';
     }
 }

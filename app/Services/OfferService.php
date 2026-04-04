@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AppCouponSetting;
 use App\Models\Offer;
 use App\Models\Coupon;
 use Illuminate\Http\UploadedFile;
@@ -74,6 +75,8 @@ class OfferService
      */
     public function createCouponForOffer(Offer $offer, array $couponData, ?UploadedFile $imageFile = null): Coupon
     {
+        AppCouponSetting::assertOfferCanAddCoupon($offer);
+
         $allowed = [
             'title', 'title_ar', 'title_en', 'description', 'description_ar', 'description_en',
             'price', 'discount', 'discount_type', 'barcode', 'image', 'status', 'usage_limit',
@@ -91,8 +94,11 @@ class OfferService
             $payload['expires_at'] = is_string($couponData['expires_at'])
                 ? date('Y-m-d H:i:s', strtotime($couponData['expires_at']))
                 : $couponData['expires_at'];
-        } else {
+        } elseif ($offer->end_date) {
             $payload['expires_at'] = $offer->end_date;
+        } else {
+            $days = max(1, (int) AppCouponSetting::current()->coupon_expiry_days);
+            $payload['expires_at'] = now()->addDays($days);
         }
         if (! empty($payload['starts_at'])) {
             $payload['starts_at'] = is_string($payload['starts_at'])
@@ -172,6 +178,8 @@ class OfferService
         $payload['discount_type'] = in_array($payload['discount_type'] ?? '', ['percent', 'amount'], true)
             ? $payload['discount_type']
             : 'percent';
+
+        $payload['coupon_setting_id'] = AppCouponSetting::current()->id;
 
         return $offer->coupons()->create($payload);
     }

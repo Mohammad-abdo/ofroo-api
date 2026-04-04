@@ -74,6 +74,11 @@ class CouponResource extends JsonResource
             'starts_at' => $this->starts_at ? $this->starts_at->toIso8601String() : '',
             'expires_at' => $this->expires_at ? $this->expires_at->toIso8601String() : '',
             'status' => $this->status ?? '',
+            'is_expired' => $this->resource->isExpired(),
+            'is_not_started' => $this->resource->isNotYetStarted(),
+            'effective_status' => $this->resource->effectiveStatus(),
+            'status_label_ar' => $this->couponStatusLabelAr(),
+            'status_label_en' => $this->couponStatusLabelEn(),
             'usage_limit' => $unlimited ? 0 : $usageLimit,
             'usage_unlimited' => $unlimited,
             'times_used' => $timesUsed,
@@ -90,10 +95,37 @@ class CouponResource extends JsonResource
                 'title_ar' => $o->title_ar ?? $o->title ?? null,
                 'title_en' => $o->title_en ?? $o->title ?? null,
                 'status' => $o->status ?? null,
-                'start_date' => $o->start_date ?? null,
-                'end_date' => $o->end_date ?? null,
+                'start_date' => $o->start_date?->toIso8601String(),
+                'end_date' => $o->end_date?->toIso8601String(),
+                'is_expired' => $o->isExpired(),
+                'is_not_started' => $o->isNotYetStarted(),
+                'effective_status' => $o->effectiveStatus(),
             ];
         }
         return $arr;
+    }
+
+    private function couponStatusLabelAr(): string
+    {
+        if ($this->resource->isExpired()) {
+            return 'هذا الكوبون منتهي';
+        }
+        if ($this->resource->isNotYetStarted()) {
+            return 'الكوبون لم يبدأ بعد';
+        }
+
+        return '';
+    }
+
+    private function couponStatusLabelEn(): string
+    {
+        if ($this->resource->isExpired()) {
+            return 'This coupon has expired';
+        }
+        if ($this->resource->isNotYetStarted()) {
+            return 'This coupon is not active yet';
+        }
+
+        return '';
     }
 }

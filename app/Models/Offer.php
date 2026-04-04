@@ -104,29 +104,69 @@ class Offer extends Model
     }
 
     /**
+     * انتهاء العرض: حقل status = expired أو تجاوز end_date.
+     */
+    public function isExpired(): bool
+    {
+        if (strtolower((string) ($this->status ?? '')) === 'expired') {
+            return true;
+        }
+        if ($this->end_date && $this->end_date->isPast()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function isNotYetStarted(): bool
+    {
+        return (bool) ($this->start_date && $this->start_date->isFuture());
+    }
+
+    /**
+     * حالة موحّدة للـ API (التاريخ يتقدّم على status إن كان نشطاً بالاسم فقط).
+     */
+    public function effectiveStatus(): string
+    {
+        if ($this->isExpired()) {
+            return 'expired';
+        }
+        if ($this->isNotYetStarted()) {
+            return 'not_started';
+        }
+
+        $s = (string) ($this->status ?? 'active');
+
+        return $s !== '' ? $s : 'active';
+    }
+
+    /**
      * Total number of coupon uses still available (sum of usage_limit - times_used for active coupons).
      * Used when adding offer to cart to ensure we don't exceed available uses.
      */
     public function getAvailableCouponsCountAttribute(): int
     {
+        $fromCoupons = 0;
         if (\Schema::hasColumn('coupons', 'usage_limit') && \Schema::hasColumn('coupons', 'times_used')) {
             if (! $this->relationLoaded('coupons')) {
                 $this->load('coupons');
             }
-            $total = 0;
             foreach ($this->coupons as $coupon) {
                 if (($coupon->status ?? '') !== 'active') {
                     continue;
                 }
                 $limit = (int) ($coupon->usage_limit ?? 1);
                 $used = (int) ($coupon->times_used ?? 0);
-                $total += max(0, $limit - $used);
+                $fromCoupons += max(0, $limit - $used);
             }
-            return $total;
+        }
+
+        if ($fromCoupons > 0) {
+            return $fromCoupons;
         }
 
         if (\Schema::hasColumn('offers', 'coupons_remaining')) {
-            return (int) $this->coupons_remaining;
+            return max(0, (int) $this->coupons_remaining);
         }
 
         return 0;

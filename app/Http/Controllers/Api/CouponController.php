@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CouponResource;
+use App\Models\AppCouponSetting;
 use App\Models\Offer;
 use App\Models\Coupon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 
 class CouponController extends Controller
 {
@@ -39,6 +41,13 @@ class CouponController extends Controller
             'expires_at' => 'nullable|date',
         ]);
 
+        try {
+            AppCouponSetting::assertOfferCanAddCoupon($offer);
+        } catch (ValidationException $e) {
+            return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], 422);
+        }
+
+        $validated['coupon_setting_id'] = AppCouponSetting::current()->id;
         $coupon = $offer->coupons()->create($validated);
 
         return response()->json([

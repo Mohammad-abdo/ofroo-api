@@ -283,7 +283,7 @@ class WalletManagementController extends Controller
         $minimumWithdrawal = (float) \App\Models\Setting::getValue('minimum_withdrawal', 100);
         $withdrawalFee = (float) \App\Models\Setting::getValue('withdrawal_fee', 0);
         $withdrawalFeePercent = (float) \App\Models\Setting::getValue('withdrawal_fee_percent', 0);
-        $commissionRate = (float) \App\Models\Setting::getValue('commission_rate', 0.10);
+        $commissionRate = \App\Services\FeatureFlagService::getCommissionRate();
 
         return response()->json([
             'data' => [

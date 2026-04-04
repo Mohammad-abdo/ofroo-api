@@ -9,6 +9,7 @@ class Coupon extends Model
 {
     protected $fillable = [
         'offer_id',
+        'coupon_setting_id',
         'image',
         'title',
         'title_ar',
@@ -46,6 +47,14 @@ class Coupon extends Model
         return $this->belongsTo(Offer::class);
     }
 
+    /**
+     * Global coupon policy row in effect when this coupon was created.
+     */
+    public function appCouponSetting(): BelongsTo
+    {
+        return $this->belongsTo(AppCouponSetting::class, 'coupon_setting_id');
+    }
+
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
@@ -63,6 +72,40 @@ class Coupon extends Model
     {
         return $query->where('status', 'active')
             ->where('expires_at', '>', now());
+    }
+
+    /**
+     * انتهاء الكوبون: status = expired أو تجاوز expires_at.
+     */
+    public function isExpired(): bool
+    {
+        if (strtolower((string) ($this->status ?? '')) === 'expired') {
+            return true;
+        }
+        if ($this->expires_at && $this->expires_at->isPast()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function isNotYetStarted(): bool
+    {
+        return (bool) ($this->starts_at && $this->starts_at->isFuture());
+    }
+
+    public function effectiveStatus(): string
+    {
+        if ($this->isExpired()) {
+            return 'expired';
+        }
+        if ($this->isNotYetStarted()) {
+            return 'not_started';
+        }
+
+        $s = (string) ($this->status ?? 'active');
+
+        return $s !== '' ? $s : 'active';
     }
 
     /**

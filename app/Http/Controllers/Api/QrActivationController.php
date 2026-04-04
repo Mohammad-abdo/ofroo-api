@@ -4,13 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Coupon;
-use App\Models\Merchant;
+use App\Http\Controllers\Concerns\ResolvesMerchantPortal;
 use App\Services\QrActivationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class QrActivationController extends Controller
 {
+    use ResolvesMerchantPortal;
+
     protected QrActivationService $qrService;
 
     public function __construct(QrActivationService $qrService)
@@ -36,7 +38,7 @@ class QrActivationController extends Controller
         $code = $request->qr_code ?? $request->coupon_code;
 
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $result = $this->qrService->activateCoupon(
             $code,
@@ -78,7 +80,7 @@ class QrActivationController extends Controller
         $code = $request->qr_code ?? $request->coupon_code;
 
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $result = $this->qrService->validateQrCode($code, $merchant);
 
@@ -100,7 +102,7 @@ class QrActivationController extends Controller
     public function scannerPage(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         // Get pending/reserved coupons for this merchant
         $pendingCoupons = Coupon::whereHas('offer', function ($q) use ($merchant) {

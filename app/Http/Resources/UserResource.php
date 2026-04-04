@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\MerchantStaff;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -31,6 +32,11 @@ class UserResource extends JsonResource
                     'name_en' => $this->role->name_en,
                 ];
             }),
+            'merchant_staff' => MerchantStaff::toApiArray(
+                $this->resource->relationLoaded('activeMerchantStaff')
+                    ? $this->resource->activeMerchantStaff
+                    : $this->resource->activeMerchantStaff()->first()
+            ),
             'email_verified_at' => $this->email_verified_at ? $this->email_verified_at->toIso8601String() : null,
             'created_at' => $this->created_at->toIso8601String(),
         ];

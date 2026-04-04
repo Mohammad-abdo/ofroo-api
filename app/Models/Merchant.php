@@ -37,6 +37,8 @@ class Merchant extends Model
         'category_id',
         'commercial_registration',
         'tax_number',
+        'commission_mode',
+        'commission_custom_percent',
     ];
 
     protected function casts(): array
@@ -47,6 +49,7 @@ class Merchant extends Model
             'suspended_at' => 'datetime',
             'suspended_until' => 'datetime',
             'is_blocked' => 'boolean',
+            'commission_custom_percent' => 'decimal:2',
         ];
     }
 

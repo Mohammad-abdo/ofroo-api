@@ -61,6 +61,7 @@ Route::get('/', function () {
 // API Documentation
 Route::get('/docs', [DocumentationController::class, 'apiDocs']);
 Route::get('/docs/postman', [DocumentationController::class, 'postmanCollection']);
+Route::get('/docs/openapi.yaml', [DocumentationController::class, 'openapiYaml']);
 
 
 // Public routes
@@ -85,6 +86,30 @@ Route::get('/offers/{offer}/coupons', [CouponController::class, 'index']);
 Route::get('/merchants', [MerchantProfileController::class, 'index']);
 Route::get('/merchants/{id}/offers', [MerchantProfileController::class, 'offers']);
 Route::get('/merchants/{id}', [MerchantProfileController::class, 'show'])->where('id', '[0-9]+');
+
+// Static app pages (admin-managed under Settings → Static pages)
+Route::get('/content/static-pages', function () {
+    return response()->json([
+        'data' => [
+            'complaints_suggestions' => [
+                'ar' => \App\Models\Setting::getValue('static_complaints_ar', ''),
+                'en' => \App\Models\Setting::getValue('static_complaints_en', ''),
+            ],
+            'privacy' => [
+                'ar' => \App\Models\Setting::getValue('static_privacy_ar', ''),
+                'en' => \App\Models\Setting::getValue('static_privacy_en', ''),
+            ],
+            'support' => [
+                'ar' => \App\Models\Setting::getValue('static_support_ar', ''),
+                'en' => \App\Models\Setting::getValue('static_support_en', ''),
+            ],
+            'about' => [
+                'ar' => \App\Models\Setting::getValue('static_about_ar', ''),
+                'en' => \App\Models\Setting::getValue('static_about_en', ''),
+            ],
+        ],
+    ]);
+});
 
 // Test route without middleware
 Route::get('/test-notifications', function () {
@@ -356,6 +381,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::prefix('staff')->group(function () {
             Route::get('/', [MerchantStaffController::class, 'index']);
             Route::post('/', [MerchantStaffController::class, 'create']);
+            Route::get('/{id}/activations', [MerchantStaffController::class, 'activations']);
             Route::put('/{id}', [MerchantStaffController::class, 'update']);
             Route::delete('/{id}', [MerchantStaffController::class, 'delete']);
         });
@@ -393,6 +419,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::prefix('notifications')->group(function () {
             Route::get('/', [MerchantController::class, 'getNotifications']);
             Route::post('/mark-all-read', [MerchantController::class, 'markAllNotificationsAsRead']);
+            Route::post('/{id}/read', [MerchantController::class, 'markNotificationAsRead']);
+            Route::delete('/{id}', [MerchantController::class, 'deleteMerchantNotification']);
         });
     });
 
@@ -425,6 +453,7 @@ Route::middleware('auth:sanctum')->group(function () {
                     ], 500);
                 }
             }); // اختبار بسيط
+            Route::put('/{id}/commission', [AdminController::class, 'updateMerchantCommission']);
             Route::get('/{id}', [AdminController::class, 'getMerchant']);
             Route::post('/', [AdminController::class, 'createMerchant']);
             Route::put('/{id}', [AdminController::class, 'updateMerchant']);
@@ -711,16 +740,17 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::delete('/{id}', [AdminController::class, 'deleteStaff']);
         });
 
-        // Notifications Management
+        // Notifications Management (static paths before /{id} so "mark-all-read" is not treated as an id)
         Route::prefix('notifications')->group(function () {
             Route::get('/', [AdminController::class, 'getNotifications']);
-            Route::get('/{id}', [AdminController::class, 'getNotification']);
+            Route::post('/mark-all-read', [AdminController::class, 'markAllNotificationsAsRead']);
             Route::post('/', [AdminController::class, 'createNotification']);
+            Route::get('/{id}', [AdminController::class, 'getNotification']);
             Route::put('/{id}', [AdminController::class, 'updateNotification']);
             Route::delete('/{id}', [AdminController::class, 'deleteNotification']);
+            Route::post('/{id}/delete', [AdminController::class, 'deleteNotification']);
             Route::post('/{id}/send', [AdminController::class, 'sendNotification']);
             Route::post('/{id}/read', [AdminController::class, 'markNotificationAsRead']);
-            Route::post('/mark-all-read', [AdminController::class, 'markAllNotificationsAsRead']);
         });
 
         // Malls Management
@@ -734,6 +764,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Ads Management
         Route::prefix('ads')->group(function () {
+            Route::get('/report-stats', [AdminController::class, 'getAdsReportStats']);
             Route::get('/', [AdminController::class, 'getAds']);
             Route::get('/{id}', [AdminController::class, 'getAd']);
             Route::post('/', [AdminController::class, 'createAd']);

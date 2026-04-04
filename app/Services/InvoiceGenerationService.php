@@ -30,6 +30,8 @@ class InvoiceGenerationService
         $merchant = $order->merchant;
         $customer = $customer ?? $order->user;
 
+        $rate = \App\Services\CommissionRateResolver::effectiveDecimalRate($merchant);
+
         // Calculate tax
         $taxInfo = $this->taxService->calculateTax($order->total_amount);
         $taxAmount = $taxInfo['tax_amount'] ?? 0;
@@ -48,9 +50,9 @@ class InvoiceGenerationService
                 'period_start' => now(),
                 'period_end' => now(),
                 'total_sales' => $order->total_amount,
-                'commission_rate' => \App\Services\FeatureFlagService::getCommissionRate() * 100,
-                'commission_amount' => $order->total_amount * \App\Services\FeatureFlagService::getCommissionRate(),
-                'net_amount' => $order->total_amount - ($order->total_amount * \App\Services\FeatureFlagService::getCommissionRate()),
+                'commission_rate' => $rate * 100,
+                'commission_amount' => $order->total_amount * $rate,
+                'net_amount' => $order->total_amount - ($order->total_amount * $rate),
                 'tax_amount' => $taxAmount,
                 'invoice_type' => 'order',
                 'status' => 'issued',
@@ -87,7 +89,7 @@ class InvoiceGenerationService
             ->get();
 
         $totalSales = $orders->sum('total_amount');
-        $commissionRate = \App\Services\FeatureFlagService::getCommissionRate();
+        $commissionRate = \App\Services\CommissionRateResolver::effectiveDecimalRate($merchant);
         $commissionAmount = $totalSales * $commissionRate;
         $netAmount = $totalSales - $commissionAmount;
 

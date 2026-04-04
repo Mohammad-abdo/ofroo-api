@@ -66,7 +66,7 @@ class CouponSeeder extends Seeder
                     : $faker->numberBetween(0, max(0, $usageLimit - 1));
                 $titleIdx = $faker->numberBetween(0, count($titlePairsAr) - 1);
 
-                $offerImages = $offer->offer_images ?? [];
+                $offerImages = $offer->offer_images ?? ["https://img.freepik.com/free-psd/super-sale-podium-product-banner-with-editable-text_47987-12084.jpg?t=st=1775324331~exp=1775327931~hmac=99defdea4cd3969e9a8da5f32884de55c42ca4c6c7e787b2aa43e6ee724eb4a9&w=2000","https://img.freepik.com/free-psd/cyber-monday-facebook-template_23-2149839017.jpg?t=st=1775324444~exp=1775328044~hmac=4e541a08217edf82a2aa4d009ab8a5d1519461633fb11732f2277d3f239f97a6&w=2000"];
                 $firstImage = is_array($offerImages) && !empty($offerImages)
                     ? (str_starts_with($offerImages[0], 'http') || str_starts_with($offerImages[0], '/') ? $offerImages[0] : asset('storage/' . $offerImages[0]))
                     : '';
@@ -89,7 +89,7 @@ class CouponSeeder extends Seeder
                     'status'              => $status,
                     'usage_limit'         => $usageLimit,
                     'times_used'          => $timesUsed,
-                    'image'               => $firstImage,
+                    'image'               => $firstImage ,
                 ];
 
                 try {

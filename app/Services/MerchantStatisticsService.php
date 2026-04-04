@@ -2,15 +2,93 @@
 
 namespace App\Services;
 
+use App\Models\ActivationReport;
+use App\Models\Commission;
 use App\Models\Coupon;
 use App\Models\Merchant;
 use App\Models\Offer;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class MerchantStatisticsService
 {
+    /**
+     * Statistics scoped to activations performed by this user (merchant staff / employee).
+     */
+    public function getStatisticsForActivator(Merchant $merchant, User $activator): array
+    {
+        if (! Schema::hasColumn('activation_reports', 'activated_by_user_id')) {
+            return $this->getStatistics($merchant);
+        }
+
+        $today = now()->startOfDay();
+        $weekStart = now()->startOfWeek();
+
+        $base = ActivationReport::query()
+            ->where('merchant_id', $merchant->id)
+            ->where('activated_by_user_id', $activator->id);
+
+        $todayCount = (clone $base)->where('created_at', '>=', $today)->count();
+        $weekCount = (clone $base)->where('created_at', '>=', $weekStart)->count();
+
+        $valueSum = function (callable $constraints) use ($merchant, $activator) {
+            $q = ActivationReport::query()
+                ->where('activation_reports.merchant_id', $merchant->id)
+                ->where('activation_reports.activated_by_user_id', $activator->id);
+            $constraints($q);
+
+            return (float) $q->join('coupons', 'coupons.id', '=', 'activation_reports.coupon_id')
+                ->sum(DB::raw('COALESCE(coupons.price, 0)'));
+        };
+
+        $todayRevenue = $valueSum(fn ($q) => $q->where('activation_reports.created_at', '>=', now()->startOfDay()));
+        $weeklyRevenue = $valueSum(fn ($q) => $q->where('activation_reports.created_at', '>=', now()->startOfWeek()));
+
+        $couponQuery = Coupon::whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id));
+        $readyCoupons = $this->getReadyCouponsCount($merchant, $couponQuery);
+
+        $recentActivations = ActivationReport::query()
+            ->where('merchant_id', $merchant->id)
+            ->where('activated_by_user_id', $activator->id)
+            ->with(['coupon.offer'])
+            ->orderByDesc('created_at')
+            ->limit(8)
+            ->get()
+            ->map(function (ActivationReport $row) {
+                $c = $row->coupon;
+                $title = $c && $c->offer
+                    ? ($c->offer->title_ar ?? $c->offer->title_en ?? $c->offer->title ?? '—')
+                    : '—';
+
+                return [
+                    'id' => $row->id,
+                    'customer' => '—',
+                    'coupon' => $title,
+                    'time' => $row->created_at?->format('H:i') ?? '—',
+                ];
+            })
+            ->toArray();
+
+        $avg = $weekCount > 0 ? round($weeklyRevenue / $weekCount, 2) : 0.0;
+
+        $full = $this->getStatistics($merchant);
+
+        return array_merge($full, [
+            'today_revenue' => round($todayRevenue, 2),
+            'today_activations' => $todayCount,
+            'weekly_revenue' => round($weeklyRevenue, 2),
+            'weekly_activations' => $weekCount,
+            'average_order_value' => $avg,
+            'ready_coupons' => $readyCoupons,
+            'recent_activations' => $recentActivations,
+            'staff_activations_total' => (clone $base)->count(),
+            'statistics_scope' => 'activator',
+        ]);
+    }
+
     public function getStatistics(Merchant $merchant): array
     {
         $baseQuery = Order::where('merchant_id', $merchant->id)
@@ -26,14 +104,15 @@ class MerchantStatisticsService
 
         $totalOrders = $allOrders->count();
         $totalRevenue = $allOrders->sum('total_amount');
-        $averageOrderValue = $totalOrders > 0 ? $totalOrders / $totalRevenue : 0;
+        $averageOrderValue = $totalOrders > 0 ? round($totalRevenue / $totalOrders, 2) : 0;
 
         $todayRevenue = $todayOrders->sum('total_amount');
         $weeklyRevenue = $weeklyOrders->sum('total_amount');
 
-        $commissionRate = FeatureFlagService::getCommissionRate();
-        $totalCommission = $totalRevenue * $commissionRate;
-        $netProfit = $totalRevenue - $totalCommission;
+        $totalCommission = (float) Commission::where('merchant_id', $merchant->id)
+            ->where('status', 'completed')
+            ->sum('commission_amount');
+        $netProfit = round($totalRevenue - $totalCommission, 2);
 
         $couponQuery = Coupon::whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id));
         
@@ -191,28 +270,28 @@ class MerchantStatisticsService
 
     private function getBestCoupons(Merchant $merchant): array
     {
-        $commissionRate = FeatureFlagService::getCommissionRate();
-        
+        $rate = CommissionRateResolver::effectiveDecimalRate($merchant);
+
         return Offer::where('merchant_id', $merchant->id)
             ->withCount(['coupons' => fn ($q) => $q->whereIn('status', ['activated', 'used'])])
             ->orderBy('coupons_count', 'desc')
             ->limit(3)
             ->get()
-            ->map(function ($offer) use ($merchant, $commissionRate) {
-                $totalSales = Order::where('merchant_id', $merchant->id)
-                    ->where('payment_status', 'paid')
-                    ->sum('total_amount');
-                $commission = $totalSales * $commissionRate;
-                $profit = $totalSales - $commission;
+            ->map(function ($offer) use ($merchant, $rate) {
+                $totalSalesOffer = (float) OrderItem::whereHas('order', function ($q) use ($merchant) {
+                    $q->where('merchant_id', $merchant->id)->where('payment_status', 'paid');
+                })->where('offer_id', $offer->id)->sum('total_price');
+                $commission = $totalSalesOffer * $rate;
+                $profit = $totalSalesOffer - $commission;
                 $title = $offer->title ?? $offer->title_ar ?? $offer->title_en ?? 'N/A';
-                
+
                 return [
                     'id' => $offer->id,
                     'title_ar' => $title,
                     'title_en' => $title,
                     'views' => 0,
                     'bookings' => $offer->coupons_count,
-                    'sales' => round($totalSales, 2),
+                    'sales' => round($totalSalesOffer, 2),
                     'commission' => round($commission, 2),
                     'profit' => round($profit, 2),
                 ];

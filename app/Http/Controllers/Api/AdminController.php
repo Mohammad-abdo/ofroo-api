@@ -5,9 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\CouponResource;
+use App\Models\AppCouponSetting;
 use App\Models\Merchant;
 use App\Models\Order;
 use App\Models\Setting;
+use App\Models\SocialLink;
+use App\Services\CommissionRateResolver;
+use App\Services\FeatureFlagService;
 use App\Models\User;
 use App\Models\Coupon;
 use App\Models\Category;
@@ -18,11 +22,19 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 
 class AdminController extends Controller
 {
+    /** Persisted in `app_coupon_settings` and `social_links`, not the generic `settings` table. */
+    private const DEDICATED_APP_SETTING_KEYS = [
+        'max_coupons_per_merchant', 'coupon_expiry_days', 'auto_cancel_enabled', 'days_before_cancel',
+        'grace_period_hours', 'notify_merchant', 'notify_user', 'auto_refund',
+        'instagram_url', 'facebook_url', 'twitter_url', 'youtube_url', 'snapchat_url', 'telegram_url', 'tiktok_url', 'whatsapp_url',
+    ];
+
     public function __construct(
         protected ?OfferService $offerService = null
     ) {
@@ -260,8 +272,53 @@ class AdminController extends Controller
                 'total_offers' => $merchant->offers()->count(),
                 'created_coupons_count' => $createdCouponsCount,
                 'created_at' => $merchant->created_at ? $merchant->created_at->toIso8601String() : null,
+                'commission' => $this->merchantCommissionPayload($merchant),
             ],
         ]);
+    }
+
+    /**
+     * Admin: update merchant commission rule (platform default / custom % / waived).
+     */
+    public function updateMerchantCommission(Request $request, string $id): JsonResponse
+    {
+        $merchant = Merchant::findOrFail($id);
+
+        $validated = $request->validate([
+            'commission_mode' => 'required|string|in:platform,custom,waived',
+            'commission_custom_percent' => 'nullable|numeric|min:0|max:100|required_if:commission_mode,custom',
+        ]);
+
+        if ($validated['commission_mode'] === CommissionRateResolver::MODE_CUSTOM) {
+            $merchant->commission_mode = CommissionRateResolver::MODE_CUSTOM;
+            $merchant->commission_custom_percent = $validated['commission_custom_percent'];
+        } elseif ($validated['commission_mode'] === CommissionRateResolver::MODE_WAIVED) {
+            $merchant->commission_mode = CommissionRateResolver::MODE_WAIVED;
+            $merchant->commission_custom_percent = null;
+        } else {
+            $merchant->commission_mode = CommissionRateResolver::MODE_PLATFORM;
+            $merchant->commission_custom_percent = null;
+        }
+        $merchant->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Commission settings updated successfully.',
+            'message_ar' => 'تم تحديث إعدادات العمولة.',
+            'data' => $this->merchantCommissionPayload($merchant->fresh()),
+        ]);
+    }
+
+    protected function merchantCommissionPayload(Merchant $merchant): array
+    {
+        return [
+            'commission_mode' => $merchant->commission_mode ?? CommissionRateResolver::MODE_PLATFORM,
+            'commission_custom_percent' => $merchant->commission_custom_percent !== null
+                ? (float) $merchant->commission_custom_percent
+                : null,
+            'effective_commission_percent' => CommissionRateResolver::effectivePercentDisplay($merchant),
+            'platform_default_commission_percent' => round(FeatureFlagService::getCommissionRate() * 100, 2),
+        ];
     }
 
     /**
@@ -609,6 +666,8 @@ class AdminController extends Controller
             });
         });
 
+        $settings = $this->overlayAppCouponSettingsAndSocialLinks($settings);
+
         return response()->json([
             'data' => $settings,
         ]);
@@ -652,6 +711,8 @@ class AdminController extends Controller
             ]
         );
 
+        Cache::forget('app_settings');
+
         return response()->json([
             'message' => 'Logo uploaded successfully',
             'data' => [
@@ -675,10 +736,23 @@ class AdminController extends Controller
                 'settings.*.key' => 'required|string',
                 'settings.*.value' => 'required',
             ]);
-            $settingsToUpdate = $request->settings;
+            $settingsToUpdate = [];
+            $dedicatedKv = [];
+            foreach ($request->settings as $item) {
+                $k = $item['key'] ?? null;
+                if ($k === null || $k === '') {
+                    continue;
+                }
+                if (in_array($k, self::DEDICATED_APP_SETTING_KEYS, true)) {
+                    $dedicatedKv[$k] = $item['value'] ?? null;
+                } else {
+                    $settingsToUpdate[] = $item;
+                }
+            }
+            $this->syncDedicatedSettingsFromKeyValue($dedicatedKv);
         } else {
             // Format: { app_name: 'OFROO', default_language: 'ar', ... }
-            $request->validate([
+            $validated = $request->validate([
                 'app_name' => 'nullable|string|max:255',
                 'default_language' => 'nullable|in:ar,en',
                 'max_coupons_per_merchant' => 'nullable|integer|min:1',
@@ -697,39 +771,165 @@ class AdminController extends Controller
                 'telegram_url' => 'nullable|string|max:500',
                 'tiktok_url' => 'nullable|string|max:500',
                 'whatsapp_url' => 'nullable|string|max:500',
+                'static_complaints_ar' => 'nullable|string',
+                'static_complaints_en' => 'nullable|string',
+                'static_privacy_ar' => 'nullable|string',
+                'static_privacy_en' => 'nullable|string',
+                'static_support_ar' => 'nullable|string',
+                'static_support_en' => 'nullable|string',
+                'static_about_ar' => 'nullable|string',
+                'static_about_en' => 'nullable|string',
             ]);
 
-            // Convert flat object to settings array format
-            foreach ($request->all() as $key => $value) {
-                if (!in_array($key, ['_token', '_method'])) {
-                    $settingsToUpdate[] = [
-                        'key' => $key,
-                        'value' => $value,
-                    ];
+            foreach ($validated as $key => $value) {
+                if (in_array($key, self::DEDICATED_APP_SETTING_KEYS, true)) {
+                    continue;
                 }
+                $settingsToUpdate[] = [
+                    'key' => $key,
+                    'value' => $value,
+                ];
             }
+            $this->syncDedicatedSettingsFromKeyValue($validated);
         }
 
         foreach ($settingsToUpdate as $settingData) {
             $key = $settingData['key'] ?? $settingData[0] ?? null;
             $value = $settingData['value'] ?? $settingData[1] ?? null;
 
-            if ($key && $value !== null) {
-                Setting::updateOrCreate(
-                    ['key' => $key],
-                    [
-                        'value' => is_array($value)
-                            ? json_encode($value)
-                            : (is_bool($value) ? ($value ? '1' : '0') : (string)$value),
-                        'type' => $settingData['type'] ?? $this->detectSettingType($value),
-                    ]
-                );
+            if ($key === null || $key === '') {
+                continue;
             }
+
+            // Allow false, 0, and empty string for text fields (e.g. clearing a static page)
+            if ($value === null) {
+                continue;
+            }
+
+            Setting::updateOrCreate(
+                ['key' => $key],
+                [
+                    'value' => is_array($value)
+                        ? json_encode($value)
+                        : (is_bool($value) ? ($value ? '1' : '0') : (string) $value),
+                    'type' => $settingData['type'] ?? $this->detectSettingType($value),
+                ]
+            );
         }
+
+        Cache::forget('app_settings');
 
         return response()->json([
             'message' => 'Settings updated successfully',
         ]);
+    }
+
+    /**
+     * Merge dedicated DB models into the cached key/value shape the admin UI expects.
+     *
+     * @param  \Illuminate\Support\Collection<string, array<string, mixed>>  $settings
+     * @return \Illuminate\Support\Collection<string, array<string, mixed>>
+     */
+    private function overlayAppCouponSettingsAndSocialLinks($settings)
+    {
+        if (! Schema::hasTable('app_coupon_settings')) {
+            return $settings;
+        }
+
+        $policy = AppCouponSetting::query()->first();
+        if ($policy) {
+            $settings['max_coupons_per_merchant'] = $this->adminSettingMeta((string) $policy->max_coupons_per_merchant, 'integer');
+            $settings['coupon_expiry_days'] = $this->adminSettingMeta((string) $policy->coupon_expiry_days, 'integer');
+            $settings['auto_cancel_enabled'] = $this->adminSettingMeta($policy->auto_cancel_enabled ? '1' : '0', 'boolean');
+            $settings['days_before_cancel'] = $this->adminSettingMeta((string) $policy->days_before_cancel, 'integer');
+            $settings['grace_period_hours'] = $this->adminSettingMeta((string) $policy->grace_period_hours, 'integer');
+            $settings['notify_merchant'] = $this->adminSettingMeta($policy->notify_merchant ? '1' : '0', 'boolean');
+            $settings['notify_user'] = $this->adminSettingMeta($policy->notify_user ? '1' : '0', 'boolean');
+            $settings['auto_refund'] = $this->adminSettingMeta($policy->auto_refund ? '1' : '0', 'boolean');
+        }
+
+        if (Schema::hasTable('social_links')) {
+            foreach (SocialLink::query()->orderBy('platform')->get() as $link) {
+                $reqKey = SocialLink::PLATFORM_TO_REQUEST_KEY[$link->platform] ?? ($link->platform . '_url');
+                $settings[$reqKey] = $this->adminSettingMeta((string) ($link->url ?? ''), 'string');
+            }
+        }
+
+        return $settings;
+    }
+
+    /**
+     * @return array{value: string, type: string, description: null, description_ar: null, description_en: null}
+     */
+    private function adminSettingMeta(string $value, string $type): array
+    {
+        return [
+            'value' => $value,
+            'type' => $type,
+            'description' => null,
+            'description_ar' => null,
+            'description_en' => null,
+        ];
+    }
+
+    /**
+     * Persist coupon policy and social URLs to their tables (and keep them out of generic `settings`).
+     *
+     * @param  array<string, mixed>  $kv
+     */
+    private function syncDedicatedSettingsFromKeyValue(array $kv): void
+    {
+        if ($kv === [] || ! Schema::hasTable('app_coupon_settings')) {
+            return;
+        }
+
+        $policy = AppCouponSetting::current();
+        $policyUpdates = [];
+
+        if (array_key_exists('max_coupons_per_merchant', $kv) && $kv['max_coupons_per_merchant'] !== null) {
+            $policyUpdates['max_coupons_per_merchant'] = max(1, (int) $kv['max_coupons_per_merchant']);
+        }
+        if (array_key_exists('coupon_expiry_days', $kv) && $kv['coupon_expiry_days'] !== null) {
+            $policyUpdates['coupon_expiry_days'] = max(1, (int) $kv['coupon_expiry_days']);
+        }
+        if (array_key_exists('auto_cancel_enabled', $kv)) {
+            $policyUpdates['auto_cancel_enabled'] = filter_var($kv['auto_cancel_enabled'], FILTER_VALIDATE_BOOLEAN);
+        }
+        if (array_key_exists('days_before_cancel', $kv) && $kv['days_before_cancel'] !== null) {
+            $policyUpdates['days_before_cancel'] = max(1, (int) $kv['days_before_cancel']);
+        }
+        if (array_key_exists('grace_period_hours', $kv) && $kv['grace_period_hours'] !== null) {
+            $policyUpdates['grace_period_hours'] = max(0, (int) $kv['grace_period_hours']);
+        }
+        if (array_key_exists('notify_merchant', $kv)) {
+            $policyUpdates['notify_merchant'] = filter_var($kv['notify_merchant'], FILTER_VALIDATE_BOOLEAN);
+        }
+        if (array_key_exists('notify_user', $kv)) {
+            $policyUpdates['notify_user'] = filter_var($kv['notify_user'], FILTER_VALIDATE_BOOLEAN);
+        }
+        if (array_key_exists('auto_refund', $kv)) {
+            $policyUpdates['auto_refund'] = filter_var($kv['auto_refund'], FILTER_VALIDATE_BOOLEAN);
+        }
+
+        if ($policyUpdates !== []) {
+            $policy->update($policyUpdates);
+        }
+
+        if (! Schema::hasTable('social_links')) {
+            return;
+        }
+
+        foreach (SocialLink::PLATFORM_TO_REQUEST_KEY as $platform => $requestKey) {
+            if (! array_key_exists($requestKey, $kv)) {
+                continue;
+            }
+            $raw = $kv[$requestKey];
+            $url = $raw === null || $raw === '' ? null : (string) $raw;
+            SocialLink::query()->updateOrCreate(
+                ['platform' => $platform],
+                ['url' => $url]
+            );
+        }
     }
 
     /**
@@ -2219,6 +2419,13 @@ class AdminController extends Controller
         }
 
         if ($isOfferBased) {
+            $offer = Offer::findOrFail($request->offer_id);
+            try {
+                AppCouponSetting::assertOfferCanAddCoupon($offer);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], 422);
+            }
+
             $dt = $request->input('discount_type', 'percent');
             $mappedDt = in_array($dt, ['fixed', 'amount'], true) ? 'amount' : 'percent';
             $barcodeVal = $request->input('barcode') ?: ('CPN-' . strtoupper(uniqid()));
@@ -2231,6 +2438,7 @@ class AdminController extends Controller
 
             $coupon = Coupon::create([
                 'offer_id'       => $request->offer_id,
+                'coupon_setting_id' => AppCouponSetting::current()->id,
                 'title'          => $request->input('title', $request->input('title_ar', '')),
                 'title_ar'       => $request->input('title_ar'),
                 'title_en'       => $request->input('title_en'),
@@ -2252,6 +2460,7 @@ class AdminController extends Controller
         } else {
             $couponCode = $request->coupon_code ?? 'CPN-' . strtoupper(uniqid());
             $coupon = Coupon::create([
+                'coupon_setting_id' => AppCouponSetting::current()->id,
                 'category_id'      => $request->category_id,
                 'mall_id'          => $request->mall_id,
                 'offer_id'         => $request->offer_id,
@@ -3588,16 +3797,75 @@ class AdminController extends Controller
             });
         }
 
-        $notifications = $query->orderBy('created_at', 'desc')
-            ->paginate($request->get('per_page', 15));
+        $perPage = (int) $request->get('per_page', 15);
+        $perPage = max(1, min(200, $perPage));
+
+        if (! $request->boolean('include_inbox')) {
+            $notifications = $query->orderBy('created_at', 'desc')->paginate($perPage);
+
+            return response()->json([
+                'data' => $notifications->getCollection(),
+                'meta' => [
+                    'current_page' => $notifications->currentPage(),
+                    'last_page' => $notifications->lastPage(),
+                    'per_page' => $notifications->perPage(),
+                    'total' => $notifications->total(),
+                ],
+            ]);
+        }
+
+        $take = max(1, min(100, $perPage));
+        $broadcast = (clone $query)->orderBy('created_at', 'desc')->limit($take)->get();
+
+        $inboxQuery = $request->user()->notifications()->orderBy('created_at', 'desc')->limit($take);
+        if ($request->has('type')) {
+            $inboxQuery->where('type', $request->type);
+        }
+        $inboxRows = $inboxQuery->get();
+
+        $rows = collect();
+        foreach ($broadcast as $m) {
+            $row = $m->toArray();
+            $row['notification_source'] = 'broadcast';
+            $rows->push($row);
+        }
+        foreach ($inboxRows as $n) {
+            $data = is_string($n->data) ? json_decode($n->data, true) : $n->data;
+            $data = is_array($data) ? $data : [];
+            $rows->push([
+                'id' => $n->id,
+                'notification_source' => 'inbox',
+                'title' => $data['title'] ?? $data['title_en'] ?? '',
+                'title_ar' => $data['title_ar'] ?? $data['title'] ?? '',
+                'title_en' => $data['title_en'] ?? $data['title'] ?? '',
+                'message' => $data['message'] ?? $data['message_en'] ?? '',
+                'message_ar' => $data['message_ar'] ?? $data['message'] ?? '',
+                'message_en' => $data['message_en'] ?? $data['message'] ?? '',
+                'type' => $data['type'] ?? $n->type ?? 'info',
+                'read_at' => $n->read_at ? $n->read_at->toIso8601String() : null,
+                'created_at' => $n->created_at ? $n->created_at->toIso8601String() : null,
+                'sent_at' => $n->created_at ? $n->created_at->toIso8601String() : null,
+                'is_sent' => true,
+                'creator' => null,
+            ]);
+        }
+
+        $sorted = $rows->sortByDesc(function ($row) {
+            $t = $row['created_at'] ?? null;
+            if ($t instanceof \DateTimeInterface) {
+                return $t->getTimestamp();
+            }
+
+            return strtotime((string) $t) ?: 0;
+        })->take($take)->values();
 
         return response()->json([
-            'data' => $notifications->getCollection(),
+            'data' => $sorted,
             'meta' => [
-                'current_page' => $notifications->currentPage(),
-                'last_page' => $notifications->lastPage(),
-                'per_page' => $notifications->perPage(),
-                'total' => $notifications->total(),
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => $take,
+                'total' => $sorted->count(),
             ],
         ]);
     }
@@ -3711,19 +3979,30 @@ class AdminController extends Controller
      */
     public function markNotificationAsRead(Request $request, string $id): JsonResponse
     {
-        $notification = \App\Models\AdminNotification::findOrFail($id);
+        $broadcast = \App\Models\AdminNotification::find($id);
+        if ($broadcast) {
+            if (! $broadcast->read_at) {
+                $broadcast->update(['read_at' => now()]);
+            }
 
-        // إضافة حقل read_at إذا لم يكن موجوداً
-        if (!$notification->read_at) {
-            $notification->update([
-                'read_at' => now(),
+            return response()->json([
+                'message' => 'Notification marked as read',
+                'data' => $broadcast->fresh(),
+            ]);
+        }
+
+        $inbox = $request->user()->notifications()->where('id', $id)->first();
+        if ($inbox) {
+            $inbox->markAsRead();
+
+            return response()->json([
+                'message' => 'Notification marked as read',
             ]);
         }
 
         return response()->json([
-            'message' => 'Notification marked as read',
-            'data' => $notification->fresh(),
-        ]);
+            'message' => 'Notification not found',
+        ], 404);
     }
 
     /**
@@ -3731,33 +4010,44 @@ class AdminController extends Controller
      */
     public function markAllNotificationsAsRead(Request $request): JsonResponse
     {
-        \App\Models\AdminNotification::where('target_audience', 'admins')
-            ->whereNull('read_at')
+        // Match admin inbox list (getNotifications returns all rows, not only target_audience=admins)
+        $updated = \App\Models\AdminNotification::whereNull('read_at')
             ->update(['read_at' => now()]);
+
+        $request->user()->unreadNotifications->markAsRead();
 
         return response()->json([
             'message' => 'All notifications marked as read',
+            'data' => ['updated_count' => $updated],
         ]);
     }
 
     /**
-     * Delete notification (Admin)
+     * Delete notification (Admin): broadcast row (admin_notifications) or current user's database notification (inbox).
      */
-    public function deleteNotification(string $id): JsonResponse
+    public function deleteNotification(Request $request, string $id): JsonResponse
     {
-        $notification = \App\Models\AdminNotification::findOrFail($id);
+        $broadcast = \App\Models\AdminNotification::find($id);
+        if ($broadcast) {
+            $broadcast->delete();
 
-        if ($notification->is_sent) {
             return response()->json([
-                'message' => 'Cannot delete notification that has already been sent',
-            ], 422);
+                'message' => 'Notification deleted successfully',
+            ]);
         }
 
-        $notification->delete();
+        $inbox = $request->user()->notifications()->where('id', $id)->first();
+        if ($inbox) {
+            $inbox->delete();
+
+            return response()->json([
+                'message' => 'Notification deleted successfully',
+            ]);
+        }
 
         return response()->json([
-            'message' => 'Notification deleted successfully',
-        ]);
+            'message' => 'Notification not found',
+        ], 404);
     }
 
     /**
@@ -4095,33 +4385,33 @@ class AdminController extends Controller
     // ==================== Ads Management ====================
 
     /**
-     * Get all ads (Admin)
+     * Apply shared filters for admin ads listing / report stats.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $query
      */
-    public function getAds(Request $request): JsonResponse
+    private function applyAdminAdFilters(Request $request, $query, bool $applyLifecycle = true): void
     {
-        $query = \App\Models\Ad::with(['merchant', 'category']);
-
         if ($request->has('is_active')) {
             $query->where('is_active', $request->boolean('is_active'));
         }
 
-        if ($request->has('position')) {
+        if ($request->filled('position')) {
             $query->where('position', $request->position);
         }
 
-        if ($request->has('ad_type')) {
+        if ($request->filled('ad_type')) {
             $query->where('ad_type', $request->ad_type);
         }
 
-        if ($request->has('merchant_id')) {
+        if ($request->filled('merchant_id')) {
             $query->where('merchant_id', $request->merchant_id);
         }
 
-        if ($request->has('category_id')) {
+        if ($request->filled('category_id')) {
             $query->where('category_id', $request->category_id);
         }
 
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
@@ -4129,6 +4419,75 @@ class AdminController extends Controller
                     ->orWhere('title_en', 'like', "%{$search}%");
             });
         }
+
+        if ($applyLifecycle && $request->filled('lifecycle')) {
+            match ($request->lifecycle) {
+                'active' => $query->where('is_active', true)->where(function ($q) {
+                    $q->whereNull('end_date')->orWhere('end_date', '>', now());
+                }),
+                'expired' => $query->where('is_active', true)
+                    ->whereNotNull('end_date')
+                    ->where('end_date', '<=', now()),
+                'pending' => $query->where('is_active', false),
+                default => null,
+            };
+        }
+    }
+
+    /**
+     * Aggregates + top ads for the reports dashboard (same filters as getAds, respects lifecycle).
+     */
+    public function getAdsReportStats(Request $request): JsonResponse
+    {
+        $filtered = \App\Models\Ad::query();
+        $this->applyAdminAdFilters($request, $filtered, true);
+
+        $total = (clone $filtered)->count();
+        $viewsSum = (int) (clone $filtered)->sum('views_count');
+        $clicksSum = (int) (clone $filtered)->sum('clicks_count');
+
+        $unscoped = \App\Models\Ad::query();
+        $this->applyAdminAdFilters($request, $unscoped, false);
+
+        $active = (clone $unscoped)->where('is_active', true)->where(function ($q) {
+            $q->whereNull('end_date')->orWhere('end_date', '>', now());
+        })->count();
+
+        $expired = (clone $unscoped)->where('is_active', true)
+            ->whereNotNull('end_date')
+            ->where('end_date', '<=', now())
+            ->count();
+
+        $pending = (clone $unscoped)->where('is_active', false)->count();
+
+        $topByClicks = (clone $filtered)
+            ->orderByDesc('clicks_count')
+            ->limit(8)
+            ->get([
+                'id', 'title', 'title_ar', 'title_en', 'views_count', 'clicks_count',
+                'ad_type', 'is_active', 'start_date', 'end_date',
+            ]);
+
+        return response()->json([
+            'data' => [
+                'total' => $total,
+                'views_sum' => $viewsSum,
+                'clicks_sum' => $clicksSum,
+                'active' => $active,
+                'expired' => $expired,
+                'pending' => $pending,
+                'top_by_clicks' => $topByClicks,
+            ],
+        ]);
+    }
+
+    /**
+     * Get all ads (Admin)
+     */
+    public function getAds(Request $request): JsonResponse
+    {
+        $query = \App\Models\Ad::with(['merchant', 'category']);
+        $this->applyAdminAdFilters($request, $query, true);
 
         $ads = $query->orderBy('order_index')
             ->orderBy('created_at', 'desc')
@@ -4172,6 +4531,18 @@ class AdminController extends Controller
         foreach (['start_date', 'end_date'] as $dateField) {
             if (isset($input[$dateField]) && (is_string($input[$dateField]) && trim($input[$dateField]) === '')) {
                 $input[$dateField] = null;
+            }
+        }
+        // Ensure URL fields are strings or null (frontend may send null / non-scalar)
+        foreach (['video_url', 'link_url', 'image_url'] as $urlField) {
+            if (! array_key_exists($urlField, $input)) {
+                continue;
+            }
+            $v = $input[$urlField];
+            if ($v === null || $v === '') {
+                $input[$urlField] = null;
+            } elseif (! is_string($v)) {
+                $input[$urlField] = is_scalar($v) ? (string) $v : null;
             }
         }
         $request->merge($input);
@@ -4287,6 +4658,26 @@ class AdminController extends Controller
     {
         $ad = \App\Models\Ad::findOrFail($id);
 
+        $merge = [];
+        foreach (['video_url', 'link_url', 'image_url'] as $urlField) {
+            if (! $request->has($urlField)) {
+                continue;
+            }
+            $v = $request->input($urlField);
+            if ($v === null || $v === '') {
+                $merge[$urlField] = null;
+            } elseif (! is_string($v)) {
+                $merge[$urlField] = is_scalar($v) ? (string) $v : null;
+            }
+        }
+        if ($merge !== []) {
+            $request->merge($merge);
+        }
+
+        if ($request->filled('end_date') && ! $request->filled('start_date') && $ad->start_date) {
+            $request->merge(['start_date' => $ad->start_date->format('Y-m-d H:i:s')]);
+        }
+
         $request->validate([
             'title' => 'sometimes|string|max:255',
             'title_ar' => 'sometimes|string|max:255',
@@ -4297,26 +4688,33 @@ class AdminController extends Controller
             // Support both file upload and URL for updates
             'image' => ImageUploadRules::sometimesFileMax(10240),
             'video' => 'sometimes|file|mimes:mp4,avi,mov,webm|max:51200',
-            'image_url' => 'sometimes|string|max:500',
-            'video_url' => 'sometimes|string|max:500',
+            'image_url' => 'sometimes|nullable|string|max:500',
+            'video_url' => 'sometimes|nullable|string|max:500',
             'images' => 'sometimes|array',
-            'link_url' => 'sometimes|string|max:500',
+            'link_url' => 'sometimes|nullable|string|max:500',
             'position' => 'sometimes|string|max:50',
             'ad_type' => 'sometimes|in:banner,popup,sidebar,inline,video',
-            'merchant_id' => 'sometimes|exists:merchants,id',
-            'category_id' => 'sometimes|exists:categories,id',
+            'merchant_id' => 'sometimes|nullable|exists:merchants,id',
+            'category_id' => 'sometimes|nullable|exists:categories,id',
             'is_active' => 'sometimes|boolean',
             'order_index' => 'sometimes|integer',
             'start_date' => 'sometimes|date',
-            'end_date' => 'sometimes|date|after:start_date',
+            'end_date' => 'sometimes|nullable|date|after:start_date',
             'cost_per_click' => 'sometimes|numeric|min:0',
             'total_budget' => 'sometimes|numeric|min:0',
+            'budget' => 'sometimes|numeric|min:0',
             // إضافة دعم تحديث الإحصائيات
             'views_count' => 'sometimes|integer|min:0',
             'clicks_count' => 'sometimes|integer|min:0',
         ]);
 
-        $updateData = $request->except(['image', 'video']);
+        $updateData = collect($request->validated())
+            ->except(['image', 'video'])
+            ->all();
+
+        if ($request->filled('budget') && ! $request->filled('total_budget')) {
+            $updateData['total_budget'] = $request->input('budget');
+        }
 
         // Handle file uploads for updates (مسار promo لتجنب حجب مانعات الإعلانات)
         if ($request->hasFile('image')) {

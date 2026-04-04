@@ -30,6 +30,8 @@ Route::get('/docs', function () {
         'name' => 'OFROO API Documentation',
         'version' => '1.0.0',
         'postman_collection' => url('/docs/postman_collection.json'),
+        'openapi_yaml' => url('/api/docs/openapi.yaml'),
+        'swagger_ui' => url('/docs/swagger.html'),
         'api_base_url' => url('/api'),
         'endpoints' => [
             'auth' => '/api/auth',

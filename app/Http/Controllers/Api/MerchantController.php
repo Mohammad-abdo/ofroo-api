@@ -15,19 +15,26 @@ use App\Services\MerchantStatisticsService;
 use App\Services\MerchantProfileService;
 use App\Models\ActivationReport;
 use App\Models\Ad;
+use App\Models\AppCouponSetting;
 use App\Models\Coupon;
+use App\Models\Commission;
 use App\Models\Merchant;
 use App\Models\Offer;
 use App\Models\Order;
+use App\Services\CommissionRateResolver;
+use App\Services\FeatureFlagService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use App\Helpers\StorageHelper;
 use App\Support\ImageUploadRules;
+use App\Http\Controllers\Concerns\ResolvesMerchantPortal;
 
 class MerchantController extends Controller
 {
+    use ResolvesMerchantPortal;
+
     public function __construct(
         protected OfferService $offerService,
         protected MerchantStatisticsService $statisticsService,
@@ -40,7 +47,7 @@ class MerchantController extends Controller
     public function offers(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $query = Offer::with(['category', 'mall', 'branches', 'coupons'])
             ->where('merchant_id', $merchant->id);
@@ -79,8 +86,8 @@ class MerchantController extends Controller
      */
     public function getOffer(Request $request, string $id): JsonResponse
     {
-        $merchant = $request->user()->merchant;
-        if (!$merchant) {
+        $merchant = $request->user()->merchantForPortal();
+        if (! $merchant) {
             return response()->json(['message' => 'Merchant not found'], 403);
         }
         $offer = Offer::where('merchant_id', $merchant->id)
@@ -117,10 +124,8 @@ class MerchantController extends Controller
      */
     public function updateOffer(OfferUpdateRequest $request, string $id): JsonResponse
     {
-        $merchant = $request->user()->merchant;
-        if (!$merchant) {
-            return response()->json(['message' => 'Merchant not found'], 403);
-        }
+        $this->assertMerchantOwner($request);
+        $merchant = $this->resolveMerchant($request);
 
         $offer = Offer::where('merchant_id', $merchant->id)->findOrFail($id);
         $data = $this->prepareMerchantOfferData($request);
@@ -200,7 +205,7 @@ class MerchantController extends Controller
     public function deleteOffer(Request $request, string $id): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $offer = Offer::where('merchant_id', $merchant->id)
             ->findOrFail($id);
@@ -220,8 +225,7 @@ class MerchantController extends Controller
      */
     public function orders(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->first();
+        $merchant = $request->user()->merchantForPortal();
 
         if (! $merchant) {
             return response()->json(['data' => [], 'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 0]], 200);
@@ -250,7 +254,7 @@ class MerchantController extends Controller
     public function activateCoupon(Request $request, string $id): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $coupon = Coupon::with(['offer'])
             ->whereHas('offer', function ($query) use ($merchant) {
@@ -271,8 +275,15 @@ class MerchantController extends Controller
             'activated_at' => now(),
         ]);
 
-        // TODO: Send notification to user
-        // dispatch(new SendCouponActivatedNotificationJob($coupon));
+        ActivationReport::create([
+            'coupon_id' => $coupon->id,
+            'merchant_id' => $merchant->id,
+            'user_id' => $coupon->user_id,
+            'activated_by_user_id' => $user->id,
+            'order_id' => $coupon->order_id,
+            'activation_method' => 'manual',
+            'ip_address' => $request->ip(),
+        ]);
 
         return response()->json([
             'message' => 'Coupon activated successfully',
@@ -293,7 +304,7 @@ class MerchantController extends Controller
     public function storeLocations(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $locations = $merchant->branches()
             ->orderBy('created_at', 'desc')
@@ -330,6 +341,7 @@ class MerchantController extends Controller
      */
     public function createStoreLocation(Request $request): JsonResponse
     {
+        $this->assertMerchantOwner($request);
         $request->validate([
             'name_ar' => 'nullable|string|max:255',
             'name_en' => 'nullable|string|max:255',
@@ -345,7 +357,7 @@ class MerchantController extends Controller
         ]);
 
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $location = $merchant->branches()->create([
             'name_ar' => $request->name_ar,
@@ -373,7 +385,7 @@ class MerchantController extends Controller
     public function getStoreLocation(Request $request, string $id): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $location = $merchant->branches()->findOrFail($id);
 
@@ -405,8 +417,9 @@ class MerchantController extends Controller
      */
     public function updateStoreLocation(Request $request, string $id): JsonResponse
     {
+        $this->assertMerchantOwner($request);
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $location = $merchant->branches()->findOrFail($id);
 
@@ -462,8 +475,9 @@ class MerchantController extends Controller
      */
     public function deleteStoreLocation(Request $request, string $id): JsonResponse
     {
+        $this->assertMerchantOwner($request);
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $location = $merchant->branches()->findOrFail($id);
 
@@ -487,8 +501,9 @@ class MerchantController extends Controller
      */
     public function createCoupon(Request $request): JsonResponse
     {
+        $this->assertMerchantOwner($request);
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $isOfferBased = $request->filled('offer_id') && !$request->filled('category_id');
 
@@ -561,8 +576,15 @@ class MerchantController extends Controller
                 $imagePath = $request->image;
             }
 
+            try {
+                AppCouponSetting::assertOfferCanAddCoupon($offer);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], 422);
+            }
+
             $coupon = Coupon::create([
                 'offer_id'       => $request->offer_id,
+                'coupon_setting_id' => AppCouponSetting::current()->id,
                 'title'          => $request->input('title', $request->input('title_ar', '')),
                 'title_ar'       => $request->input('title_ar'),
                 'title_en'       => $request->input('title_en'),
@@ -586,6 +608,7 @@ class MerchantController extends Controller
         } else {
             $couponCode = $request->coupon_code ?? 'CPN-' . strtoupper(uniqid());
             $coupon = Coupon::create([
+                'coupon_setting_id' => AppCouponSetting::current()->id,
                 'category_id'      => $request->category_id,
                 'mall_id'          => $request->mall_id,
                 'coupon_code'      => $couponCode,
@@ -616,7 +639,7 @@ class MerchantController extends Controller
     public function getCoupons(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $query = Coupon::with(['offer'])
             ->whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id));
@@ -658,7 +681,7 @@ class MerchantController extends Controller
     public function getCoupon(Request $request, string $id): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $coupon = Coupon::with(['offer'])
             ->whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id))
@@ -674,8 +697,9 @@ class MerchantController extends Controller
      */
     public function updateCoupon(Request $request, string $id): JsonResponse
     {
+        $this->assertMerchantOwner($request);
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $coupon = Coupon::query()
             ->where('id', $id)
@@ -894,8 +918,9 @@ class MerchantController extends Controller
      */
     public function deleteCoupon(Request $request, string $id): JsonResponse
     {
+        $this->assertMerchantOwner($request);
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $coupon = Coupon::query()
             ->where('id', $id)
@@ -931,7 +956,7 @@ class MerchantController extends Controller
     public function getMallCoupons(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $query = Coupon::with(['offer'])
             ->whereHas('offer', fn ($q) => $q->where('merchant_id', $merchant->id));
@@ -979,9 +1004,13 @@ class MerchantController extends Controller
     public function statistics(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
-        $stats = $this->statisticsService->getStatistics($merchant);
+        if ($user->isMerchant()) {
+            $stats = $this->statisticsService->getStatistics($merchant);
+        } else {
+            $stats = $this->statisticsService->getStatisticsForActivator($merchant, $user);
+        }
 
         return $this->success($stats);
     }
@@ -1000,8 +1029,7 @@ class MerchantController extends Controller
         ]);
         
         $merchant = Merchant::with(['user', 'mall', 'category'])
-            ->where('user_id', $user->id)
-            ->firstOrFail();
+            ->findOrFail($this->resolveMerchant($request)->id);
 
         \Log::info('Get merchant profile - Found merchant', [
             'merchant_id' => $merchant->id,
@@ -1060,8 +1088,9 @@ class MerchantController extends Controller
      */
     public function updateProfile(MerchantProfileRequest $request): JsonResponse
     {
+        $this->assertMerchantOwner($request);
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         try {
             $logoFile = $request->hasFile('logo') ? $request->file('logo') : null;
@@ -1089,8 +1118,9 @@ class MerchantController extends Controller
             'logo' => ImageUploadRules::requiredFileMax(2048),
         ]);
 
+        $this->assertMerchantOwner($request);
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         try {
             $logoUrl = $this->profileService->uploadLogo($merchant, $request->file('logo'));
@@ -1195,6 +1225,48 @@ class MerchantController extends Controller
         ]);
     }
 
+    /**
+     * Mark single database notification as read (merchant)
+     */
+    public function markNotificationAsRead(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+        $notification = $user->notifications()->where('id', $id)->first();
+
+        if (! $notification) {
+            return response()->json([
+                'message' => 'Notification not found',
+            ], 404);
+        }
+
+        $notification->markAsRead();
+
+        return response()->json([
+            'message' => 'Notification marked as read',
+        ]);
+    }
+
+    /**
+     * Delete a database notification (merchant inbox)
+     */
+    public function deleteMerchantNotification(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+        $notification = $user->notifications()->where('id', $id)->first();
+
+        if (! $notification) {
+            return response()->json([
+                'message' => 'Notification not found',
+            ], 404);
+        }
+
+        $notification->delete();
+
+        return response()->json([
+            'message' => 'Notification deleted successfully',
+        ]);
+    }
+
     // ==================== Ads Management (Merchant) ====================
 
     /**
@@ -1204,7 +1276,7 @@ class MerchantController extends Controller
     {
         try {
             $user = $request->user();
-            $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+            $merchant = $this->resolveMerchant($request);
 
             $query = Ad::with(['category'])
                 ->where('merchant_id', $merchant->id);
@@ -1274,7 +1346,7 @@ class MerchantController extends Controller
     public function getAd(string $id): JsonResponse
     {
         $user = \Illuminate\Support\Facades\Auth::user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $ad = Ad::with(['category'])
             ->where('merchant_id', $merchant->id)
@@ -1291,7 +1363,7 @@ class MerchantController extends Controller
     public function createAd(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'title_ar' => 'required|string|max:255',
@@ -1349,7 +1421,7 @@ class MerchantController extends Controller
     public function updateAd(Request $request, string $id): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $ad = Ad::where('merchant_id', $merchant->id)
             ->findOrFail($id);
@@ -1411,7 +1483,7 @@ class MerchantController extends Controller
     public function deleteAd(string $id): JsonResponse
     {
         $user = \Illuminate\Support\Facades\Auth::user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $ad = Ad::where('merchant_id', $merchant->id)
             ->findOrFail($id);
@@ -1429,7 +1501,7 @@ class MerchantController extends Controller
     public function getAdStatus(string $id): JsonResponse
     {
         $user = \Illuminate\Support\Facades\Auth::user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $ad = Ad::where('merchant_id', $merchant->id)
             ->findOrFail($id);
@@ -1448,7 +1520,7 @@ class MerchantController extends Controller
     public function getCouponActivations(Request $request): JsonResponse
     {
         $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         if ($request->filled('coupon_id')) {
             $couponId = (int) $request->coupon_id;
@@ -1548,18 +1620,25 @@ class MerchantController extends Controller
      */
     public function getCommissions(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->firstOrFail();
+        $merchant = $this->resolveMerchant($request);
 
         $stats = $this->statistics($request);
         $statsData = json_decode($stats->getContent(), true)['data'] ?? [];
 
+        $platformPct = round(FeatureFlagService::getCommissionRate() * 100, 2);
+
         return response()->json([
+            'success' => true,
             'data' => [
                 'total_sales' => $statsData['total_revenue'] ?? 0,
                 'total_commission' => $statsData['total_commission'] ?? 0,
                 'net_profit' => $statsData['net_profit'] ?? 0,
-                'commission_rate' => 10, // 10% commission
+                'commission_rate_effective_percent' => CommissionRateResolver::effectivePercentDisplay($merchant),
+                'commission_mode' => $merchant->commission_mode ?? CommissionRateResolver::MODE_PLATFORM,
+                'commission_custom_percent' => $merchant->commission_custom_percent !== null
+                    ? (float) $merchant->commission_custom_percent
+                    : null,
+                'platform_default_commission_percent' => $platformPct,
             ],
         ]);
     }
@@ -1569,11 +1648,11 @@ class MerchantController extends Controller
      */
     public function getCommissionTransactions(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $merchant = Merchant::where('user_id', $user->id)->first();
+        $merchant = $request->user()->merchantForPortal();
 
         if (! $merchant) {
             return response()->json([
+                'success' => true,
                 'data' => [],
                 'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 0],
             ], 200);
@@ -1616,8 +1695,17 @@ class MerchantController extends Controller
         $orders = $query->orderBy('created_at', 'desc')
             ->paginate($request->get('per_page', 15));
 
-        $transactions = $orders->getCollection()->map(function ($order) {
-            $commission = (float) $order->total_amount * 0.10;
+        $orderIds = $orders->getCollection()->pluck('id')->filter()->values();
+        $commissionsByOrder = Commission::whereIn('order_id', $orderIds)->get()->keyBy('order_id');
+
+        $transactions = $orders->getCollection()->map(function ($order) use ($commissionsByOrder, $merchant) {
+            $row = $commissionsByOrder->get($order->id);
+            $commission = $row
+                ? (float) $row->commission_amount
+                : (float) $order->total_amount * CommissionRateResolver::effectiveDecimalRate($merchant);
+            $ratePercent = $row
+                ? round((float) $row->commission_rate * 100, 2)
+                : CommissionRateResolver::effectivePercentDisplay($merchant);
             $firstItem = $order->items->first();
             $offer = $firstItem?->offer;
             $offerTitle = $offer ? ($offer->title_ar ?? $offer->title_en ?? $offer->title) : null;
@@ -1637,14 +1725,16 @@ class MerchantController extends Controller
                 'location' => $order->location_id ? 'Branch ' . $order->location_id : 'N/A',
                 'payment_method' => $order->payment_method ?? 'N/A',
                 'payment' => $order->payment_method ?? 'N/A',
-                'amount' => $order->total_amount,
-                'commission' => $commission,
+                'amount' => (float) $order->total_amount,
+                'commission' => round($commission, 2),
+                'commission_rate_percent' => $ratePercent,
                 'status' => 'تم الفعالية / Activated',
                 'transaction_type' => 'تم الفعالية / Activated',
             ];
         });
 
         return response()->json([
+            'success' => true,
             'data' => $transactions,
             'meta' => [
                 'current_page' => $orders->currentPage(),
@@ -1660,23 +1750,51 @@ class MerchantController extends Controller
      */
     public function getCommissionRates(Request $request): JsonResponse
     {
-        // Get all categories with their commission rates
-        $categories = \App\Models\Category::select('id', 'name_ar', 'name_en')
-            ->orderBy('name_ar')
-            ->get();
+        $merchant = $this->resolveMerchant($request);
+        $platformPct = round(FeatureFlagService::getCommissionRate() * 100, 2);
+        $effective = CommissionRateResolver::effectivePercentDisplay($merchant);
 
-        $rates = $categories->map(function ($category) {
-            return [
-                'category' => $category->name_ar ?? $category->name_en,
+        $category = $merchant->relationLoaded('category') ? $merchant->category : $merchant->load('category')->category;
+
+        $rates = [
+            [
+                'scope' => 'merchant_effective',
+                'label_ar' => 'نسبة العمولة المطبّقة على حسابك',
+                'label_en' => 'Your effective commission rate',
+                'rate' => $effective.'%',
+                'rate_value' => $effective,
+            ],
+            [
+                'scope' => 'platform_default',
+                'label_ar' => 'النسبة الافتراضية للمنصة',
+                'label_en' => 'Platform default rate',
+                'rate' => $platformPct.'%',
+                'rate_value' => $platformPct,
+            ],
+        ];
+
+        if ($category) {
+            $rates[] = [
+                'scope' => 'merchant_category',
+                'label_ar' => 'تصنيف نشاطك (مرجعي)',
+                'label_en' => 'Your business category (reference)',
                 'category_ar' => $category->name_ar,
                 'category_en' => $category->name_en,
-                'rate' => '10%', // Default 10% commission for all categories
-                'rate_value' => 10,
+                'category' => $category->name_ar ?? $category->name_en,
+                'rate' => $platformPct.'%',
+                'rate_value' => $platformPct,
             ];
-        });
+        }
 
         return response()->json([
+            'success' => true,
             'data' => $rates,
+            'meta' => [
+                'commission_mode' => $merchant->commission_mode ?? CommissionRateResolver::MODE_PLATFORM,
+                'commission_custom_percent' => $merchant->commission_custom_percent !== null
+                    ? (float) $merchant->commission_custom_percent
+                    : null,
+            ],
         ]);
     }
 
@@ -1687,8 +1805,9 @@ class MerchantController extends Controller
      */
     public function storeOfferCoupon(Request $request, $offerId): JsonResponse
     {
+        $this->assertMerchantOwner($request);
         $offer = Offer::where('id', $offerId)
-            ->where('merchant_id', auth()->user()->merchant->id)
+            ->where('merchant_id', $this->resolveMerchant($request)->id)
             ->firstOrFail();
 
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
@@ -1769,7 +1888,7 @@ class MerchantController extends Controller
      */
     public function getMyCoupons(Request $request): JsonResponse
     {
-        $query = \App\Models\Coupon::where('merchant_id', auth()->user()->merchant->id)
+        $query = \App\Models\Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
             ->with(['offer', 'category', 'mall']);
 
         // Apply filters
@@ -1804,7 +1923,7 @@ class MerchantController extends Controller
      */
     public function getCouponsByMall(Request $request, $mallId): JsonResponse
     {
-        $query = \App\Models\Coupon::where('merchant_id', auth()->user()->merchant->id)
+        $query = \App\Models\Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
             ->where('mall_id', $mallId)
             ->with(['offer', 'category', 'mall']);
 
@@ -1827,7 +1946,7 @@ class MerchantController extends Controller
      */
     public function getCouponsByCategory(Request $request, $categoryId): JsonResponse
     {
-        $query = \App\Models\Coupon::where('merchant_id', auth()->user()->merchant->id)
+        $query = \App\Models\Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
             ->where('category_id', $categoryId)
             ->with(['offer', 'category', 'mall']);
 
@@ -1850,7 +1969,7 @@ class MerchantController extends Controller
      */
     public function getAvailableCoupons(Request $request): JsonResponse
     {
-        $query = \App\Models\Coupon::where('merchant_id', auth()->user()->merchant->id)
+        $query = \App\Models\Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
             ->where('status', 'active')
             ->where(function ($q) {
                 $q->whereNull('expires_at')
@@ -1888,9 +2007,10 @@ class MerchantController extends Controller
     /**
      * Deactivate coupon (Merchant) - منقول من الأدمن
      */
-    public function deactivateCoupon($id): JsonResponse
+    public function deactivateCoupon(Request $request, $id): JsonResponse
     {
-        $coupon = \App\Models\Coupon::where('merchant_id', auth()->user()->merchant->id)
+        $this->assertMerchantOwner($request);
+        $coupon = \App\Models\Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
             ->findOrFail($id);
 
         $coupon->status = 'inactive';

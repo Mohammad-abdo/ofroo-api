@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\File;
 
 class DocumentationController extends Controller
 {
@@ -26,6 +27,22 @@ class DocumentationController extends Controller
             ->header('Content-Disposition', 'inline; filename="ofroo_api.postman_collection.json"');
     }
 
+    /**
+     * OpenAPI 3 YAML (Swagger source). Same file as api/docs/openapi.yaml.
+     */
+    public function openapiYaml(): Response
+    {
+        $path = base_path('docs/openapi.yaml');
+        if (! File::isReadable($path)) {
+            abort(404, 'OpenAPI spec not found');
+        }
+
+        return response(File::get($path), 200, [
+            'Content-Type' => 'application/yaml; charset=UTF-8',
+            'Access-Control-Allow-Origin' => '*',
+        ]);
+    }
+
     public function apiDocs(): JsonResponse
     {
         $endpoints = [
@@ -33,8 +50,8 @@ class DocumentationController extends Controller
                 'POST /api/auth/register' => 'Register new user',
                 'POST /api/auth/login' => 'Login user',
                 'POST /api/auth/logout' => 'Logout user (requires auth)',
-                'POST /api/auth/request-otp' => 'Request OTP code',
-                'POST /api/auth/verify-otp' => 'Verify OTP code',
+                'POST /api/auth/otp/request' => 'Request OTP (phone or email)',
+                'POST /api/auth/otp/verify' => 'Verify OTP',
                 'POST /api/auth/register-merchant' => 'Register as merchant',
                 'POST /api/auth/login-with-pin' => 'Merchant login with PIN',
             ],
@@ -86,6 +103,7 @@ class DocumentationController extends Controller
                 'POST /api/admin/merchants/{id}/approve' => 'Approve merchant',
                 'POST /api/admin/merchants/{id}/reject' => 'Reject merchant',
                 'POST /api/admin/merchants/{id}/suspend' => 'Suspend merchant',
+                'PUT /api/admin/merchants/{id}/commission' => 'Set merchant commission (platform / custom % / waived)',
                 'GET /api/admin/withdrawals' => 'List withdrawals',
                 'POST /api/admin/withdrawals/{id}/approve' => 'Approve withdrawal',
                 'POST /api/admin/withdrawals/{id}/reject' => 'Reject withdrawal',
@@ -110,7 +128,9 @@ class DocumentationController extends Controller
                 'base_url' => config('app.url') . '/api',
                 'documentation' => [
                     'postman_collection' => config('app.url') . '/api/docs/postman',
-                    'swagger' => config('app.url') . '/api/docs',
+                    'openapi_yaml' => config('app.url') . '/api/docs/openapi.yaml',
+                    'swagger_ui' => rtrim(config('app.url'), '/') . '/docs/swagger.html',
+                    'this_json' => config('app.url') . '/api/docs',
                 ],
                 'endpoints' => $endpoints,
                 'authentication' => [

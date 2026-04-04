@@ -15,7 +15,8 @@ class CheckMerchant
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (!$request->user() || !$request->user()->isMerchant()) {
+        $user = $request->user();
+        if (! $user || ! $user->merchantForPortal()) {
             return response()->json(['message' => 'Unauthorized. Merchant access required.'], 403);
         }
 

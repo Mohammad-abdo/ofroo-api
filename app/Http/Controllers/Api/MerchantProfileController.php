@@ -183,6 +183,11 @@ class MerchantProfileController extends Controller
             'start_date' => $offer->start_date?->toIso8601String(),
             'end_date' => $offer->end_date?->toIso8601String(),
             'status' => $offer->status ?? 'active',
+            'is_expired' => $offer->isExpired(),
+            'is_not_started' => $offer->isNotYetStarted(),
+            'effective_status' => $offer->effectiveStatus(),
+            'status_label_ar' => $offer->isExpired() ? 'هذا العرض منتهي' : ($offer->isNotYetStarted() ? 'العرض لم يبدأ بعد' : ''),
+            'status_label_en' => $offer->isExpired() ? 'This offer has expired' : ($offer->isNotYetStarted() ? 'This offer has not started yet' : ''),
             'category_name' => $categoryName,
             'mall_name' => $mallName,
         ];
