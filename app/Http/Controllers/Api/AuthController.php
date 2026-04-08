@@ -324,7 +324,7 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
+    /**fdf
      * Register merchant
      */
     public function registerMerchant(\App\Http\Requests\MerchantRegisterRequest $request): JsonResponse
