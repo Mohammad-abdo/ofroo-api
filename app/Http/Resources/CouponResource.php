@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\ApiMediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -56,7 +57,7 @@ class CouponResource extends JsonResource
         $arr = [
             'id' => $this->id,
             'offer_id' => (string) $this->offer_id,
-            'image' => $this->image ?? '',
+            'image' => ApiMediaUrl::publicAbsolute(is_string($this->image) ? $this->image : ''),
             'title' => $this->title ?? '',
             'title_ar' => $this->title_ar ?? '',
             'title_en' => $this->title_en ?? '',

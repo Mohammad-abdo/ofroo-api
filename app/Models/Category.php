@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Support\ApiMediaUrl;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Storage;
 
 class Category extends Model
 {
@@ -33,12 +33,10 @@ class Category extends Model
             if (empty($this->attributes['image'] ?? null)) {
                 return self::DEFAULT_IMAGE_URL;
             }
-            $image = $this->attributes['image'];
-            if (str_starts_with($image, 'http://') || str_starts_with($image, 'https://')) {
-                return $image;
-            }
-            $base = rtrim(config('app.url', 'http://localhost'), '/');
-            return $base . '/storage/' . ltrim($image, '/');
+            $image = (string) $this->attributes['image'];
+            $abs = ApiMediaUrl::publicAbsolute($image);
+
+            return $abs !== '' ? $abs : self::DEFAULT_IMAGE_URL;
         } catch (\Throwable $e) {
             return self::DEFAULT_IMAGE_URL;
         }

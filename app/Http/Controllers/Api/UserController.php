@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use App\Helpers\StorageHelper;
+use App\Support\ApiMediaUrl;
 use App\Support\ImageUploadRules;
 
 class UserController extends Controller
@@ -78,13 +79,7 @@ class UserController extends Controller
      */
     private function fullAvatarUrl(?string $avatar): string
     {
-        if (empty($avatar)) {
-            return '';
-        }
-        if (str_starts_with($avatar, 'http')) {
-            return $avatar;
-        }
-        return rtrim(config('app.url'), '/') . '/' . ltrim($avatar, '/');
+        return ApiMediaUrl::publicAbsolute($avatar);
     }
 
     /**
@@ -684,7 +679,7 @@ class UserController extends Controller
                     'merchant' => $order->merchant ? [
                         'id' => $order->merchant->id,
                         'company_name' => $order->merchant->company_name,
-                        'logo_url' => $order->merchant->logo_url,
+                        'logo_url' => ApiMediaUrl::publicAbsolute(is_string($order->merchant->logo_url) ? $order->merchant->logo_url : ''),
                     ] : null,
                     'created_at' => $order->created_at->toIso8601String(),
                 ];

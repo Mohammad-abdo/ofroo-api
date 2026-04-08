@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
+use App\Support\ApiMediaUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -41,7 +42,7 @@ class MerchantProfileController extends Controller
             return [
                 'id' => $merchant->id,
                 'name' => $name,
-                'logo_url' => $merchant->logo_url ?? '',
+                'logo_url' => ApiMediaUrl::publicAbsolute(is_string($merchant->logo_url) ? $merchant->logo_url : ''),
             ];
         })->values()->all();
 
@@ -120,7 +121,7 @@ class MerchantProfileController extends Controller
             'company_name' => $merchant->company_name ?? '',
             'company_name_ar' => $merchant->company_name_ar ?? $merchant->company_name ?? '',
             'company_name_en' => $merchant->company_name_en ?? $merchant->company_name ?? '',
-            'logo_url' => $merchant->logo_url ?? '',
+            'logo_url' => ApiMediaUrl::publicAbsolute(is_string($merchant->logo_url) ? $merchant->logo_url : ''),
             'city' => $merchant->city ?? '',
             'country' => $merchant->country ?? '',
             'category_name' => $categoryName,
@@ -179,7 +180,7 @@ class MerchantProfileController extends Controller
             'description' => $offer->description ?? '',
             'price' => (float) $offer->price,
             'discount' => (float) ($offer->discount ?? 0),
-            'offer_images' => $offer->offer_images ?? [],
+            'offer_images' => ApiMediaUrl::absoluteList($offer->offer_images ?? []),
             'start_date' => $offer->start_date?->toIso8601String(),
             'end_date' => $offer->end_date?->toIso8601String(),
             'status' => $offer->status ?? 'active',

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\ApiMediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -32,7 +33,7 @@ class OfferResource extends JsonResource
             'mall_id' => $this->mall_id !== null ? (string) $this->mall_id : null,
             'price' => (float) $this->price,
             'discount' => (float) $this->discount,
-            'offer_images' => $this->offer_images ?? [],
+            'offer_images' => ApiMediaUrl::absoluteList($this->offer_images ?? []),
             'start_date' => $this->start_date ? $this->start_date->toIso8601String() : null,
             'end_date' => $this->end_date ? $this->end_date->toIso8601String() : null,
             'location' => $this->location ?? '',

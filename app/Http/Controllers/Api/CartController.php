@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CouponResource;
+use App\Support\ApiMediaUrl;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Coupon;
@@ -61,7 +62,7 @@ class CartController extends Controller
                         'description' => $offer->description ?? '',
                         'price' => (float) $offer->price,
                         'discount' => (float) ($offer->discount ?? 0),
-                        'offer_images' => $offer->offer_images ?? [],
+                        'offer_images' => ApiMediaUrl::absoluteList($offer->offer_images ?? []),
                         'status' => $offer->status ?? '',
                         'is_expired' => $offer->isExpired(),
                         'is_not_started' => $offer->isNotYetStarted(),

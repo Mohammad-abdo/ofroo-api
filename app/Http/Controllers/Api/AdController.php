@@ -4,36 +4,32 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Ad;
+use App\Support\ApiMediaUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AdController extends Controller
 {
     /**
-     * Full URL for a path (storage or relative).
-     */
-    private function fullUrl(?string $path): string
-    {
-        if (empty($path)) {
-            return '';
-        }
-        if (str_starts_with($path, 'http')) {
-            return $path;
-        }
-        return rtrim(config('app.url'), '/') . '/' . ltrim($path, '/');
-    }
-
-    /**
      * Build single ad payload with all related data (for list and show).
      */
     private function adPayload(Ad $ad): array
     {
-        $imageUrl = $ad->image_url ? $this->fullUrl($ad->image_url) : null;
-        $videoUrl = $ad->video_url ? $this->fullUrl($ad->video_url) : null;
+        $imageUrl = ApiMediaUrl::publicAbsoluteOrNull(is_string($ad->image_url) ? $ad->image_url : null);
+        $videoUrl = ApiMediaUrl::publicAbsoluteOrNull(is_string($ad->video_url) ? $ad->video_url : null);
         $images = [];
         if (! empty($ad->images) && is_array($ad->images)) {
             foreach ($ad->images as $img) {
-                $images[] = $this->fullUrl(is_string($img) ? $img : ($img['url'] ?? $img));
+                $path = '';
+                if (is_string($img)) {
+                    $path = $img;
+                } elseif (is_array($img) && isset($img['url']) && is_string($img['url'])) {
+                    $path = $img['url'];
+                }
+                $abs = ApiMediaUrl::publicAbsolute($path);
+                if ($abs !== '') {
+                    $images[] = $abs;
+                }
             }
         }
 
@@ -45,7 +41,7 @@ class AdController extends Controller
                 'company_name' => $m->company_name ?? $m->company_name_ar ?? $m->company_name_en ?? '',
                 'company_name_ar' => $m->company_name_ar ?? '',
                 'company_name_en' => $m->company_name_en ?? '',
-                'logo_url' => $m->logo_url ? $this->fullUrl($m->logo_url) : null,
+                'logo_url' => ApiMediaUrl::publicAbsoluteOrNull(is_string($m->logo_url) ? $m->logo_url : null),
                 'description' => $m->description ?? $m->description_ar ?? $m->description_en ?? null,
             ];
         }
@@ -57,8 +53,8 @@ class AdController extends Controller
                 'id' => $c->id,
                 'name_ar' => $c->name_ar ?? '',
                 'name_en' => $c->name_en ?? '',
-                'image' => $c->image ?? null,
-                'image_url' => $c->image_url ?? $this->fullUrl($c->image ?? null),
+                'image' => $c->image_url,
+                'image_url' => $c->image_url,
             ];
         }
 

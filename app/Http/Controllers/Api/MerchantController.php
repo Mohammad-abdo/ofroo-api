@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\ApiMediaUrl;
 use App\Http\Requests\OfferRequest;
 use App\Http\Requests\OfferStoreRequest;
 use App\Http\Requests\OfferUpdateRequest;
@@ -1109,7 +1110,7 @@ class MerchantController extends Controller
                 'whatsapp_enabled' => $merchant->whatsapp_enabled,
                 'city' => $merchant->city,
                 'country' => $merchant->country ?? 'مصر',
-                'logo_url' => $merchant->logo_url,
+                'logo_url' => ApiMediaUrl::publicAbsolute(is_string($merchant->logo_url) ? $merchant->logo_url : ''),
                 'category_id' => $merchant->category_id,
                 'category' => $merchant->category ? [
                     'id' => $merchant->category->id,

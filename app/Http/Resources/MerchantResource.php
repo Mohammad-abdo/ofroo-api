@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\ApiMediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -25,7 +26,7 @@ class MerchantResource extends JsonResource
             'company_name' => $this->company_name ?? '',
             'company_name_ar' => $this->company_name_ar ?? $this->company_name ?? '',
             'company_name_en' => $this->company_name_en ?? $this->company_name ?? '',
-            'logo_url' => $this->logo_url ?? '',
+            'logo_url' => ApiMediaUrl::publicAbsolute(is_string($this->logo_url) ? $this->logo_url : ''),
             'city' => $this->city ?? '',
             'country' => $this->country ?? '',
         ];
