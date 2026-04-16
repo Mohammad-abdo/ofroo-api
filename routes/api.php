@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\RegulatoryCheckController;
 use App\Http\Controllers\Api\FinancialReportsCacheController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\CouponEntitlementController;
 use App\Http\Controllers\Api\CommissionController;
 use App\Http\Controllers\Api\WalletManagementController;
 use Illuminate\Support\Facades\Route;
@@ -228,6 +229,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Wallet & Coupons - يتطلب مصادقة
     Route::prefix('wallet')->middleware('auth:sanctum')->group(function () {
         Route::get('/coupons', [OrderController::class, 'walletCoupons']);
+        Route::post('/entitlements/{entitlementId}/share', [CouponEntitlementController::class, 'share'])
+            ->whereNumber('entitlementId');
     });
 
     // Reviews - يتطلب مصادقة

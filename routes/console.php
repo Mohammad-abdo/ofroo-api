@@ -10,4 +10,5 @@ Artisan::command('inspire', function () {
 
 // Schedule tasks
 Schedule::command('coupons:expire')->daily();
+Schedule::command('coupon-shares:release-expired')->hourly();
 Schedule::command('backup:database')->daily()->at('02:00');

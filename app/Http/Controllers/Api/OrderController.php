@@ -5,8 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CouponResource;
 use App\Http\Resources\OrderResource;
+use App\Http\Resources\CouponEntitlementResource;
 use App\Models\Cart;
-use App\Models\Coupon;
+use App\Models\CouponEntitlement;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Services\CouponService;
@@ -30,7 +31,7 @@ class OrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $orders = Order::with(['items.offer', 'coupons', 'merchant'])
+        $orders = Order::with(['items.offer', 'coupons', 'couponEntitlements.coupon', 'merchant'])
             ->where('user_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->paginate($request->get('per_page', 15));
@@ -52,7 +53,7 @@ class OrderController extends Controller
     public function show(Request $request, string $id): JsonResponse
     {
         $user = $request->user();
-        $order = Order::with(['items.offer', 'coupons.offer', 'merchant'])
+        $order = Order::with(['items.offer', 'coupons.offer', 'couponEntitlements.coupon', 'merchant'])
             ->where('user_id', $user->id)
             ->findOrFail($id);
 
@@ -180,8 +181,18 @@ class OrderController extends Controller
                 $loyaltyService = app(\App\Services\LoyaltyService::class);
                 $loyaltyService->awardPointsForOrder($order);
 
-                // Send email with coupons
-                \App\Jobs\SendOrderConfirmationEmail::dispatch($order, $user->language ?? 'ar');
+                // Send email with wallet lines (entitlements)
+                $order->load(['couponEntitlements.coupon']);
+                $couponPayload = $order->couponEntitlements->map(function ($e) {
+                    return [
+                        'redeem_token' => $e->redeem_token,
+                        'usage_limit' => (int) $e->usage_limit,
+                        'remaining_uses' => $e->remainingUses(),
+                        'coupon_title' => $e->coupon->title ?? $e->coupon->title_ar ?? '',
+                    ];
+                })->values()->all();
+
+                \App\Jobs\SendOrderConfirmationEmail::dispatch($order, $couponPayload, $user->language ?? 'ar');
             }
 
             // Log activity
@@ -196,7 +207,7 @@ class OrderController extends Controller
             return response()->json([
                 'message' => 'Order created successfully',
                 'data' => [
-                    'order' => new OrderResource($order->load(['items', 'coupons'])),
+                    'order' => new OrderResource($order->load(['items', 'coupons', 'couponEntitlements.coupon'])),
                 ],
             ], 201);
         } catch (\Exception $e) {
@@ -213,18 +224,19 @@ class OrderController extends Controller
     public function walletCoupons(Request $request): JsonResponse
     {
         $user = $request->user();
-        $coupons = Coupon::with(['offer.merchant'])
+        $entitlements = CouponEntitlement::with(['coupon.offer.merchant'])
             ->where('user_id', $user->id)
+            ->whereIn('status', ['active', 'pending', 'exhausted'])
             ->orderBy('created_at', 'desc')
             ->paginate($request->get('per_page', 15));
 
         return response()->json([
-            'data' => CouponResource::collection($coupons->items()),
+            'data' => CouponEntitlementResource::collection($entitlements->items()),
             'meta' => [
-                'current_page' => $coupons->currentPage(),
-                'last_page' => $coupons->lastPage(),
-                'per_page' => $coupons->perPage(),
-                'total' => $coupons->total(),
+                'current_page' => $entitlements->currentPage(),
+                'last_page' => $entitlements->lastPage(),
+                'per_page' => $entitlements->perPage(),
+                'total' => $entitlements->total(),
             ],
         ]);
     }
@@ -284,10 +296,12 @@ class OrderController extends Controller
 
         DB::beginTransaction();
         try {
-            // Cancel all coupons
+            // Cancel legacy coupon rows and wallet entitlements
             $order->coupons()->update([
                 'status' => 'cancelled',
             ]);
+
+            CouponEntitlement::where('order_id', $order->id)->update(['status' => 'cancelled']);
 
             // Restore coupons_remaining in offers
             foreach ($order->items as $item) {
@@ -321,12 +335,13 @@ class OrderController extends Controller
         $order = Order::where('user_id', $user->id)
             ->findOrFail($id);
 
-        $coupons = $order->coupons()
-            ->with(['offer.merchant'])
+        $entitlements = CouponEntitlement::where('order_id', $order->id)
+            ->with(['coupon.offer.merchant'])
+            ->orderBy('id')
             ->get();
 
         return response()->json([
-            'data' => CouponResource::collection($coupons),
+            'data' => CouponEntitlementResource::collection($entitlements),
         ]);
     }
 }

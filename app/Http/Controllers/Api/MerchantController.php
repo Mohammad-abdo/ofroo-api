@@ -24,6 +24,7 @@ use App\Models\Offer;
 use App\Models\Order;
 use App\Services\CommissionRateResolver;
 use App\Services\FeatureFlagService;
+use App\Services\QrActivationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -40,7 +41,8 @@ class MerchantController extends Controller
     public function __construct(
         protected OfferService $offerService,
         protected MerchantStatisticsService $statisticsService,
-        protected MerchantProfileService $profileService
+        protected MerchantProfileService $profileService,
+        protected QrActivationService $qrActivationService
     ) {}
 
     /**
@@ -251,51 +253,33 @@ class MerchantController extends Controller
     }
 
     /**
-     * Activate coupon (scan barcode flow)
+     * Manual activation for a wallet entitlement ({id} = coupon_entitlements.id).
      */
     public function activateCoupon(Request $request, string $id): JsonResponse
     {
         $user = $request->user();
         $merchant = $this->resolveMerchant($request);
 
-        $coupon = Coupon::with(['offer'])
-            ->whereHas('offer', function ($query) use ($merchant) {
-                $query->where('merchant_id', $merchant->id);
-            })
-            ->findOrFail($id);
+        $result = $this->qrActivationService->activateEntitlementById((int) $id, $merchant, $user, [
+            'ip_address' => $request->ip(),
+            'activation_method' => 'manual',
+        ]);
 
-        // Payment validation: in current schema coupons are tied to offers only
-
-        if ($coupon->status !== 'reserved') {
+        if (! ($result['success'] ?? false)) {
             return response()->json([
-                'message' => 'Coupon cannot be activated. Current status: ' . $coupon->status,
+                'message' => $result['message'] ?? 'Activation failed',
+                'data' => $result['coupon'] ?? null,
             ], 400);
         }
 
-        $coupon->update([
-            'status' => 'activated',
-            'activated_at' => now(),
-        ]);
-
-        ActivationReport::create([
-            'coupon_id' => $coupon->id,
-            'merchant_id' => $merchant->id,
-            'user_id' => $coupon->user_id,
-            'activated_by_user_id' => $user->id,
-            'order_id' => $coupon->order_id,
-            'activation_method' => 'manual',
-            'ip_address' => $request->ip(),
-        ]);
-
         return response()->json([
-            'message' => 'Coupon activated successfully',
+            'message' => $result['message'],
             'data' => [
-                'coupon' => [
-                    'id' => $coupon->id,
-                    'coupon_code' => $coupon->coupon_code,
-                    'status' => $coupon->status,
-                    'activated_at' => $coupon->activated_at->toIso8601String(),
-                ],
+                'coupon' => $result['coupon'],
+                'entitlement' => isset($result['entitlement'])
+                    ? new \App\Http\Resources\CouponEntitlementResource($result['entitlement'])
+                    : null,
+                'redeem_type' => $result['redeem_type'] ?? null,
             ],
         ]);
     }

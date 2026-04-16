@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Coupon;
+use App\Models\CouponEntitlementShare;
 use App\Models\Merchant;
 use App\Models\Offer;
 use App\Models\Order;
@@ -87,7 +88,7 @@ class PaymentProcessingService
                 'total_price' => $totalAmount,
             ]);
 
-            $this->couponService->createCouponsForOrder($order, $offer, $quantity);
+            $this->couponService->createCouponsForOrder($order);
 
             if ($paymentMethod === 'wallet') {
                 $this->walletService->deduct($user, $totalAmount, 'purchase', $order->id);
@@ -124,6 +125,17 @@ class PaymentProcessingService
 
             foreach ($order->coupons as $coupon) {
                 $coupon->update(['status' => 'cancelled']);
+            }
+
+            $order->load('couponEntitlements');
+            foreach ($order->couponEntitlements as $entitlement) {
+                $entitlement->update(['status' => 'cancelled']);
+            }
+            $entitlementIds = $order->couponEntitlements->pluck('id');
+            if ($entitlementIds->isNotEmpty()) {
+                CouponEntitlementShare::whereIn('parent_entitlement_id', $entitlementIds)
+                    ->where('status', 'pending')
+                    ->update(['status' => 'revoked']);
             }
 
             $this->loyaltyService->revokePoints($order->user, $order->total_amount);

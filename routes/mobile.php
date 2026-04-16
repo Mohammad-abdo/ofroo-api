@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\FinancialController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\CouponController;
+use App\Http\Controllers\Api\CouponEntitlementController;
 use App\Http\Controllers\Api\MerchantProfileController;
 use App\Http\Controllers\Api\OfferController;
 use App\Http\Controllers\Api\OrderController;
@@ -164,6 +165,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // ================================
     Route::prefix('wallet')->middleware('auth:sanctum')->group(function () {
         Route::get('/coupons', [OrderController::class, 'walletCoupons']);
+        Route::post('/entitlements/{entitlementId}/share', [CouponEntitlementController::class, 'share'])
+            ->whereNumber('entitlementId');
     });
     
     // ================================

@@ -57,6 +57,14 @@ class Order extends Model
     }
 
     /**
+     * Purchased coupon balances (wallet lines) for this order.
+     */
+    public function couponEntitlements(): HasMany
+    {
+        return $this->hasMany(CouponEntitlement::class);
+    }
+
+    /**
      * Get the payments for the order.
      */
     public function payments(): HasMany

@@ -54,6 +54,9 @@ class OrderResource extends JsonResource
                     ];
                 });
             }),
+            'coupon_entitlements' => $this->whenLoaded('couponEntitlements', function () {
+                return CouponEntitlementResource::collection($this->couponEntitlements);
+            }),
             'merchant' => $this->whenLoaded('merchant', function () {
                 return [
                     'id' => $this->merchant->id,

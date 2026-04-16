@@ -14,15 +14,28 @@
     <p>{{ $language === 'ar' ? 'المبلغ الإجمالي' : 'Total Amount' }}: {{ number_format($order->total_amount, 2) }} EGP</p>
     
     <h2>{{ $language === 'ar' ? 'الكوبونات' : 'Coupons' }}:</h2>
-    @foreach($coupons as $coupon)
-    <div class="coupon">
-        <div class="code">{{ $coupon->coupon_code }}</div>
-        <p>{{ $coupon->offer->title_ar ?? $coupon->offer->title_en }}</p>
-        @if($coupon->barcode_value)
-        <img src="data:image/png;base64,{{ base64_encode(\Milon\Barcode\Facades\DNS1DFacade::getBarcodePNG($coupon->barcode_value, 'C128', 2, 50)) }}" alt="Barcode">
-        @endif
-    </div>
-    @endforeach
+    @if(isset($entitlements) && $entitlements->isNotEmpty())
+        @foreach($entitlements as $ent)
+        <div class="coupon">
+            <div class="code">{{ $ent->redeem_token }}</div>
+            <p>{{ $ent->coupon->title_ar ?? $ent->coupon->title_en ?? $ent->coupon->title ?? '' }}</p>
+            @php $scan = $ent->redeem_token ?? ''; @endphp
+            @if($scan)
+            <img src="data:image/png;base64,{{ base64_encode(\Milon\Barcode\Facades\DNS1DFacade::getBarcodePNG($scan, 'C128', 2, 50)) }}" alt="Barcode">
+            @endif
+        </div>
+        @endforeach
+    @else
+        @foreach($coupons as $coupon)
+        <div class="coupon">
+            <div class="code">{{ $coupon->coupon_code }}</div>
+            <p>{{ $coupon->offer->title_ar ?? $coupon->offer->title_en }}</p>
+            @if($coupon->barcode_value)
+            <img src="data:image/png;base64,{{ base64_encode(\Milon\Barcode\Facades\DNS1DFacade::getBarcodePNG($coupon->barcode_value, 'C128', 2, 50)) }}" alt="Barcode">
+            @endif
+        </div>
+        @endforeach
+    @endif
 </body>
 </html>
 

@@ -16,8 +16,16 @@
         <ul>
             @foreach($coupons as $coupon)
             <li style="margin: 10px 0;">
-                <strong>{{ $coupon->coupon_code }}</strong> - 
-                {{ $coupon->offer->title_en ?? $coupon->offer->title_ar }}
+                @if(is_array($coupon))
+                    <strong>{{ $coupon['redeem_token'] ?? '' }}</strong> —
+                    {{ $coupon['coupon_title'] ?? '' }}
+                    @if(!empty($coupon['remaining_uses']))
+                        ({{ $coupon['remaining_uses'] }} use(s) available)
+                    @endif
+                @else
+                    <strong>{{ $coupon->coupon_code ?? $coupon->barcode ?? '' }}</strong> -
+                    {{ $coupon->offer->title_en ?? $coupon->offer->title_ar ?? '' }}
+                @endif
             </li>
             @endforeach
         </ul>

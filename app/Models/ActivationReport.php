@@ -9,6 +9,8 @@ class ActivationReport extends Model
 {
     protected $fillable = [
         'coupon_id',
+        'coupon_entitlement_id',
+        'coupon_entitlement_share_id',
         'merchant_id',
         'user_id',
         'activated_by_user_id',
@@ -53,5 +55,15 @@ class ActivationReport extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function couponEntitlement(): BelongsTo
+    {
+        return $this->belongsTo(CouponEntitlement::class);
+    }
+
+    public function couponEntitlementShare(): BelongsTo
+    {
+        return $this->belongsTo(CouponEntitlementShare::class);
     }
 }

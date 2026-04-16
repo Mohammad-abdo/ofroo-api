@@ -42,8 +42,11 @@ class PdfService
         $user = $order->user;
         $language = $user->language ?? 'ar';
 
+        $order->loadMissing(['couponEntitlements.coupon.offer', 'coupons.offer']);
+
         $data = [
             'order' => $order,
+            'entitlements' => $order->couponEntitlements,
             'coupons' => $order->coupons,
             'language' => $language,
         ];

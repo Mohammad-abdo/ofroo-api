@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Coupon;
 use App\Http\Controllers\Concerns\ResolvesMerchantPortal;
+use App\Http\Resources\CouponEntitlementResource;
+use App\Models\ActivationReport;
 use App\Services\QrActivationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -54,7 +55,7 @@ class QrActivationController extends Controller
             ]
         );
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return response()->json([
                 'message' => $result['message'],
                 'data' => $result['coupon'] ?? null,
@@ -63,7 +64,13 @@ class QrActivationController extends Controller
 
         return response()->json([
             'message' => $result['message'],
-            'data' => $result['coupon'],
+            'data' => [
+                'coupon' => $result['coupon'] ?? null,
+                'entitlement' => isset($result['entitlement'])
+                    ? new CouponEntitlementResource($result['entitlement'])
+                    : null,
+                'redeem_type' => $result['redeem_type'] ?? null,
+            ],
         ]);
     }
 
@@ -93,6 +100,7 @@ class QrActivationController extends Controller
             'data' => $result['coupon'] ?? null,
             'can_activate' => $result['can_activate'] ?? false,
             'status' => $result['status'] ?? null,
+            'redeem_type' => $result['redeem_type'] ?? null,
         ]);
     }
 
@@ -101,23 +109,30 @@ class QrActivationController extends Controller
      */
     public function scannerPage(Request $request): JsonResponse
     {
-        $user = $request->user();
         $merchant = $this->resolveMerchant($request);
 
-        // Get pending/reserved coupons for this merchant
-        $pendingCoupons = Coupon::whereHas('offer', function ($q) use ($merchant) {
-            $q->where('merchant_id', $merchant->id);
-        })
-        ->whereIn('status', ['reserved', 'paid'])
-        ->with(['user', 'offer'])
-        ->orderBy('created_at', 'desc')
-        ->limit(20)
-        ->get();
+        $recent = ActivationReport::where('merchant_id', $merchant->id)
+            ->with(['coupon.offer'])
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get()
+            ->map(function (ActivationReport $row) {
+                $c = $row->coupon;
+
+                return [
+                    'id' => $row->id,
+                    'created_at' => $row->created_at?->toIso8601String(),
+                    'activation_method' => $row->activation_method,
+                    'coupon_code' => $c?->coupon_code ?? $c?->barcode,
+                    'coupon_title' => $c && $c->offer
+                        ? ($c->offer->title_ar ?? $c->offer->title_en ?? $c->offer->title)
+                        : null,
+                ];
+            });
 
         return response()->json([
             'data' => [
-                'pending_count' => $pendingCoupons->count(),
-                'recent_coupons' => $pendingCoupons,
+                'recent_activations' => $recent,
             ],
         ]);
     }
