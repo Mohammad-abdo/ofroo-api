@@ -180,6 +180,18 @@ class User extends Authenticatable
     }
 
     /**
+     * Roles that may use the admin API and dashboard (with permission checks).
+     */
+    public function canAccessAdminPanel(): bool
+    {
+        if (! $this->role) {
+            return false;
+        }
+
+        return in_array($this->role->name, ['admin', 'employee', 'data_entry', 'accountant'], true);
+    }
+
+    /**
      * Check if user is merchant
      */
     public function isMerchant(): bool

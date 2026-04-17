@@ -24,6 +24,8 @@ class UserResource extends JsonResource
             'city' => $this->city,
             'country' => $this->country,
             'is_blocked' => $this->is_blocked ?? false,
+            /** Always expose FK so clients can resolve labels if `role` is omitted. */
+            'role_id' => $this->role_id,
             'role' => $this->whenLoaded('role', function () {
                 return [
                     'id' => $this->role->id,

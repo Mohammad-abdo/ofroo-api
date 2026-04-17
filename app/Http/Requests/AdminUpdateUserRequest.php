@@ -8,7 +8,10 @@ class AdminUpdateUserRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user() && $this->user()->isAdmin();
+        $u = $this->user();
+
+        return $u && $u->canAccessAdminPanel()
+            && ($u->isAdmin() || $u->hasPermission('users.update'));
     }
 
     public function rules(): array

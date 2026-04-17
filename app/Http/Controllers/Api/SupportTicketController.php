@@ -48,7 +48,7 @@ class SupportTicketController extends Controller
     {
         $query = SupportTicket::with(['user', 'merchant', 'assignedTo', 'attachments']);
 
-        if (!$request->user()->isAdmin()) {
+        if (! $request->user()->hasPermission('support.view')) {
             $query->where('user_id', $request->user()->id);
         }
 
