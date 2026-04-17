@@ -17,6 +17,9 @@ class MerchantProfileService
             'merchant_id' => $merchant->id,
         ]);
 
+        $merchant->loadMissing(['mall', 'category', 'branches.mall']);
+        $mall = $merchant->resolveDisplayMall();
+
         return [
             'id' => $merchant->id,
             'company_name' => $merchant->company_name,
@@ -47,11 +50,11 @@ class MerchantProfileService
                 'email' => $user->email,
                 'phone' => $user->phone,
             ],
-            'mall' => $merchant->mall ? [
-                'id' => $merchant->mall->id,
-                'name' => $merchant->mall->name,
-                'name_ar' => $merchant->mall->name_ar,
-                'name_en' => $merchant->mall->name_en,
+            'mall' => $mall ? [
+                'id' => $mall->id,
+                'name' => $mall->name,
+                'name_ar' => $mall->name_ar,
+                'name_en' => $mall->name_en,
             ] : null,
         ];
     }

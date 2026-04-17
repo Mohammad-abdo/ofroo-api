@@ -70,6 +70,25 @@ class Merchant extends Model
     }
 
     /**
+     * Mall on the merchant row, or the first branch that has a mall_id (for portal/profile UI).
+     */
+    public function resolveDisplayMall(): ?Mall
+    {
+        if ($this->mall) {
+            return $this->mall;
+        }
+        if ($this->relationLoaded('branches')) {
+            foreach ($this->branches as $branch) {
+                if ($branch->mall) {
+                    return $branch->mall;
+                }
+            }
+        }
+
+        return $this->branches()->whereNotNull('mall_id')->with('mall')->first()?->mall;
+    }
+
+    /**
      * Get the category that the merchant belongs to.
      */
     public function category(): BelongsTo

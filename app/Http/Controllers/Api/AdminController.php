@@ -1523,9 +1523,19 @@ class AdminController extends Controller
             'status' => 'required|in:active,rejected',
         ]);
 
-        $offer->update([
-            'status' => $request->status === 'active' ? 'active' : 'disabled',
-        ]);
+        $newOfferStatus = $request->status === 'active' ? 'active' : 'disabled';
+
+        DB::transaction(function () use ($offer, $request, $newOfferStatus) {
+            $offer->update(['status' => $newOfferStatus]);
+
+            if ($request->status === 'active') {
+                $offer->coupons()->where('status', 'pending')->update(['status' => 'active']);
+            } else {
+                $offer->coupons()->whereIn('status', ['pending', 'active'])->update(['status' => 'expired']);
+            }
+        });
+
+        $offer->refresh();
 
         return response()->json([
             'message' => 'Offer ' . ($request->status === 'active' ? 'approved' : 'rejected') . ' successfully',

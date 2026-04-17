@@ -114,11 +114,13 @@ class MerchantController extends Controller
 
         $data = $this->prepareMerchantOfferData($request);
         $data['merchant_id'] = $merchant->id;
+        // Merchant offers require admin approval before going live (and coupons stay pending until then).
+        $data['status'] = 'pending_approval';
 
         $offer = $this->offerService->createOffer($data);
 
         return response()->json([
-            'message' => 'Offer created successfully',
+            'message' => 'Offer submitted for admin review. It will go live after approval.',
             'data' => new OfferResource($offer->load(['merchant', 'category', 'mall', 'branches', 'coupons'])),
         ], 201);
     }
@@ -133,6 +135,9 @@ class MerchantController extends Controller
 
         $offer = Offer::where('merchant_id', $merchant->id)->findOrFail($id);
         $data = $this->prepareMerchantOfferData($request);
+        if (strtolower((string) ($offer->status ?? '')) === 'pending_approval') {
+            $data['status'] = 'pending_approval';
+        }
 
         $offer = $this->offerService->updateOffer($offer, $data);
 
@@ -1062,7 +1067,7 @@ class MerchantController extends Controller
             'user_name' => $user->name,
         ]);
         
-        $merchant = Merchant::with(['user', 'mall', 'category'])
+        $merchant = Merchant::with(['user', 'mall', 'category', 'branches.mall'])
             ->findOrFail($this->resolveMerchant($request)->id);
 
         \Log::info('Get merchant profile - Found merchant', [
@@ -1107,11 +1112,11 @@ class MerchantController extends Controller
                     'email' => $user->email,
                     'phone' => $user->phone,
                 ],
-                'mall' => $merchant->mall ? [
-                    'id' => $merchant->mall->id,
-                    'name' => $merchant->mall->name,
-                    'name_ar' => $merchant->mall->name_ar,
-                    'name_en' => $merchant->mall->name_en,
+                'mall' => ($mall = $merchant->resolveDisplayMall()) ? [
+                    'id' => $mall->id,
+                    'name' => $mall->name,
+                    'name_ar' => $mall->name_ar,
+                    'name_en' => $mall->name_en,
                 ] : null,
             ],
         ]);

@@ -124,6 +124,24 @@ class OfferController extends Controller
      */
     public function show(Request $request, Offer $offer): JsonResponse
     {
+        if (strtolower((string) ($offer->status ?? '')) === 'pending_approval') {
+            $user = $request->user();
+            $allowed = false;
+            if ($user) {
+                if ($user->canAccessAdminPanel()) {
+                    $allowed = true;
+                } else {
+                    $m = $user->merchantForPortal();
+                    if ($m && (int) $m->id === (int) $offer->merchant_id) {
+                        $allowed = true;
+                    }
+                }
+            }
+            if (! $allowed) {
+                abort(404);
+            }
+        }
+
         $offer->load(['merchant', 'category', 'mall', 'branches', 'coupons']);
         $data = (new OfferResource($offer))->toArray($request);
         // تفاصيل التاجر الكاملة + شروط الاستخدام للعرض
@@ -200,6 +218,16 @@ class OfferController extends Controller
         $request->validate([
             'status' => 'required|in:active,disabled',
         ]);
+
+        if ($request->status === 'active' && strtolower((string) ($offer->status ?? '')) === 'pending_approval') {
+            $u = $request->user();
+            if (! $u || ! $u->canAccessAdminPanel()) {
+                return response()->json([
+                    'message' => 'This offer is awaiting admin approval and cannot be activated yet.',
+                    'message_ar' => 'هذا العرض بانتظار موافقة الإدارة ولا يمكن تفعيله بعد.',
+                ], 422);
+            }
+        }
 
         $offer->update(['status' => $request->status]);
 

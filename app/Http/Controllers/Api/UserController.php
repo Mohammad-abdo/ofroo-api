@@ -15,6 +15,7 @@ use Illuminate\Validation\Rule;
 use App\Helpers\StorageHelper;
 use App\Support\ApiMediaUrl;
 use App\Support\ImageUploadRules;
+use App\Models\City;
 
 class UserController extends Controller
 {
@@ -90,6 +91,8 @@ class UserController extends Controller
     {
         $user = $request->user();
 
+        $this->normalizeProfileCityPayload($request);
+
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'email' => [
@@ -107,9 +110,9 @@ class UserController extends Controller
             'language' => 'sometimes|in:ar,en',
             'gender' => 'sometimes|in:male,female',
             'avatar' => 'sometimes|nullable|string|max:500',
-            'city' => 'sometimes|array',
+            'city' => 'sometimes|nullable|array',
             'city.id' => 'sometimes|nullable|integer|exists:cities,id',
-            'governorate' => 'sometimes|array',
+            'governorate' => 'sometimes|nullable|array',
             'governorate.id' => 'sometimes|nullable|integer|exists:governorates,id',
             'city_id' => 'sometimes|nullable|exists:cities,id',
             'governorate_id' => 'sometimes|nullable|exists:governorates,id',
@@ -150,6 +153,11 @@ class UserController extends Controller
             if ($city) {
                 $updateData['governorate_id'] = $city->governorate_id;
             }
+        }
+
+        if ($request->exists('city') && $request->input('city') === null && ! array_key_exists('city_id', $updateData)) {
+            $updateData['city_id'] = null;
+            $updateData['governorate_id'] = null;
         }
 
         $updateData['country'] = 'مصر';
@@ -199,6 +207,50 @@ class UserController extends Controller
                 'updated_at' => $user->updated_at->toIso8601String(),
             ],
         ]);
+    }
+
+    /**
+     * Admin SPA and legacy clients send `city` as an Arabic/English name string or "".
+     * The API expects `city: { id }` or `city_id`. Normalize before validation to avoid 422 on `array` rule.
+     */
+    private function normalizeProfileCityPayload(Request $request): void
+    {
+        if ($request->filled('city_id')) {
+            return;
+        }
+
+        if (! $request->exists('city')) {
+            return;
+        }
+
+        $city = $request->input('city');
+
+        if ($city === '' || $city === null) {
+            $request->merge(['city' => null]);
+
+            return;
+        }
+
+        if (is_array($city) && isset($city['id'])) {
+            return;
+        }
+
+        if (is_string($city) && trim($city) !== '') {
+            $label = trim($city);
+            $row = City::query()
+                ->where(function ($q) use ($label) {
+                    $q->where('name_ar', $label)->orWhere('name_en', $label);
+                })
+                ->first();
+            if ($row) {
+                $request->merge([
+                    'city' => ['id' => $row->id],
+                    'city_id' => $row->id,
+                ]);
+            } else {
+                $request->request->remove('city');
+            }
+        }
     }
 
     /**

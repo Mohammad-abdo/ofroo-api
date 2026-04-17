@@ -114,7 +114,7 @@ class OfferUpdateRequest extends FormRequest
             'coupons.*.discount_type' => 'nullable|in:percentage,fixed,percent,amount',
             'coupons.*.barcode' => 'nullable|string|max:64',
             'coupons.*.image' => 'nullable|string',
-            'coupons.*.status' => 'nullable|in:active,used,expired',
+            'coupons.*.status' => 'nullable|in:active,used,expired,pending',
             'coupons.*.usage_limit' => 'nullable|integer|min:1',
         ];
 

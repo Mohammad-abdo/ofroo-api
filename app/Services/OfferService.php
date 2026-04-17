@@ -107,7 +107,11 @@ class OfferService
         } else {
             $payload['starts_at'] = null;
         }
-        $payload['status'] = $payload['status'] ?? 'active';
+        if (strtolower((string) ($offer->status ?? '')) === 'pending_approval') {
+            $payload['status'] = 'pending';
+        } else {
+            $payload['status'] = $payload['status'] ?? 'active';
+        }
         if (array_key_exists('usage_limit', $couponData)) {
             $ul = $couponData['usage_limit'];
             if ($ul === 'unlimited' || (string) $ul === '0' || (is_numeric($ul) && (int) $ul === 0)) {
