@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Governorate;
+use App\Models\Mall;
 use App\Models\Merchant;
 use App\Models\Role;
 use App\Models\User;
@@ -38,6 +39,10 @@ class MerchantSeeder extends Seeder
             $this->command->warn('No categories found. Run CategorySeeder before MerchantSeeder so merchants get category_id.');
         }
 
+        $mallsByNameEn = Mall::query()->pluck('id', 'name_en');
+        $hasMerchantMallId = Schema::hasColumn('merchants', 'mall_id');
+        $hasBranchMallId = Schema::hasColumn('branches', 'mall_id');
+
         $genders = ['male', 'female'];
 
         $merchants = [
@@ -54,6 +59,8 @@ class MerchantSeeder extends Seeder
                 'lat' => 30.0626,
                 'lng' => 31.3219,
                 'category_name_ar' => 'مولات',
+                // Matches MallSeeder (Nasr City)
+                'mall_name_en' => 'Genena Mall',
             ],
             [
                 'name' => 'Koshary Abou Tarek',
@@ -82,6 +89,7 @@ class MerchantSeeder extends Seeder
                 'lat' => 29.9697,
                 'lng' => 30.9564,
                 'category_name_ar' => 'مولات',
+                'mall_name_en' => 'Mall of Arabia',
             ],
             [
                 'name' => 'Cairo Festival City',
@@ -96,6 +104,7 @@ class MerchantSeeder extends Seeder
                 'lat' => 30.0131,
                 'lng' => 31.6850,
                 'category_name_ar' => 'مولات',
+                'mall_name_en' => 'Cairo Festival City Mall',
             ],
             [
                 'name' => 'El Tahrir Restaurant',
@@ -140,6 +149,14 @@ class MerchantSeeder extends Seeder
                 ]
             );
 
+            $mallNameEn = $merchantData['mall_name_en'] ?? null;
+            $mallId = ($hasMerchantMallId && $mallNameEn && $mallsByNameEn->has($mallNameEn))
+                ? (int) $mallsByNameEn->get($mallNameEn)
+                : null;
+            if ($mallNameEn && $hasMerchantMallId && ! $mallId) {
+                $this->command->warn("Mall not found for merchant seed (name_en={$mallNameEn}). Run MallSeeder first.");
+            }
+
             $merchantAttrs = [
                 'company_name' => $merchantData['name'],
                 'company_name_ar' => $merchantData['name_ar'],
@@ -159,20 +176,34 @@ class MerchantSeeder extends Seeder
             if (Schema::hasColumn('merchants', 'category_id') && $categoryId) {
                 $merchantAttrs['category_id'] = $categoryId;
             }
+            if ($mallId) {
+                $merchantAttrs['mall_id'] = $mallId;
+            }
 
             $merchant = Merchant::firstOrCreate(
                 ['user_id' => $merchantUser->id],
                 $merchantAttrs
             );
 
+            $syncMerchant = [];
             if (Schema::hasColumn('merchants', 'category_id') && $categoryId && (int) $merchant->category_id !== (int) $categoryId) {
-                $merchant->update(['category_id' => $categoryId]);
+                $syncMerchant['category_id'] = $categoryId;
+            }
+            if ($hasMerchantMallId && $mallId && (int) ($merchant->mall_id ?? 0) !== $mallId) {
+                $syncMerchant['mall_id'] = $mallId;
+            }
+            if ($syncMerchant !== []) {
+                $merchant->update($syncMerchant);
             }
 
-            if (!$merchant->wasRecentlyCreated) {
+            if (! $merchant->wasRecentlyCreated) {
+                if ($hasBranchMallId && $mallId) {
+                    Branch::where('merchant_id', $merchant->id)->update(['mall_id' => $mallId]);
+                }
                 continue;
             }
-            Branch::create([
+
+            $branchPayload = [
                 'merchant_id' => $merchant->id,
                 'name' => $merchantData['name'],
                 'name_ar' => $merchantData['name_ar'],
@@ -193,7 +224,11 @@ class MerchantSeeder extends Seeder
                     'saturday' => '10:00-22:00',
                     'sunday' => '10:00-22:00',
                 ],
-            ]);
+            ];
+            if ($hasBranchMallId && $mallId) {
+                $branchPayload['mall_id'] = $mallId;
+            }
+            Branch::create($branchPayload);
         }
 
         // Create 20 more random merchants
@@ -281,6 +316,27 @@ class MerchantSeeder extends Seeder
 
         if (Schema::hasColumn('merchants', 'category_id') && $defaultCategoryId) {
             Merchant::whereNull('category_id')->update(['category_id' => $defaultCategoryId]);
+        }
+
+        // Attach a few more mall-category merchants to seeded malls (if any remain unlinked).
+        if ($hasMerchantMallId && $mallsByNameEn->isNotEmpty() && $categoryByNameAr->has('مولات')) {
+            $mallCategoryId = $categoryByNameAr->get('مولات')->id;
+            $mallIds = Mall::query()->pluck('id')->all();
+            if ($mallIds !== []) {
+                Merchant::query()
+                    ->where('category_id', $mallCategoryId)
+                    ->whereNull('mall_id')
+                    ->orderBy('id')
+                    ->limit(6)
+                    ->get()
+                    ->each(function (Merchant $m) use ($mallIds, $hasBranchMallId) {
+                        $mid = $mallIds[array_rand($mallIds)];
+                        $m->update(['mall_id' => $mid]);
+                        if ($hasBranchMallId) {
+                            Branch::where('merchant_id', $m->id)->update(['mall_id' => $mid]);
+                        }
+                    });
+            }
         }
     }
 }

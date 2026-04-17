@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
 
             // 2. Business entities
             CategorySeeder::class,
+            MallSeeder::class,
             MerchantSeeder::class,
 
             // 3. Products & coupons
