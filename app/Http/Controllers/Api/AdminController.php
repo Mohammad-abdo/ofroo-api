@@ -1581,10 +1581,12 @@ class AdminController extends Controller
         $user = User::with(['role', 'orders', 'coupons', 'reviews'])
             ->findOrFail($id);
 
-        // Count used coupons (coupons that have been activated/used)
+        // Count used coupons for this user only (group OR so it does not leak to other users' rows)
         $usedCouponsCount = $user->coupons()
-            ->whereNotNull('activated_at')
-            ->orWhere('status', 'used')
+            ->where(function ($q) {
+                $q->whereNotNull('activated_at')
+                    ->orWhere('status', 'used');
+            })
             ->count();
 
         return response()->json([
@@ -1597,18 +1599,20 @@ class AdminController extends Controller
                 'city' => $user->city,
                 'country' => $user->country,
                 'is_blocked' => $user->is_blocked ?? false,
-                'role' => [
+                'role_id' => $user->role_id,
+                'role' => $user->role ? [
                     'id' => $user->role->id,
                     'name' => $user->role->name,
                     'name_ar' => $user->role->name_ar,
                     'name_en' => $user->role->name_en,
-                ],
+                ] : null,
                 'email_verified_at' => $user->email_verified_at ? $user->email_verified_at->toIso8601String() : null,
                 'total_orders' => $user->orders()->count(),
                 'total_coupons' => $user->coupons()->count(),
                 'used_coupons_count' => $usedCouponsCount,
                 'total_reviews' => $user->reviews()->count(),
                 'created_at' => $user->created_at->toIso8601String(),
+                'updated_at' => $user->updated_at ? $user->updated_at->toIso8601String() : null,
             ],
         ]);
     }
