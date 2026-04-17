@@ -21,7 +21,7 @@ class CategoryController extends Controller
         $language = $request->get('language', $user ? $user->language : null) ?? 'ar';
 
         $categories = Category::whereNull('parent_id')
-            ->select('id', 'name_ar', 'name_en', 'order_index')
+            ->select('id', 'name_ar', 'name_en', 'order_index', 'is_active')
             ->orderBy('order_index')
             ->get();
 
@@ -31,6 +31,7 @@ class CategoryController extends Controller
                 'name' => $language === 'ar'
                     ? ($category->name_ar ?? $category->name_en)
                     : ($category->name_en ?? $category->name_ar),
+                'is_active' => $category->is_active,
             ];
         });
 
@@ -64,6 +65,7 @@ class CategoryController extends Controller
                     'order_index' => $category->order_index,
                     'image' => $category->image_url,
                     'children' => $children,
+                    'is_active' => $category->is_active,
                 ];
             })->toArray();
         });
@@ -108,6 +110,7 @@ class CategoryController extends Controller
                 'order_index' => $category->order_index,
                 'image' => $category->image_url,
                 'children' => $children,
+                'is_active' => $category->is_active,
             ],
         ]);
     }

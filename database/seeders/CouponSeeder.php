@@ -6,6 +6,7 @@ use App\Models\Coupon;
 use App\Models\Merchant;
 use App\Models\Offer;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema;
 use Faker\Factory as Faker;
 
 class CouponSeeder extends Seeder
@@ -55,7 +56,7 @@ class CouponSeeder extends Seeder
                     ? $faker->dateTimeBetween('-30 days', '-1 day')
                     : $faker->dateTimeBetween('now', '+90 days');
                 $discountType = $faker->randomElement($discountTypes);
-                $discountVal = $discountType === 'percentage'
+                $discountVal = $discountType === 'percent'
                     ? $faker->randomElement([5, 10, 15, 20, 25, 30, 40, 50])
                     : $faker->randomFloat(2, 5, 50);
                 $barcode = 'CPN-' . strtoupper($faker->unique()->bothify('????##??'));
@@ -91,6 +92,10 @@ class CouponSeeder extends Seeder
                     'times_used'          => $timesUsed,
                     'image'               => $firstImage ,
                 ];
+
+                if (Schema::hasColumn('coupons', 'category_id') && $offer->category_id) {
+                    $data['category_id'] = $offer->category_id;
+                }
 
                 try {
                     Coupon::create($data);

@@ -4,6 +4,10 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * Relates coupons to categories via coupons.category_id → categories.id
+ * (in addition to coupons.offer_id → offers.category_id when an offer is linked).
+ */
 return new class extends Migration
 {
     /**
@@ -12,7 +16,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('coupons', function (Blueprint $table) {
-            // Add category_id (required - coupon must belong to a category)
+            // Add category_id (optional denormalized link; offer.category_id is canonical for offer-based coupons)
             $table->unsignedBigInteger('category_id')->nullable()->after('offer_id');
             $table->foreign('category_id')->references('id')->on('categories')->onDelete('cascade');
             

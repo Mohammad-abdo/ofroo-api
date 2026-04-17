@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Branch;
+use App\Models\Category;
 use App\Models\Governorate;
 use App\Models\Merchant;
 use App\Models\Role;
@@ -10,6 +11,7 @@ use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Faker\Factory as Faker;
 
 class MerchantSeeder extends Seeder
@@ -28,6 +30,14 @@ class MerchantSeeder extends Seeder
             return;
         }
 
+        $rootCategories = Category::whereNull('parent_id')->orderBy('order_index')->get();
+        $categoryByNameAr = $rootCategories->keyBy('name_ar');
+        $defaultCategoryId = $rootCategories->first()?->id;
+
+        if ($rootCategories->isEmpty()) {
+            $this->command->warn('No categories found. Run CategorySeeder before MerchantSeeder so merchants get category_id.');
+        }
+
         $genders = ['male', 'female'];
 
         $merchants = [
@@ -43,6 +53,7 @@ class MerchantSeeder extends Seeder
                 'address_en' => 'Nasr City, Cairo, Egypt',
                 'lat' => 30.0626,
                 'lng' => 31.3219,
+                'category_name_ar' => 'مولات',
             ],
             [
                 'name' => 'Koshary Abou Tarek',
@@ -56,6 +67,7 @@ class MerchantSeeder extends Seeder
                 'address_en' => 'Downtown, Cairo, Egypt',
                 'lat' => 30.0444,
                 'lng' => 31.2357,
+                'category_name_ar' => 'مطاعم',
             ],
             [
                 'name' => 'Mall of Arabia',
@@ -69,6 +81,7 @@ class MerchantSeeder extends Seeder
                 'address_en' => '6th October City, Giza, Egypt',
                 'lat' => 29.9697,
                 'lng' => 30.9564,
+                'category_name_ar' => 'مولات',
             ],
             [
                 'name' => 'Cairo Festival City',
@@ -82,6 +95,7 @@ class MerchantSeeder extends Seeder
                 'address_en' => 'New Cairo, Egypt',
                 'lat' => 30.0131,
                 'lng' => 31.6850,
+                'category_name_ar' => 'مولات',
             ],
             [
                 'name' => 'El Tahrir Restaurant',
@@ -95,6 +109,7 @@ class MerchantSeeder extends Seeder
                 'address_en' => 'Multiple Locations, Egypt',
                 'lat' => 30.0444,
                 'lng' => 31.2357,
+                'category_name_ar' => 'مطاعم',
             ],
         ];
 
@@ -103,6 +118,11 @@ class MerchantSeeder extends Seeder
             $phoneNumber = '+20' . $faker->unique()->numerify('##########');
             $gov = $governorates->random();
             $city = $gov->cities->random();
+
+            $categoryNameAr = $merchantData['category_name_ar'] ?? null;
+            $categoryId = ($categoryNameAr && $categoryByNameAr->has($categoryNameAr))
+                ? $categoryByNameAr->get($categoryNameAr)->id
+                : $defaultCategoryId;
 
             $merchantUser = User::firstOrCreate(
                 ['email' => $email],
@@ -120,25 +140,34 @@ class MerchantSeeder extends Seeder
                 ]
             );
 
+            $merchantAttrs = [
+                'company_name' => $merchantData['name'],
+                'company_name_ar' => $merchantData['name_ar'],
+                'company_name_en' => $merchantData['name_en'],
+                'description' => $merchantData['description'],
+                'description_ar' => $merchantData['description_ar'],
+                'description_en' => $merchantData['description_en'],
+                'address' => $merchantData['address'],
+                'address_ar' => $merchantData['address_ar'],
+                'address_en' => $merchantData['address_en'],
+                'phone' => $phoneNumber,
+                'whatsapp_link' => 'https://wa.me/' . str_replace('+', '', $phoneNumber),
+                'city' => $city->name_ar,
+                'country' => 'مصر',
+                'approved' => true,
+            ];
+            if (Schema::hasColumn('merchants', 'category_id') && $categoryId) {
+                $merchantAttrs['category_id'] = $categoryId;
+            }
+
             $merchant = Merchant::firstOrCreate(
                 ['user_id' => $merchantUser->id],
-                [
-                    'company_name' => $merchantData['name'],
-                    'company_name_ar' => $merchantData['name_ar'],
-                    'company_name_en' => $merchantData['name_en'],
-                    'description' => $merchantData['description'],
-                    'description_ar' => $merchantData['description_ar'],
-                    'description_en' => $merchantData['description_en'],
-                    'address' => $merchantData['address'],
-                    'address_ar' => $merchantData['address_ar'],
-                    'address_en' => $merchantData['address_en'],
-                    'phone' => $phoneNumber,
-                    'whatsapp_link' => 'https://wa.me/' . str_replace('+', '', $phoneNumber),
-                    'city' => $city->name_ar,
-                    'country' => 'مصر',
-                    'approved' => true,
-                ]
+                $merchantAttrs
             );
+
+            if (Schema::hasColumn('merchants', 'category_id') && $categoryId && (int) $merchant->category_id !== (int) $categoryId) {
+                $merchant->update(['category_id' => $categoryId]);
+            }
 
             if (!$merchant->wasRecentlyCreated) {
                 continue;
@@ -190,25 +219,38 @@ class MerchantSeeder extends Seeder
                 ]
             );
 
+            $randomCategoryId = $rootCategories->isNotEmpty()
+                ? $rootCategories->random()->id
+                : $defaultCategoryId;
+
+            $randomMerchantAttrs = [
+                'company_name' => $faker->company(),
+                'company_name_ar' => $faker->company() . ' (عربي)',
+                'company_name_en' => $faker->company(),
+                'description' => $faker->text(200),
+                'description_ar' => $faker->realText(200),
+                'description_en' => $faker->text(200),
+                'address' => $faker->address(),
+                'address_ar' => $faker->address(),
+                'address_en' => $faker->address(),
+                'phone' => $phoneNumber,
+                'whatsapp_link' => 'https://wa.me/' . str_replace('+', '', $phoneNumber),
+                'city' => $city->name_ar,
+                'country' => 'مصر',
+                'approved' => $faker->boolean(80),
+            ];
+            if (Schema::hasColumn('merchants', 'category_id') && $randomCategoryId) {
+                $randomMerchantAttrs['category_id'] = $randomCategoryId;
+            }
+
             $merchant = Merchant::firstOrCreate(
                 ['user_id' => $merchantUser->id],
-                [
-                    'company_name' => $faker->company(),
-                    'company_name_ar' => $faker->company() . ' (عربي)',
-                    'company_name_en' => $faker->company(),
-                    'description' => $faker->text(200),
-                    'description_ar' => $faker->realText(200),
-                    'description_en' => $faker->text(200),
-                    'address' => $faker->address(),
-                    'address_ar' => $faker->address(),
-                    'address_en' => $faker->address(),
-                    'phone' => $phoneNumber,
-                    'whatsapp_link' => 'https://wa.me/' . str_replace('+', '', $phoneNumber),
-                    'city' => $city->name_ar,
-                    'country' => 'مصر',
-                    'approved' => $faker->boolean(80),
-                ]
+                $randomMerchantAttrs
             );
+
+            if (Schema::hasColumn('merchants', 'category_id') && $randomCategoryId && (int) $merchant->category_id !== (int) $randomCategoryId) {
+                $merchant->update(['category_id' => $randomCategoryId]);
+            }
 
             if (!$merchant->wasRecentlyCreated) {
                 continue;
@@ -235,6 +277,10 @@ class MerchantSeeder extends Seeder
                     'sunday' => $faker->time('H:i') . '-' . $faker->time('H:i'),
                 ],
             ]);
+        }
+
+        if (Schema::hasColumn('merchants', 'category_id') && $defaultCategoryId) {
+            Merchant::whereNull('category_id')->update(['category_id' => $defaultCategoryId]);
         }
     }
 }

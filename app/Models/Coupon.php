@@ -10,6 +10,7 @@ class Coupon extends Model
 {
     protected $fillable = [
         'offer_id',
+        'category_id',
         'coupon_setting_id',
         'image',
         'title',
@@ -46,6 +47,14 @@ class Coupon extends Model
     public function offer(): BelongsTo
     {
         return $this->belongsTo(Offer::class);
+    }
+
+    /**
+     * Optional direct category (also implied by offer.category_id when offer is set).
+     */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
     }
 
     /**

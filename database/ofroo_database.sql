@@ -116,6 +116,13 @@ CREATE TABLE `categories` (
   INDEX `categories_order_idx` (`order_index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Merchants are created before categories above; add category FK after categories exists.
+-- Many merchants → one category each (FK lives on merchants, not on categories).
+ALTER TABLE `merchants`
+  ADD COLUMN `category_id` INT NULL COMMENT 'FK: business category (categories.id)' AFTER `user_id`,
+  ADD INDEX `merchants_category_id_idx` (`category_id`),
+  ADD CONSTRAINT `merchants_category_id_foreign` FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON DELETE SET NULL;
+
 -- ============================================
 -- 6. OFFERS TABLE
 -- ============================================

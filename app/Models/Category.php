@@ -6,6 +6,7 @@ use App\Support\ApiMediaUrl;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Category extends Model
 {
@@ -15,6 +16,7 @@ class Category extends Model
         'order_index',
         'parent_id',
         'image',
+        'is_active',
     ];
 
     protected $appends = ['image_url'];
@@ -65,9 +67,32 @@ class Category extends Model
     {
         return $this->hasMany(Offer::class);
     }
-    
+
     /**
-     * Get the coupons for the category.
+     * Merchants assigned to this category (each merchant has one category).
+     */
+    public function merchants(): HasMany
+    {
+        return $this->hasMany(Merchant::class, 'category_id');
+    }
+
+    /**
+     * Coupons on offers that belong to this category (canonical admin path).
+     */
+    public function couponsViaOffers(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            Coupon::class,
+            Offer::class,
+            'category_id',
+            'offer_id',
+            'id',
+            'id'
+        )->whereNotNull('coupons.offer_id');
+    }
+
+    /**
+     * Legacy: coupons.category_id when present on the coupons table.
      */
     public function coupons(): HasMany
     {

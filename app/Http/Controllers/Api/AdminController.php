@@ -175,6 +175,14 @@ class AdminController extends Controller
                 $query->whereDate('created_at', '<=', $request->created_to);
             }
 
+            if ($request->filled('category_id')) {
+                $query->where('category_id', $request->category_id);
+            }
+
+            if ($request->filled('mall_id')) {
+                $query->where('mall_id', $request->mall_id);
+            }
+
             $merchants = $query->orderBy('created_at', 'desc')
                 ->paginate($request->get('per_page', 15));
 
@@ -197,6 +205,8 @@ class AdminController extends Controller
                     'company_name' => $merchant->company_name ?? 'N/A',
                     'company_name_ar' => $merchant->company_name_ar,
                     'company_name_en' => $merchant->company_name_en,
+                    'category_id' => $merchant->category_id,
+                    'mall_id' => $merchant->mall_id,
                     'description' => $merchant->description,
                     'phone' => $merchant->phone,
                     'address' => $merchant->address,
@@ -976,7 +986,11 @@ class AdminController extends Controller
      */
     public function getCategories(Request $request): JsonResponse
     {
-        $query = \App\Models\Category::with(['parent', 'children']);
+        $query = \App\Models\Category::with(['parent', 'children'])
+            ->withCount([
+                'merchants',
+                'couponsViaOffers as coupons_count',
+            ]);
 
         if ($request->has('parent_id')) {
             $query->where('parent_id', $request->parent_id);
@@ -996,7 +1010,12 @@ class AdminController extends Controller
      */
     public function getCategory(string $id): JsonResponse
     {
-        $category = \App\Models\Category::with(['parent', 'children', 'offers'])->findOrFail($id);
+        $category = \App\Models\Category::with(['parent', 'children', 'offers'])
+            ->withCount([
+                'merchants',
+                'couponsViaOffers as coupons_count',
+            ])
+            ->findOrFail($id);
 
         return response()->json([
             'data' => $category,
@@ -1013,6 +1032,7 @@ class AdminController extends Controller
             'name_en' => 'nullable|string|max:255',
             'parent_id' => 'nullable|exists:categories,id',
             'order_index' => 'nullable|integer',
+            'is_active' => 'nullable|boolean',
         ];
         if ($request->hasFile('image')) {
             $rules['image'] = ImageUploadRules::fileMax(2048);
@@ -1031,6 +1051,7 @@ class AdminController extends Controller
             'name_en' => $request->name_en ?? $request->name_ar,
             'parent_id' => $request->parent_id,
             'order_index' => (int) ($request->order_index ?? 0),
+            'is_active' => true,
         ];
 
         if ($request->hasFile('image')) {
@@ -1060,6 +1081,8 @@ class AdminController extends Controller
             'parent_id' => 'nullable|exists:categories,id',
             'order_index' => 'nullable|integer',
             'remove_image' => 'nullable|string|in:1,true',
+            'is_active' => 'nullable|boolean',
+
         ];
         if ($request->hasFile('image')) {
             $rules['image'] = ImageUploadRules::fileMax(2048);
@@ -1085,6 +1108,7 @@ class AdminController extends Controller
             'name_en' => $request->input('name_en', $category->name_en),
             'parent_id' => $request->has('parent_id') ? $request->parent_id : $category->parent_id,
             'order_index' => $request->has('order_index') ? (int) $request->order_index : $category->order_index,
+            'is_active' => $request->has('is_active') ? $request->boolean('is_active') : $category->is_active,
         ];
 
         // Remove existing image if requested

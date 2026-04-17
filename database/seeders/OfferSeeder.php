@@ -141,7 +141,10 @@ class OfferSeeder extends Seeder
                     'price' => $price,
                     'discount' => $discountPercent,
                     'offer_images' => [
-                        'offers/image' . $faker->numberBetween(1, 10) . '.jpg' || "https://img.freepik.com/free-psd/super-sale-podium-product-banner-with-editable-text_47987-12084.jpg?t=st=1775324331~exp=1775327931~hmac=99defdea4cd3969e9a8da5f32884de55c42ca4c6c7e787b2aa43e6ee724eb4a9&w=2000",
+                        $faker->randomElement([
+                            'https://img.freepik.com/free-psd/super-sale-podium-product-banner-with-editable-text_47987-12084.jpg',
+                            'https://img.freepik.com/free-psd/cyber-monday-facebook-template_23-2149839017.jpg',
+                        ]),
                     ],
                     'start_date' => $startDate,
                     'end_date' => $endDate,
@@ -183,7 +186,7 @@ class OfferSeeder extends Seeder
                 $couponsCount = $faker->numberBetween(2, 5);
                 for ($c = 0; $c < $couponsCount; $c++) {
                     $barcode = 'CPN-' . strtoupper($faker->unique()->bothify('########'));
-                    $offer->coupons()->create([
+                    $couponPayload = [
                         'title' => $title['ar'],
                         'description' => $faker->realText(150),
                         'price' => $price,
@@ -193,7 +196,11 @@ class OfferSeeder extends Seeder
                         'coupon_code' => $barcode,
                         'expires_at' => $endDate,
                         'status' => 'active',
-                    ]);
+                    ];
+                    if (Schema::hasColumn('coupons', 'category_id') && $offer->category_id) {
+                        $couponPayload['category_id'] = $offer->category_id;
+                    }
+                    $offer->coupons()->create($couponPayload);
                 }
 
                 $created++;
