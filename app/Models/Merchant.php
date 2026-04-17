@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 class Merchant extends Model
 {
@@ -77,6 +78,11 @@ class Merchant extends Model
         if ($this->mall) {
             return $this->mall;
         }
+
+        if (! Schema::hasColumn('branches', 'mall_id')) {
+            return null;
+        }
+
         if ($this->relationLoaded('branches')) {
             foreach ($this->branches as $branch) {
                 if ($branch->mall) {

@@ -15,6 +15,22 @@ class MerchantProfileRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $merge = [];
+        foreach (['whatsapp_link', 'logo_url'] as $key) {
+            if ($this->has($key) && $this->input($key) === '') {
+                $merge[$key] = null;
+            }
+        }
+        if ($this->has('category_id') && ($this->input('category_id') === '' || $this->input('category_id') === null)) {
+            $merge['category_id'] = null;
+        }
+        if ($merge !== []) {
+            $this->merge($merge);
+        }
+    }
+
     public function rules(): array
     {
         $userId = $this->user()?->id;
@@ -31,14 +47,17 @@ class MerchantProfileRequest extends FormRequest
             'address_en' => 'sometimes|string|max:500|nullable',
             'phone' => 'sometimes|string|max:50|nullable',
             'whatsapp_number' => 'sometimes|string|max:50|nullable',
-            'whatsapp_link' => 'sometimes|url|max:255|nullable',
+            // Allow wa.me/…, numbers, or partial links (admin UI often stores non-RFC strings).
+            'whatsapp_link' => 'sometimes|nullable|string|max:255',
             'whatsapp_enabled' => 'sometimes|boolean',
             'city' => 'sometimes|string|max:255|nullable',
-            'logo_url' => 'sometimes|url|max:500|nullable',
+            // Stored value may be relative path or full URL — do not use strict `url` rule.
+            'logo_url' => 'sometimes|nullable|string|max:500',
             'logo' => ImageUploadRules::sometimesFileMax(2048),
             'name' => 'sometimes|string|max:255',
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users')->ignore($userId)],
             'phone_user' => 'sometimes|string|max:50|nullable',
+            'category_id' => 'sometimes|nullable|integer|exists:categories,id',
         ];
     }
 
@@ -48,7 +67,6 @@ class MerchantProfileRequest extends FormRequest
             'logo.file' => 'Logo must be a valid file',
             'logo.mimes' => 'Logo must be a supported image type',
             'logo.max' => 'Logo must not be greater than 2MB',
-            'logo_url.url' => 'Logo URL must be a valid URL',
         ];
     }
 

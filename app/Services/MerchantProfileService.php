@@ -98,10 +98,11 @@ class MerchantProfileService
             'description', 'description_ar', 'description_en',
             'address', 'address_ar', 'address_en',
             'phone', 'whatsapp_number', 'whatsapp_link', 'whatsapp_enabled', 'city',
+            'category_id',
         ];
 
         return collect($fields)
-            ->filter(fn ($field) => isset($data[$field]))
+            ->filter(fn ($field) => array_key_exists($field, $data))
             ->mapWithKeys(fn ($field) => [$field => $data[$field]])
             ->toArray();
     }
