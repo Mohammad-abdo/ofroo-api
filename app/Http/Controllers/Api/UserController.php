@@ -40,6 +40,16 @@ class UserController extends Controller
 
         $countryPayload = $this->getCountryPayload($user);
 
+        $governoratePayload = null;
+        if ($user->governorateRelation) {
+            $governoratePayload = [
+                'id' => $user->governorateRelation->id,
+                'name_ar' => $user->governorateRelation->name_ar ?? '',
+                'name_en' => $user->governorateRelation->name_en ?? '',
+                'order_index' => $user->governorateRelation->order_index ?? null,
+            ];
+        }
+
         return response()->json([
             'data' => [
                 'id' => $user->id,
@@ -50,7 +60,10 @@ class UserController extends Controller
                 'avatar_url' => $user->avatar ? $this->fullAvatarUrl($user->avatar) : null,
                 'language' => $user->language ?? 'ar',
                 'gender' => $user->gender ?? null,
+                'city_id' => $user->city_id,
+                'governorate_id' => $user->governorate_id,
                 'city' => $cityPayload,
+                'governorate' => $governoratePayload,
                 'country' => $countryPayload,
                 'role' => $user->role ? [
                     'id' => $user->role->id,

@@ -83,7 +83,7 @@ class AuthController extends Controller
             'gender' => $request->gender,
         ]);
 
-        $user->load('role');
+        $user->load(['role', 'cityRelation', 'governorateRelation']);
 
         $token = $user->createToken('auth_token')->plainTextToken;
 

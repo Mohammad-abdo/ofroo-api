@@ -36,11 +36,19 @@ class LocationController extends Controller
     /**
      * List cities by governorate (المدن حسب المحافظة)
      * GET /api/mobile/cities?governorate_id=1&language=ar
+     * (يقبل أيضاً governorateId للتوافق مع تطبيقات تستخدم camelCase)
      */
     public function cities(Request $request): JsonResponse
     {
+        if ($request->missing('governorate_id') && $request->filled('governorateId')) {
+            $request->merge(['governorate_id' => $request->input('governorateId')]);
+        }
+
         $request->validate([
             'governorate_id' => 'required|integer|exists:governorates,id',
+        ], [
+            'governorate_id.required' => 'اختر المحافظة أولاً ثم أرسل governorate_id (أو governorateId) مع طلب المدن. / Select governorate first, then call GET /cities?governorate_id=…',
+            'governorate_id.exists' => 'المحافظة غير موجودة. / Governorate not found.',
         ]);
 
         $language = $request->get('language', 'ar');

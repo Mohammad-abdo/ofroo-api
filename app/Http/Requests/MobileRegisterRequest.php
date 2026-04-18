@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\City;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class MobileRegisterRequest extends FormRequest
 {
@@ -38,10 +40,43 @@ class MobileRegisterRequest extends FormRequest
     }
 
     /**
+     * Ensure city_id belongs to governorate_id when both are sent.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $govId = $this->input('governorate_id');
+            $cityId = $this->input('city_id');
+            if ($govId === null || $govId === '' || $cityId === null || $cityId === '') {
+                return;
+            }
+
+            $city = City::query()->find((int) $cityId);
+            if (! $city) {
+                return;
+            }
+
+            if ((int) $city->governorate_id !== (int) $govId) {
+                $validator->errors()->add(
+                    'city_id',
+                    'المدينة لا تنتمي لهذه المحافظة. اطلب GET /api/mobile/cities?governorate_id=… بعد اختيار المحافظة واختر city_id من النتيجة. / City does not belong to the selected governorate.'
+                );
+            }
+        });
+    }
+
+    /**
      * Prepare the data for validation (normalize gender).
      */
     protected function prepareForValidation(): void
     {
+        if ($this->missing('governorate_id') && $this->filled('governorateId')) {
+            $this->merge(['governorate_id' => $this->input('governorateId')]);
+        }
+        if ($this->missing('city_id') && $this->filled('cityId')) {
+            $this->merge(['city_id' => $this->input('cityId')]);
+        }
+
         if ($this->has('gender')) {
             $gender = strtolower((string) $this->gender);
             if ($gender === 'mal') {
