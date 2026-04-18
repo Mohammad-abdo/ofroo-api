@@ -87,8 +87,12 @@ class TestRegisterAndSendOtpCommand extends Command
             $this->warn('Job queued. Ensure a worker is running: php artisan queue:work');
         }
 
-        $driver = config('otp.phone_driver', 'log');
-        $this->line("OTP_PHONE_DRIVER={$driver} (use \"log\" to see message in storage/logs)");
+        $driver = strtolower((string) config('otp.phone_driver', 'log'));
+        if (in_array($driver, ['log', ''], true)) {
+            $this->warn('OTP_PHONE_DRIVER=log — nothing is sent to the phone. Set OTP_PHONE_DRIVER=welniz and SMS_API_KEY in .env, then php artisan config:clear');
+        } else {
+            $this->line("OTP_PHONE_DRIVER={$driver}");
+        }
 
         return self::SUCCESS;
     }

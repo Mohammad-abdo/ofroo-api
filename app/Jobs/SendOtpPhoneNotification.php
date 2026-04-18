@@ -32,7 +32,7 @@ class SendOtpPhoneNotification implements ShouldQueue
             return;
         }
 
-        $digits = PhoneNormalizer::digitsOnly($user->phone);
+        $digits = PhoneNormalizer::digitsForSmsGateway($user->phone);
         if (strlen($digits) < 8) {
             Log::warning('SendOtpPhoneNotification: phone too short after normalize', [
                 'user_id' => $this->userId,
