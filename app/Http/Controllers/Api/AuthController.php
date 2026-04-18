@@ -233,8 +233,9 @@ class AuthController extends Controller
             $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         }
 
+        // Store plain 6-digit OTP: column is VARCHAR(10); bcrypt hashes do not fit without widening the column.
         $user->update([
-            'otp_code' => Hash::make($otp),
+            'otp_code' => $otp,
             'otp_expires_at' => now()->addMinutes(10),
         ]);
 
@@ -301,7 +302,7 @@ class AuthController extends Controller
             $user->otp_code
             && $user->otp_expires_at
             && $user->otp_expires_at->greaterThanOrEqualTo(now())
-            && Hash::check($request->otp, $user->otp_code)
+            && $this->otpMatchesStored($user, (string) $request->otp)
         );
 
         if (! $otpValid) {
@@ -324,7 +325,7 @@ class AuthController extends Controller
         ]);
     }
 
-    /**fdf
+    /**
      * Register merchant
      */
     public function registerMerchant(\App\Http\Requests\MerchantRegisterRequest $request): JsonResponse
@@ -450,5 +451,23 @@ class AuthController extends Controller
             'user' => new UserResource($user),
             'merchant' => $merchant,
         ]);
+    }
+
+    /**
+     * Legacy rows may store bcrypt; new requests store plain 6-digit OTP (fits VARCHAR(10)).
+     */
+    private function otpMatchesStored(User $user, string $submittedOtp): bool
+    {
+        $stored = $user->otp_code;
+        if ($stored === null || $stored === '') {
+            return false;
+        }
+
+        $stored = (string) $stored;
+        if (str_starts_with($stored, '$2y$') || str_starts_with($stored, '$2a$') || str_starts_with($stored, '$2b$')) {
+            return Hash::check($submittedOtp, $stored);
+        }
+
+        return hash_equals($stored, $submittedOtp);
     }
 }
