@@ -41,7 +41,7 @@ CREATE TABLE `users` (
   `language` ENUM('ar','en') DEFAULT 'ar' COMMENT 'User preferred language',
   `role_id` INT NULL,
   `email_verified_at` DATETIME NULL,
-  `otp_code` VARCHAR(10) NULL COMMENT 'OTP code for verification',
+  `otp_code` VARCHAR(255) NULL COMMENT 'Hashed OTP for verification',
   `otp_expires_at` DATETIME NULL COMMENT 'OTP expiration time',
   `last_location_lat` DECIMAL(10,7) NULL COMMENT 'Last known latitude',
   `last_location_lng` DECIMAL(10,7) NULL COMMENT 'Last known longitude',

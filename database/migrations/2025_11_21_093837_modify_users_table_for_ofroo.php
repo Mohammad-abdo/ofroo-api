@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('city', 100)->nullable()->after('country')->comment('User city');
             $table->enum('language', ['ar', 'en'])->default('ar')->after('phone')->comment('User preferred language');
             $table->foreignId('role_id')->nullable()->after('language')->constrained('roles')->onDelete('set null')->comment('User role');
-            $table->string('otp_code', 10)->nullable()->after('email_verified_at')->comment('OTP code for verification');
+            $table->string('otp_code', 255)->nullable()->after('email_verified_at')->comment('Hashed OTP for verification');
             $table->dateTime('otp_expires_at')->nullable()->after('otp_code')->comment('OTP expiration time');
             $table->decimal('last_location_lat', 10, 7)->nullable()->after('otp_expires_at')->comment('Last known latitude');
             $table->decimal('last_location_lng', 10, 7)->nullable()->after('last_location_lat')->comment('Last known longitude');
