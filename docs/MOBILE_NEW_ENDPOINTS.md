@@ -195,17 +195,32 @@ populated by the admin so the mobile app can render safely.
 
 ### `GET /api/mobile/app/about` *(new, public)*
 Optional query: `?language=ar|en`.
-Reads from `settings` keys: `app_description_ar`, `app_description_en`
-(fallbacks: legacy `static_about_*`). Social URLs are read from the
-existing `social_links` table (managed by the admin dashboard).
+
+Sections are managed from the admin dashboard via
+`/api/admin/app-sections?type=about` (full CRUD — see §10.1).
+The legacy `app_description_*` / `static_about_*` settings are still
+honoured as a fallback so the mobile app never receives an empty
+response during the transition.
 
 **Response**
 ```json
 {
   "data": {
-    "description": "...",
-    "description_ar": "...",
-    "description_en": "...",
+    "sections": [
+      {
+        "id": 3,
+        "type": "about",
+        "title": "من نحن",
+        "title_ar": "من نحن",
+        "title_en": "Who We Are",
+        "description": "OFROO تطبيق عروض وكوبونات...",
+        "description_ar": "OFROO تطبيق عروض وكوبونات...",
+        "description_en": "OFROO is an app for deals and coupons..."
+      }
+    ],
+    "description":     "OFROO تطبيق عروض وكوبونات...",
+    "description_ar":  "OFROO تطبيق عروض وكوبونات...",
+    "description_en":  "OFROO is an app for deals and coupons...",
     "app_version": "1.0.0",
     "social_links": [
       { "platform": "facebook",  "url": "https://facebook.com/ofroo",  "icon": "https://host/storage/images/social/facebook.png" },
@@ -216,7 +231,9 @@ existing `social_links` table (managed by the admin dashboard).
 }
 ```
 
-Only platforms with a non-empty `url` are returned.
+- `sections` → the new preferred array shape every item has `{ id, title, description }`.
+- `description*` → kept for backward compatibility (mirrors the first section).
+- `social_links` → only platforms with a non-empty `url` are returned.
 
 ---
 
@@ -224,22 +241,27 @@ Only platforms with a non-empty `url` are returned.
 
 ### `GET /api/mobile/app/policy` *(new, public — mobile prefix only)*
 Optional query: `?language=ar|en`.
-Backed by a **new** table `app_policies` (migration
-`2026_04_19_120000_create_app_policies_table`).
 
-| Column          | Type           |
-|-----------------|----------------|
-| `id`            | `bigint` PK    |
-| `title_ar`      | `string` null  |
-| `title_en`      | `string` null  |
-| `description_ar`| `text` null    |
-| `description_en`| `text` null    |
-| `order_index`   | `uint` default 0 |
-| `is_active`     | `bool` default true |
+Backed by the **generic** `app_policies` table (migrations
+`2026_04_19_120000_create_app_policies_table` +
+`2026_04_19_130000_add_type_to_app_policies_table`):
 
-Transparent fallback: if the table is empty, the endpoint returns a single
-item built from the legacy `static_privacy_ar` / `static_privacy_en`
-settings — so mobile clients never see an empty response during migration.
+| Column          | Type           | Notes                                        |
+|-----------------|----------------|----------------------------------------------|
+| `id`            | `bigint` PK    |                                              |
+| `type`          | `string(32)`   | `privacy` \| `about` \| `support`            |
+| `title_ar`      | `string` null  |                                              |
+| `title_en`      | `string` null  |                                              |
+| `description_ar`| `text` null    |                                              |
+| `description_en`| `text` null    |                                              |
+| `order_index`   | `uint` default 0 | stable ordering within a type              |
+| `is_active`     | `bool` default true |                                         |
+
+Same row shape is shared by `about` and `support` sections — only the
+`type` column differs. Only rows of `type=privacy` are returned by
+this endpoint. Transparent fallback: if the table is empty, the endpoint
+returns a single item built from the legacy `static_privacy_ar` /
+`static_privacy_en` settings so mobile clients never see an empty response.
 
 **Response**
 ```json
@@ -247,6 +269,7 @@ settings — so mobile clients never see an empty response during migration.
   "data": [
     {
       "id": 1,
+      "type": "privacy",
       "title": "سياسة الخصوصية",
       "title_ar": "سياسة الخصوصية",
       "title_en": "Privacy Policy",
@@ -367,33 +390,49 @@ so creating/updating an offer is never blocked by push delivery.
 All admin routes below are protected by `auth:sanctum` + `admin` middleware
 and live under the existing `/api/admin` prefix.
 
-### 10.1 Privacy Policy sections — `GET/POST/PUT/DELETE /api/admin/app-policies`
+### 10.1 Static sections (Privacy / About / Support) — `/api/admin/app-sections`
+
+Generic CRUD for all static CMS sections consumed by the mobile app.
+Each row has a `type` column (`privacy` | `about` | `support`) — the
+dashboard is expected to render one tab per type and pass `?type=…`
+when listing, plus `"type": "…"` when creating.
+
+Two identical prefixes are exposed (aliases):
+
+- `/api/admin/app-sections` — **preferred**
+- `/api/admin/app-policies` — legacy (kept for backward compatibility)
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/admin/app-policies?q=&is_active=&per_page=` | Paginated list (admin sees ALL, including inactive) |
-| `GET` | `/api/admin/app-policies/{id}` | Single policy section |
-| `POST` | `/api/admin/app-policies` | Create |
-| `PUT` | `/api/admin/app-policies/{id}` | Update |
-| `DELETE` | `/api/admin/app-policies/{id}` | Delete |
-| `PUT` | `/api/admin/app-policies/order` | Bulk reorder |
+| `GET` | `/api/admin/app-sections?type=&q=&is_active=&per_page=` | Paginated list (admin sees ALL, including inactive) |
+| `GET` | `/api/admin/app-sections/{id}` | Single section |
+| `POST` | `/api/admin/app-sections` | Create (requires `type`) |
+| `PUT` | `/api/admin/app-sections/{id}` | Update |
+| `DELETE` | `/api/admin/app-sections/{id}` | Delete |
+| `PUT` | `/api/admin/app-sections/order` | Bulk reorder |
 
-**Payload (`store`/`update`)**
+**Payload (`store` — `type` required / `update` — `type` optional)**
 ```json
 {
-  "title_ar": "سياسة الخصوصية",
-  "title_en": "Privacy Policy",
-  "description_ar": "نص السياسة...",
-  "description_en": "Policy text...",
+  "type": "about",
+  "title_ar": "من نحن",
+  "title_en": "About Us",
+  "description_ar": "OFROO تطبيق عروض...",
+  "description_en": "OFROO is a deals app...",
   "order_index": 0,
   "is_active": true
 }
 ```
 
+Allowed `type` values: `privacy`, `about`, `support`. A few aliases are
+auto-normalised by the backend: `policy`/`privacy_policy` → `privacy`,
+`about_app`/`app_about` → `about`, `help`/`contact` → `support`.
+
 **Item shape returned**
 ```json
 {
   "id": 1,
+  "type": "privacy",
   "title_ar": "...", "title_en": "...",
   "description_ar": "...", "description_en": "...",
   "order_index": 0,
@@ -403,7 +442,19 @@ and live under the existing `/api/admin` prefix.
 }
 ```
 
-**Reorder body** (`PUT /api/admin/app-policies/order`)
+**List response — meta**
+```json
+{
+  "data": [ /* items */ ],
+  "meta": {
+    "current_page": 1, "last_page": 1, "per_page": 50, "total": 3,
+    "types":  ["privacy", "about", "support"],
+    "counts": { "privacy": 2, "about": 1, "support": 0 }
+  }
+}
+```
+
+**Reorder body** (`PUT /api/admin/app-sections/order`)
 ```json
 {
   "order": [
@@ -413,6 +464,32 @@ and live under the existing `/api/admin` prefix.
   ]
 }
 ```
+
+### 10.1.a Settings-page overlay (zero extra request)
+
+`GET /api/admin/settings` now returns two **additional** sibling keys
+next to `data` so the admin settings page can render the "Static Pages"
+cards immediately:
+
+```json
+{
+  "data": { /* existing settings map — unchanged */ },
+  "static_sections": {
+    "privacy": [ { "id": 1, "type": "privacy", "title_ar": "...", "title_en": "...", "description_ar": "...", "description_en": "...", "order_index": 0, "is_active": true } ],
+    "about":   [ /* ... */ ],
+    "support": [ /* ... */ ]
+  },
+  "endpoints": {
+    "app_sections_crud":  "/api/admin/app-sections",
+    "app_policies_crud":  "/api/admin/app-policies",
+    "mobile_policy":      "/api/mobile/app/policy",
+    "mobile_about":       "/api/mobile/app/about",
+    "mobile_support":     "/api/mobile/support"
+  }
+}
+```
+
+Clients that only read `data` keep working as-is — this is strictly additive.
 
 ### 10.2 App settings — `GET/PUT /api/admin/settings`
 

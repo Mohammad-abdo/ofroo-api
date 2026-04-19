@@ -545,15 +545,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/settings/logo', [AdminController::class, 'uploadLogo']);
         Route::put('/categories/order', [AdminController::class, 'updateCategoryOrder']);
 
-        // Privacy policy sections (mobile: GET /api/mobile/app/policy)
-        Route::prefix('app-policies')->group(function () {
-            Route::get('/', [AdminAppPolicyController::class, 'index']);
-            Route::post('/', [AdminAppPolicyController::class, 'store']);
-            Route::put('/order', [AdminAppPolicyController::class, 'reorder']);
-            Route::get('/{id}', [AdminAppPolicyController::class, 'show'])->whereNumber('id');
-            Route::put('/{id}', [AdminAppPolicyController::class, 'update'])->whereNumber('id');
-            Route::delete('/{id}', [AdminAppPolicyController::class, 'destroy'])->whereNumber('id');
-        });
+        // Static CMS sections used by the mobile app:
+        //   - Privacy policy → /api/mobile/app/policy
+        //   - About app     → /api/mobile/app/about
+        //   - Support       → /api/mobile/support (and /api/mobile/app/about)
+        //
+        // Two prefixes are exposed:
+        //   /api/admin/app-policies (legacy, keeps old integrations working)
+        //   /api/admin/app-sections (preferred, generic over the `type` column)
+        foreach (['app-policies', 'app-sections'] as $adminSectionsPrefix) {
+            Route::prefix($adminSectionsPrefix)->group(function () {
+                Route::get('/', [AdminAppPolicyController::class, 'index']);
+                Route::post('/', [AdminAppPolicyController::class, 'store']);
+                Route::put('/order', [AdminAppPolicyController::class, 'reorder']);
+                Route::get('/{id}', [AdminAppPolicyController::class, 'show'])->whereNumber('id');
+                Route::put('/{id}', [AdminAppPolicyController::class, 'update'])->whereNumber('id');
+                Route::delete('/{id}', [AdminAppPolicyController::class, 'destroy'])->whereNumber('id');
+            });
+        }
 
         // Categories Management - Full CRUD
         Route::prefix('categories')->group(function () {

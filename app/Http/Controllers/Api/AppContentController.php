@@ -54,19 +54,36 @@ class AppContentController extends Controller
 
     /**
      * About app + social links (platform, url, icon).
-     * Description is read from `app_description_ar` / `app_description_en` settings.
+     *
+     * Sections are managed from the admin dashboard via
+     *   /api/admin/app-sections?type=about   (CRUD)
+     *
+     * The response also keeps the legacy `description*` fields so older
+     * mobile clients continue to render correctly — any new client should
+     * prefer the `sections` array.
      */
     public function about(Request $request): JsonResponse
     {
-        $descriptionAr = (string) Setting::getValue('app_description_ar', (string) Setting::getValue('static_about_ar', ''));
-        $descriptionEn = (string) Setting::getValue('app_description_en', (string) Setting::getValue('static_about_en', ''));
         $language = $request->get('language', 'ar');
+
+        $sections = $this->sectionsFor(AppPolicy::TYPE_ABOUT, $language, [
+            'settings_key_ar' => 'app_description_ar',
+            'settings_key_en' => 'app_description_en',
+            'legacy_key_ar' => 'static_about_ar',
+            'legacy_key_en' => 'static_about_en',
+            'default_title_ar' => 'عن التطبيق',
+            'default_title_en' => 'About App',
+        ]);
+
+        $descriptionAr = $sections[0]['description_ar'] ?? '';
+        $descriptionEn = $sections[0]['description_en'] ?? '';
         $description = $language === 'en'
             ? ($descriptionEn !== '' ? $descriptionEn : $descriptionAr)
             : ($descriptionAr !== '' ? $descriptionAr : $descriptionEn);
 
         return response()->json([
             'data' => [
+                'sections' => $sections,
                 'description' => $description,
                 'description_ar' => $descriptionAr,
                 'description_en' => $descriptionEn,
@@ -79,60 +96,102 @@ class AppContentController extends Controller
     /**
      * Privacy policy sections managed from the admin dashboard.
      * Falls back to the legacy `static_privacy_*` setting if the `app_policies`
-     * table has no rows yet, so the mobile app never receives an empty array
-     * during the transition period.
+     * table has no rows of type=privacy yet, so the mobile app never receives
+     * an empty array during the transition period.
      */
     public function policy(Request $request): JsonResponse
     {
         $language = $request->get('language', 'ar');
 
+        $sections = $this->sectionsFor(AppPolicy::TYPE_PRIVACY, $language, [
+            'legacy_key_ar' => 'static_privacy_ar',
+            'legacy_key_en' => 'static_privacy_en',
+            'default_title_ar' => 'سياسة الخصوصية',
+            'default_title_en' => 'Privacy Policy',
+        ]);
+
+        return response()->json(['data' => $sections]);
+    }
+
+    /**
+     * Load and shape sections for the mobile app, preferring admin-managed
+     * rows in `app_policies` and falling back to legacy settings keys.
+     *
+     * @param  array{
+     *     settings_key_ar?: string,
+     *     settings_key_en?: string,
+     *     legacy_key_ar?: string,
+     *     legacy_key_en?: string,
+     *     default_title_ar?: string,
+     *     default_title_en?: string,
+     * }  $fallback
+     * @return array<int, array<string, mixed>>
+     */
+    protected function sectionsFor(string $type, string $language, array $fallback): array
+    {
         if (Schema::hasTable('app_policies')) {
             $rows = AppPolicy::query()
+                ->ofType($type)
                 ->where('is_active', true)
                 ->orderBy('order_index')
                 ->orderBy('id')
                 ->get();
 
             if ($rows->isNotEmpty()) {
-                $data = $rows->map(function (AppPolicy $p) use ($language) {
+                return $rows->map(function (AppPolicy $p) use ($language) {
                     return [
-                        'id' => $p->id,
+                        'id' => (int) $p->id,
+                        'type' => (string) $p->type,
                         'title' => $language === 'en'
-                            ? ($p->title_en ?? $p->title_ar ?? '')
-                            : ($p->title_ar ?? $p->title_en ?? ''),
-                        'title_ar' => $p->title_ar ?? '',
-                        'title_en' => $p->title_en ?? '',
+                            ? ($p->title_en ?: ($p->title_ar ?? ''))
+                            : ($p->title_ar ?: ($p->title_en ?? '')),
+                        'title_ar' => (string) ($p->title_ar ?? ''),
+                        'title_en' => (string) ($p->title_en ?? ''),
                         'description' => $language === 'en'
-                            ? ($p->description_en ?? $p->description_ar ?? '')
-                            : ($p->description_ar ?? $p->description_en ?? ''),
-                        'description_ar' => $p->description_ar ?? '',
-                        'description_en' => $p->description_en ?? '',
+                            ? ($p->description_en ?: ($p->description_ar ?? ''))
+                            : ($p->description_ar ?: ($p->description_en ?? '')),
+                        'description_ar' => (string) ($p->description_ar ?? ''),
+                        'description_en' => (string) ($p->description_en ?? ''),
                     ];
                 })->values()->all();
-
-                return response()->json(['data' => $data]);
             }
         }
 
-        $legacyAr = (string) Setting::getValue('static_privacy_ar', '');
-        $legacyEn = (string) Setting::getValue('static_privacy_en', '');
+        $fromSettingAr = isset($fallback['settings_key_ar'])
+            ? (string) Setting::getValue($fallback['settings_key_ar'], '')
+            : '';
+        $fromSettingEn = isset($fallback['settings_key_en'])
+            ? (string) Setting::getValue($fallback['settings_key_en'], '')
+            : '';
+        $legacyAr = isset($fallback['legacy_key_ar'])
+            ? (string) Setting::getValue($fallback['legacy_key_ar'], '')
+            : '';
+        $legacyEn = isset($fallback['legacy_key_en'])
+            ? (string) Setting::getValue($fallback['legacy_key_en'], '')
+            : '';
 
-        $data = [];
-        if ($legacyAr !== '' || $legacyEn !== '') {
-            $data[] = [
-                'id' => 1,
-                'title' => $language === 'en'
-                    ? ($legacyEn !== '' ? 'Privacy Policy' : 'سياسة الخصوصية')
-                    : 'سياسة الخصوصية',
-                'title_ar' => 'سياسة الخصوصية',
-                'title_en' => 'Privacy Policy',
-                'description' => $language === 'en' ? ($legacyEn ?: $legacyAr) : ($legacyAr ?: $legacyEn),
-                'description_ar' => $legacyAr,
-                'description_en' => $legacyEn,
-            ];
+        $descriptionAr = $fromSettingAr !== '' ? $fromSettingAr : $legacyAr;
+        $descriptionEn = $fromSettingEn !== '' ? $fromSettingEn : $legacyEn;
+
+        if ($descriptionAr === '' && $descriptionEn === '') {
+            return [];
         }
 
-        return response()->json(['data' => $data]);
+        $titleAr = (string) ($fallback['default_title_ar'] ?? '');
+        $titleEn = (string) ($fallback['default_title_en'] ?? '');
+
+        return [[
+            'id' => 1,
+            'type' => $type,
+            'title' => $language === 'en' ? ($titleEn ?: $titleAr) : ($titleAr ?: $titleEn),
+            'title_ar' => $titleAr,
+            'title_en' => $titleEn,
+            'description' => $language === 'en'
+                ? ($descriptionEn !== '' ? $descriptionEn : $descriptionAr)
+                : ($descriptionAr !== '' ? $descriptionAr : $descriptionEn),
+            'description_ar' => $descriptionAr,
+            'description_en' => $descriptionEn,
+        ]];
     }
 
     /**

@@ -680,7 +680,62 @@ class AdminController extends Controller
 
         return response()->json([
             'data' => $settings,
+            // Sibling key — lets the admin UI render Privacy/About/Support
+            // tabs without a second request. Consumers that still read only
+            // `data` are unaffected.
+            'static_sections' => $this->getStaticSectionsForAdmin(),
+            'endpoints' => [
+                'app_sections_crud' => '/api/admin/app-sections',
+                'app_policies_crud' => '/api/admin/app-policies',
+                'mobile_policy' => '/api/mobile/app/policy',
+                'mobile_about' => '/api/mobile/app/about',
+                'mobile_support' => '/api/mobile/support',
+            ],
         ]);
+    }
+
+    /**
+     * Grouped, admin-shaped sections (privacy | about | support) returned
+     * alongside `data` from {@see getSettings()} so the dashboard can render
+     * the "Static Pages" cards immediately.
+     *
+     * @return array<string, array<int, array<string, mixed>>>
+     */
+    private function getStaticSectionsForAdmin(): array
+    {
+        $out = [
+            \App\Models\AppPolicy::TYPE_PRIVACY => [],
+            \App\Models\AppPolicy::TYPE_ABOUT => [],
+            \App\Models\AppPolicy::TYPE_SUPPORT => [],
+        ];
+
+        if (! Schema::hasTable('app_policies')) {
+            return $out;
+        }
+
+        \App\Models\AppPolicy::query()
+            ->orderBy('type')
+            ->orderBy('order_index')
+            ->orderBy('id')
+            ->get()
+            ->each(function (\App\Models\AppPolicy $p) use (&$out) {
+                $type = (string) ($p->type ?? \App\Models\AppPolicy::TYPE_PRIVACY);
+                if (! isset($out[$type])) {
+                    $out[$type] = [];
+                }
+                $out[$type][] = [
+                    'id' => (int) $p->id,
+                    'type' => $type,
+                    'title_ar' => (string) ($p->title_ar ?? ''),
+                    'title_en' => (string) ($p->title_en ?? ''),
+                    'description_ar' => (string) ($p->description_ar ?? ''),
+                    'description_en' => (string) ($p->description_en ?? ''),
+                    'order_index' => (int) $p->order_index,
+                    'is_active' => (bool) $p->is_active,
+                ];
+            });
+
+        return $out;
     }
 
     /**

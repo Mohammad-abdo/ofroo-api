@@ -10,23 +10,41 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
- * Admin dashboard CRUD for the Privacy Policy sections consumed by the
- * mobile app through GET /api/mobile/app/policy.
+ * Admin dashboard CRUD for the static CMS sections consumed by the mobile
+ * app: privacy policy, about, and support. All sections share the same
+ * shape ({ id, title, description }) and the same table (`app_policies`)
+ * but are partitioned by a `type` column.
  *
- * Routes live under /api/admin/app-policies (protected by auth:sanctum + admin).
- * Response shapes mirror the mobile endpoint to minimise client adapters.
+ * Routes:
+ *   /api/admin/app-policies          ← legacy alias (defaults to type=privacy when missing)
+ *   /api/admin/app-sections          ← preferred, generic CRUD
+ *
+ * The Vercel admin settings UI should render one tab per `type`
+ * (privacy | about | support) and call the same endpoints.
  */
 class AdminAppPolicyController extends Controller
 {
     /**
      * Paginated list (admin sees ALL rows, including inactive ones).
+     *
+     * Query params:
+     *   - type: privacy|about|support (optional, filters rows)
+     *   - q: free-text search across title/description (ar + en)
+     *   - is_active: boolean (optional)
+     *   - per_page: 1..100 (default 50 so the admin sees all sections at once)
      */
     public function index(Request $request): JsonResponse
     {
-        $perPage = max(1, min(100, (int) $request->get('per_page', 20)));
+        $perPage = max(1, min(100, (int) $request->get('per_page', 50)));
 
-        $query = AppPolicy::query()->orderBy('order_index')->orderBy('id');
+        $query = AppPolicy::query()
+            ->orderBy('type')
+            ->orderBy('order_index')
+            ->orderBy('id');
 
+        if ($request->filled('type')) {
+            $query->where('type', $this->normaliseType($request->get('type')));
+        }
         if ($request->filled('is_active')) {
             $query->where('is_active', filter_var($request->get('is_active'), FILTER_VALIDATE_BOOLEAN));
         }
@@ -49,6 +67,8 @@ class AdminAppPolicyController extends Controller
                 'last_page' => $page->lastPage(),
                 'per_page' => $page->perPage(),
                 'total' => $page->total(),
+                'types' => AppPolicy::TYPES,
+                'counts' => $this->counts(),
             ],
         ]);
     }
@@ -62,12 +82,12 @@ class AdminAppPolicyController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $validated = $this->validatePayload($request, null);
+        $validated = $this->validatePayload($request);
 
         $policy = AppPolicy::create($validated);
 
         return response()->json([
-            'message' => 'Policy section created successfully',
+            'message' => 'Section created successfully',
             'data' => $this->toArray($policy),
         ], 201);
     }
@@ -75,12 +95,12 @@ class AdminAppPolicyController extends Controller
     public function update(Request $request, string $id): JsonResponse
     {
         $policy = AppPolicy::findOrFail($id);
-        $validated = $this->validatePayload($request, $policy->id);
+        $validated = $this->validatePayload($request, $policy);
 
         $policy->update($validated);
 
         return response()->json([
-            'message' => 'Policy section updated successfully',
+            'message' => 'Section updated successfully',
             'data' => $this->toArray($policy->fresh()),
         ]);
     }
@@ -91,12 +111,12 @@ class AdminAppPolicyController extends Controller
         $policy->delete();
 
         return response()->json([
-            'message' => 'Policy section deleted successfully',
+            'message' => 'Section deleted successfully',
         ]);
     }
 
     /**
-     * Bulk update display order.
+     * Bulk update display order, optionally scoped to a single type.
      *
      * Request:
      *   { "order": [ { "id": 3, "order_index": 0 }, { "id": 7, "order_index": 1 } ] }
@@ -118,7 +138,7 @@ class AdminAppPolicyController extends Controller
         });
 
         return response()->json([
-            'message' => 'Policy order updated successfully',
+            'message' => 'Order updated successfully',
         ]);
     }
 
@@ -131,6 +151,7 @@ class AdminAppPolicyController extends Controller
     {
         return [
             'id' => $p->id,
+            'type' => (string) ($p->type ?? AppPolicy::TYPE_PRIVACY),
             'title_ar' => $p->title_ar ?? '',
             'title_en' => $p->title_en ?? '',
             'description_ar' => $p->description_ar ?? '',
@@ -143,14 +164,22 @@ class AdminAppPolicyController extends Controller
     }
 
     /**
-     * Shared validation for create/update. Either language pair must be non-empty
-     * so the mobile app always has something to render.
+     * Shared validation for create/update.
+     *
+     * On create, `type` is required. On update, `type` is optional and
+     * defaults to the existing value so the admin UI can patch a title or
+     * description without resending the type.
      *
      * @return array<string, mixed>
      */
-    protected function validatePayload(Request $request, ?int $ignoreId): array
+    protected function validatePayload(Request $request, ?AppPolicy $existing = null): array
     {
-        return $request->validate([
+        $typeRule = $existing
+            ? ['sometimes', 'string', Rule::in(AppPolicy::TYPES)]
+            : ['required', 'string', Rule::in(AppPolicy::TYPES)];
+
+        $data = $request->validate([
+            'type' => $typeRule,
             'title_ar' => 'nullable|string|max:255',
             'title_en' => 'nullable|string|max:255',
             'description_ar' => 'nullable|string',
@@ -158,5 +187,51 @@ class AdminAppPolicyController extends Controller
             'order_index' => 'nullable|integer|min:0',
             'is_active' => 'nullable|boolean',
         ]);
+
+        if (! isset($data['type']) && $existing) {
+            $data['type'] = $existing->type;
+        }
+        if (isset($data['type'])) {
+            $data['type'] = $this->normaliseType($data['type']);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Accept a few common aliases from the admin UI and normalise them to
+     * the canonical type values used by the mobile app.
+     */
+    protected function normaliseType(mixed $raw): string
+    {
+        $v = strtolower(trim((string) $raw));
+
+        return match ($v) {
+            'policy', 'privacy_policy', 'privacy-policy' => AppPolicy::TYPE_PRIVACY,
+            'about_app', 'about-app', 'app_about' => AppPolicy::TYPE_ABOUT,
+            'help', 'help_support', 'contact' => AppPolicy::TYPE_SUPPORT,
+            default => in_array($v, AppPolicy::TYPES, true) ? $v : AppPolicy::TYPE_PRIVACY,
+        };
+    }
+
+    /**
+     * Number of rows per type — useful for the settings page to show badges.
+     *
+     * @return array<string, int>
+     */
+    protected function counts(): array
+    {
+        $rows = AppPolicy::query()
+            ->selectRaw('type, COUNT(*) as total')
+            ->groupBy('type')
+            ->pluck('total', 'type')
+            ->all();
+
+        $out = [];
+        foreach (AppPolicy::TYPES as $t) {
+            $out[$t] = (int) ($rows[$t] ?? 0);
+        }
+
+        return $out;
     }
 }
