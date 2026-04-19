@@ -19,6 +19,19 @@ class MerchantProfileController extends Controller
     protected const OFFERS_PER_DETAIL_PAGE = 10;
 
     /**
+     * عروض التاجر للاستجابة العامة: على الموبايل فقط العروض المتاحة فعلياً؛ على /api بدون mobile نفس سلوك status active السابق.
+     */
+    private function merchantOffersForRequest(\App\Models\Merchant $merchant, Request $request)
+    {
+        $q = $merchant->offers();
+        if ($request->is('api/mobile/*')) {
+            return $q->mobilePubliclyAvailable();
+        }
+
+        return $q->where('status', 'active');
+    }
+
+    /**
      * قائمة التجار للموبايل: id, name, image فقط.
      * GET /api/mobile/merchants?language=ar
      */
@@ -70,8 +83,7 @@ class MerchantProfileController extends Controller
 
         // إذا طلب العروض فقط: نفس استجابة GET .../merchants/{id}/offers
         if ($request->boolean('only_offers')) {
-            $offers = $merchant->offers()
-                ->where('status', 'active')
+            $offers = $this->merchantOffersForRequest($merchant, $request)
                 ->with(['category:id,name_ar,name_en', 'mall:id,name,name_ar,name_en'])
                 ->orderBy('created_at', 'desc')
                 ->paginate($request->get('per_page', 15));
@@ -101,8 +113,7 @@ class MerchantProfileController extends Controller
                 : ($merchant->category->name_en ?? $merchant->category->name_ar);
         }
 
-        $offers = $merchant->offers()
-            ->where('status', 'active')
+        $offers = $this->merchantOffersForRequest($merchant, $request)
             ->with(['category:id,name_ar,name_en', 'mall:id,name,name_ar,name_en'])
             ->orderBy('created_at', 'desc')
             ->limit(self::OFFERS_PER_DETAIL_PAGE)
@@ -157,7 +168,7 @@ class MerchantProfileController extends Controller
             })->values()->all(),
             'social_links' => [],
             'offers' => $offersData,
-            'offers_total' => $merchant->offers()->where('status', 'active')->count(),
+            'offers_total' => $this->merchantOffersForRequest($merchant, $request)->count(),
         ];
 
         return response()->json(['data' => $data]);
@@ -203,8 +214,7 @@ class MerchantProfileController extends Controller
         $language = $request->get('language', 'ar');
         $merchant = Merchant::where('id', $id)->where('approved', true)->firstOrFail();
 
-        $offers = $merchant->offers()
-            ->where('status', 'active')
+        $offers = $this->merchantOffersForRequest($merchant, $request)
             ->with(['category:id,name_ar,name_en', 'mall:id,name,name_ar,name_en'])
             ->orderBy('created_at', 'desc')
             ->paginate($request->get('per_page', 15));

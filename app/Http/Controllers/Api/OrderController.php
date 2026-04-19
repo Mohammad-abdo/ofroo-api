@@ -7,11 +7,14 @@ use App\Http\Resources\CouponResource;
 use App\Http\Resources\OrderResource;
 use App\Http\Resources\CouponEntitlementResource;
 use App\Models\Cart;
+use App\Models\Coupon;
 use App\Models\CouponEntitlement;
+use App\Models\Offer;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Services\CouponService;
 use App\Services\FinancialService;
+use App\Services\QrCodeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,14 +29,72 @@ class OrderController extends Controller
     }
 
     /**
-     * List user orders
+     * Localised labels for the `coupon_status` filter so the mobile UI
+     * can render a bilingual legend without duplicating strings.
+     *
+     * @return array<string, array{ar: string, en: string}>
+     */
+    public static function couponStatusLabels(): array
+    {
+        return [
+            'valid' => ['ar' => 'صالح', 'en' => 'Valid'],
+            'expired' => ['ar' => 'منتهي', 'en' => 'Expired'],
+            'inactive' => ['ar' => 'غير مفعل', 'en' => 'Inactive'],
+            'activated' => ['ar' => 'تم تفعيله', 'en' => 'Activated'],
+        ];
+    }
+
+    /**
+     * Apply the {@see couponStatusLabels()} filter to an Order query via
+     * the `couponEntitlements` relation. No-op when $status is empty or unknown.
+     */
+    protected function applyCouponStatusFilter($query, ?string $status)
+    {
+        $status = $status !== null ? strtolower(trim($status)) : '';
+        if ($status === '') {
+            return $query;
+        }
+
+        return $query->whereHas('couponEntitlements', function ($q) use ($status) {
+            switch ($status) {
+                case 'valid':
+                    $q->where('status', 'active')
+                        ->whereRaw('(usage_limit - times_used - reserved_shares_count) > 0')
+                        ->where('times_used', 0);
+                    break;
+                case 'expired':
+                    $q->whereIn('status', ['expired', 'exhausted']);
+                    break;
+                case 'inactive':
+                    $q->where('status', 'pending');
+                    break;
+                case 'activated':
+                    $q->where('status', 'active')->where('times_used', '>', 0);
+                    break;
+                default:
+                    // Unknown value → do not constrain; keep previous behaviour.
+                    break;
+            }
+        });
+    }
+
+    /**
+     * List user orders.
+     *
+     * Accepts an optional `coupon_status` filter (valid|expired|inactive|activated)
+     * that filters orders by the status of their coupon entitlements.
+     * When omitted, the response shape is identical to the previous version.
      */
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $orders = Order::with(['items.offer', 'coupons', 'couponEntitlements.coupon', 'merchant'])
-            ->where('user_id', $user->id)
-            ->orderBy('created_at', 'desc')
+
+        $query = Order::with(['items.offer', 'coupons', 'couponEntitlements.coupon', 'merchant'])
+            ->where('user_id', $user->id);
+
+        $query = $this->applyCouponStatusFilter($query, $request->get('coupon_status'));
+
+        $orders = $query->orderBy('created_at', 'desc')
             ->paginate($request->get('per_page', 15));
 
         return response()->json([
@@ -216,6 +277,204 @@ class OrderController extends Controller
                 'message' => 'Order creation failed: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Checkout by coupon IDs — mobile "buy now" flow.
+     *
+     * POST body:
+     *   - user_id (int, required, must match authenticated user)
+     *   - coupon_ids (int[], required, at least one)
+     *   - payment_method (string, optional, default 'cash')
+     *   - notes (string, optional)
+     *
+     * Creates an Order with one OrderItem per coupon template (quantity = 1 each),
+     * generates a CouponEntitlement per line and returns a QR code for the order
+     * plus a shareable deep link so the user can redeem at the merchant.
+     *
+     * Note: this method is additive and does not modify the behaviour of the
+     * legacy /orders/checkout cart-based flow which continues to work as before.
+     */
+    public function checkoutCoupons(Request $request, QrCodeService $qrService): JsonResponse
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|integer',
+            'coupon_ids' => 'required|array|min:1',
+            'coupon_ids.*' => 'integer|exists:coupons,id',
+            'payment_method' => 'sometimes|in:cash,card,none',
+            'notes' => 'sometimes|nullable|string',
+        ]);
+
+        $user = $request->user();
+        if ((int) $validated['user_id'] !== (int) $user->id) {
+            return response()->json([
+                'message' => 'user_id does not match the authenticated user',
+                'message_ar' => 'معرف المستخدم لا يطابق المستخدم الحالي',
+            ], 403);
+        }
+
+        $paymentMethod = $validated['payment_method'] ?? 'cash';
+        if ($paymentMethod === 'card' && ! \App\Services\FeatureFlagService::isElectronicPaymentsEnabled()) {
+            return response()->json([
+                'message' => 'Electronic payments are currently disabled',
+            ], 403);
+        }
+
+        $coupons = Coupon::with('offer.merchant')
+            ->whereIn('id', $validated['coupon_ids'])
+            ->get();
+
+        if ($coupons->isEmpty()) {
+            return response()->json([
+                'message' => 'No valid coupons found',
+                'message_ar' => 'لا توجد كوبونات صالحة',
+            ], 422);
+        }
+
+        foreach ($coupons as $coupon) {
+            if ($coupon->isExpired()) {
+                return response()->json([
+                    'message' => "Coupon #{$coupon->id} is expired",
+                    'message_ar' => "الكوبون رقم {$coupon->id} منتهي الصلاحية",
+                ], 422);
+            }
+            if (! $coupon->offer) {
+                return response()->json([
+                    'message' => "Coupon #{$coupon->id} is not linked to an offer",
+                ], 422);
+            }
+        }
+
+        $merchantIds = $coupons->pluck('offer.merchant_id')->unique()->values();
+        if ($merchantIds->count() > 1) {
+            return response()->json([
+                'message' => 'All coupons must belong to the same merchant',
+                'message_ar' => 'يجب أن تكون جميع الكوبونات لنفس التاجر',
+            ], 422);
+        }
+
+        $merchantId = (int) $merchantIds->first();
+        $totalAmount = (float) $coupons->sum(function (Coupon $c) {
+            return (float) ($c->price_after_discount ?? $c->price ?? 0);
+        });
+
+        DB::beginTransaction();
+        try {
+            $order = Order::create([
+                'user_id' => $user->id,
+                'merchant_id' => $merchantId,
+                'total_amount' => $totalAmount,
+                'payment_method' => $paymentMethod,
+                'payment_status' => $paymentMethod === 'cash' ? 'pending' : 'paid',
+                'notes' => $validated['notes'] ?? null,
+            ]);
+
+            foreach ($coupons as $coupon) {
+                $unitPrice = (float) ($coupon->price_after_discount ?? $coupon->price ?? 0);
+
+                $item = OrderItem::create([
+                    'order_id' => $order->id,
+                    'offer_id' => $coupon->offer_id,
+                    'quantity' => 1,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $unitPrice,
+                ]);
+
+                $entitlementStatus = $order->payment_status === 'paid' ? 'active' : 'pending';
+                CouponEntitlement::create([
+                    'user_id' => $user->id,
+                    'coupon_id' => $coupon->id,
+                    'order_id' => $order->id,
+                    'order_item_id' => $item->id,
+                    'usage_limit' => 1,
+                    'times_used' => 0,
+                    'reserved_shares_count' => 0,
+                    'status' => $entitlementStatus,
+                    'redeem_token' => $this->couponService->generateWalletRedeemToken(),
+                ]);
+            }
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Order creation failed: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        $order->load(['items.offer', 'couponEntitlements.coupon.offer', 'merchant']);
+
+        $scheme = (string) \App\Models\Setting::getValue('app_deep_link_scheme', 'ofroo');
+        $orderToken = (string) (
+            $order->couponEntitlements->first()->redeem_token ?? ''
+        );
+        $deepLink = $scheme . '://orders/' . $order->id
+            . ($orderToken !== '' ? ('?token=' . $orderToken) : '');
+        $webLanding = (string) \App\Models\Setting::getValue(
+            'app_landing_url',
+            rtrim((string) config('app.url', ''), '/')
+        );
+        $shareableLink = $webLanding !== ''
+            ? rtrim($webLanding, '/') . '/orders/' . $order->id
+            : $deepLink;
+
+        $qrPayload = json_encode([
+            'type' => 'order',
+            'order_id' => $order->id,
+            'user_id' => $user->id,
+            'token' => $orderToken,
+        ], JSON_UNESCAPED_UNICODE);
+        $qrPayload = $qrPayload !== false ? $qrPayload : ('ORDER:' . $order->id);
+
+        $qrDataUri = $qrService->dataUri($qrPayload);
+
+        $couponsPayload = $order->couponEntitlements->map(function (CouponEntitlement $e) use ($qrService) {
+            $perCouponPayload = json_encode([
+                'type' => 'coupon_entitlement',
+                'entitlement_id' => $e->id,
+                'token' => $e->redeem_token,
+            ], JSON_UNESCAPED_UNICODE) ?: ('ENT:' . $e->id);
+
+            return [
+                'entitlement_id' => $e->id,
+                'coupon' => $e->coupon ? (new CouponResource($e->coupon))->toArray(request()) : null,
+                'redeem_token' => $e->redeem_token,
+                'qr_code_base64' => $qrService->dataUri($perCouponPayload, 260),
+                'usage_limit' => (int) $e->usage_limit,
+                'remaining_uses' => $e->remainingUses(),
+                'status' => $e->status,
+            ];
+        })->values()->all();
+
+        return response()->json([
+            'message' => 'Order created successfully',
+            'data' => [
+                'order' => [
+                    'id' => $order->id,
+                    'user_id' => $order->user_id,
+                    'merchant_id' => $order->merchant_id,
+                    'total_amount' => (float) $order->total_amount,
+                    'payment_method' => $order->payment_method,
+                    'payment_status' => $order->payment_status,
+                    'created_at' => $order->created_at?->toIso8601String(),
+                ],
+                'coupons' => $couponsPayload,
+                'payment' => [
+                    'method' => $order->payment_method,
+                    'status' => $order->payment_status,
+                    'amount' => (float) $order->total_amount,
+                    'currency' => (string) \App\Models\Setting::getValue('currency', 'SAR'),
+                ],
+                'qr_code' => [
+                    'payload' => $qrPayload,
+                    'base64' => $qrDataUri,
+                    'format' => 'png',
+                ],
+                'shareable_link' => $shareableLink,
+                'deep_link' => $deepLink,
+            ],
+        ], 201);
     }
 
     /**

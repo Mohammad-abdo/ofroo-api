@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -101,6 +103,27 @@ class Offer extends Model
         return $query->where('status', 'active')
             ->where('start_date', '<=', now())
             ->where('end_date', '>=', now());
+    }
+
+    /**
+     * Offers that should appear in the public mobile app: active window + at least one redeemable coupon slot.
+     * Admin and merchant dashboards use unscoped queries instead.
+     */
+    public function scopeMobilePubliclyAvailable(Builder $query): Builder
+    {
+        return $query->active()
+            ->where(function (Builder $q) {
+                $q->whereHas('coupons', function ($cq) {
+                    $cq->where('status', 'active')
+                        ->where(function ($w) {
+                            $w->whereNull('usage_limit')
+                                ->orWhereColumn('times_used', '<', 'usage_limit');
+                        });
+                });
+                if (Schema::hasColumn('offers', 'coupons_remaining')) {
+                    $q->orWhere('coupons_remaining', '>', 0);
+                }
+            });
     }
 
     /**

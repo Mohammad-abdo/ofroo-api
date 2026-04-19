@@ -19,6 +19,12 @@ class CouponController extends Controller
      */
     public function index(Offer $offer): JsonResponse
     {
+        if (request()->is('api/mobile/*')) {
+            if (! Offer::query()->whereKey($offer->id)->mobilePubliclyAvailable()->exists()) {
+                abort(404);
+            }
+        }
+
         return response()->json([
             'data' => CouponResource::collection($offer->coupons),
         ]);

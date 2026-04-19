@@ -45,11 +45,19 @@ class CategoryController extends Controller
     {
         $user = $request->user();
         $language = $request->get('language', $user ? $user->language : null) ?? 'ar';
-        $cacheKey = 'categories_with_offers_' . $language;
+        $isMobile = $request->is('api/mobile/*');
+        $cacheKey = 'categories_with_offers_' . $language . '_' . ($isMobile ? 'mobile' : 'web');
 
-        $data = Cache::remember($cacheKey, 3600, function () use ($language, $request) {
+        $data = Cache::remember($cacheKey, 3600, function () use ($language, $request, $isMobile) {
             $categories = Category::whereNull('parent_id')
-                ->with(['offers' => fn ($q) => $q->where('status', 'active')->whereNotNull('category_id')->with(['merchant', 'category', 'branches', 'coupons'])])
+                ->with(['offers' => function ($q) use ($isMobile) {
+                    if ($isMobile) {
+                        $q->mobilePubliclyAvailable();
+                    } else {
+                        $q->where('status', 'active');
+                    }
+                    $q->whereNotNull('category_id')->with(['merchant', 'category', 'branches', 'coupons']);
+                }])
                 ->orderBy('order_index')
                 ->get();
 
@@ -84,10 +92,15 @@ class CategoryController extends Controller
         $user = $request->user();
         $language = $request->get('language', $user ? $user->language : null) ?? 'ar';
 
+        $isMobile = $request->is('api/mobile/*');
         $category = Category::with([
-            'offers' => function ($q) {
-                $q->where('status', 'active')
-                    ->whereNotNull('category_id')
+            'offers' => function ($q) use ($isMobile) {
+                if ($isMobile) {
+                    $q->mobilePubliclyAvailable();
+                } else {
+                    $q->where('status', 'active');
+                }
+                $q->whereNotNull('category_id')
                     ->with(['merchant', 'category', 'branches', 'coupons']);
             },
         ])->findOrFail($id);

@@ -558,11 +558,15 @@ class UserController extends Controller
         $user = $request->user();
         $perPage = $request->get('per_page', 15);
 
-        $offers = $user->favoriteOffers()
+        $favorites = $user->favoriteOffers()
             ->with(['merchant', 'category', 'mall', 'branches', 'coupons'])
-            ->where('status', 'active')
-            ->orderByPivot('created_at', 'desc')
-            ->paginate($perPage);
+            ->orderByPivot('created_at', 'desc');
+        if ($request->is('api/mobile/*')) {
+            $favorites->mobilePubliclyAvailable();
+        } else {
+            $favorites->where('status', 'active');
+        }
+        $offers = $favorites->paginate($perPage);
 
         $data = $offers->getCollection()->map(function ($offer) use ($request) {
             return (new OfferResource($offer))->toArray($request);
@@ -676,8 +680,11 @@ class UserController extends Controller
     {
         $user = $request->user();
 
+        // Password is optional: when provided we still verify it (backward compatibility).
+        // When omitted, the authenticated Sanctum token is treated as sufficient proof
+        // of ownership so the mobile app can offer a one-tap delete flow.
         $validator = Validator::make($request->all(), [
-            'password' => 'required|string',
+            'password' => 'sometimes|string',
         ]);
 
         if ($validator->fails()) {
@@ -687,11 +694,13 @@ class UserController extends Controller
             ], 422);
         }
 
-        // Verify password
-        if (!Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'message' => 'Password is incorrect',
-            ], 422);
+        if ($request->filled('password')) {
+            if (! Hash::check((string) $request->password, (string) $user->password)) {
+                return response()->json([
+                    'message' => 'Password is incorrect',
+                    'message_ar' => 'كلمة المرور غير صحيحة',
+                ], 422);
+            }
         }
 
         // Anonymize user data (GDPR compliance)

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\AppContentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CategoryController;
@@ -121,6 +122,16 @@ Route::get('/ads', [AdController::class, 'index']);
 Route::get('/ads/{id}', [AdController::class, 'show'])->where('id', '[0-9]+');
 
 // ================================
+// 4.3 مشاركة عرض + معلومات عامة (Public)
+// ================================
+Route::get('/offers/{offerId}/share', [AppContentController::class, 'shareOffer'])
+    ->whereNumber('offerId');
+Route::get('/support', [AppContentController::class, 'support']);
+Route::get('/app/share', [AppContentController::class, 'shareApp']);
+Route::get('/app/about', [AppContentController::class, 'about']);
+Route::get('/app/policy', [AppContentController::class, 'policy']);
+
+// ================================
 // Protected Routes - كل ما يخص المستخدم يتطلب تسجيل الدخول (auth:sanctum)
 // Cart, Orders, Payment (checkout), Profile, Wallet, Coupons, Reviews, Support, Loyalty
 // ================================
@@ -134,7 +145,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // ================================
     // 4. العروض - Protected (بحث، واتساب، مفضلة)
     // ================================
-    Route::get('/search', [OfferController::class, 'search']);
+    // Unified mobile search across offers + coupons + categories → { id, title, image, type }
+    Route::get('/search', [OfferController::class, 'searchMobile']);
     Route::get('/offers/{id}/whatsapp', [OfferController::class, 'whatsappContact']);
     Route::post('/offers/{offer}/favorite', [OfferController::class, 'toggleFavorite']);
     
@@ -154,11 +166,16 @@ Route::middleware('auth:sanctum')->group(function () {
     // ================================
     Route::prefix('orders')->middleware('auth:sanctum')->group(function () {
         Route::get('/', [OrderController::class, 'index']);
-        Route::get('/{id}', [OrderController::class, 'show']);
-        Route::get('/{id}/coupons', [OrderController::class, 'getOrderCoupons']);
+        Route::get('/{id}', [OrderController::class, 'show'])->whereNumber('id');
+        Route::get('/{id}/coupons', [OrderController::class, 'getOrderCoupons'])->whereNumber('id');
         Route::post('/checkout', [OrderController::class, 'checkout']);
-        Route::post('/{id}/cancel', [OrderController::class, 'cancel']);
+        // New: checkout by coupon_ids → generates QR + shareable link.
+        Route::post('/checkout/coupons', [OrderController::class, 'checkoutCoupons']);
+        Route::post('/{id}/cancel', [OrderController::class, 'cancel'])->whereNumber('id');
     });
+
+    // Alias: POST /api/mobile/checkout/coupons for the new coupons-checkout flow.
+    Route::post('/checkout/coupons', [OrderController::class, 'checkoutCoupons']);
     
     // ================================
     // 7. المحفظة والكوبونات (Wallet & Coupons) - تتطلب مصادقة

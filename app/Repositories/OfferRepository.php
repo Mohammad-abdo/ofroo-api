@@ -5,6 +5,7 @@ namespace App\Repositories;
 use App\Models\Offer;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Schema;
 
 class OfferRepository extends BaseRepository
 {
@@ -21,7 +22,9 @@ class OfferRepository extends BaseRepository
             $query->where('status', $filters['status']);
         }
 
-        if (isset($filters['active']) && $filters['active']) {
+        if (! empty($filters['mobile_public'])) {
+            $query->mobilePubliclyAvailable();
+        } elseif (isset($filters['active']) && $filters['active']) {
             $query->active();
         }
 
@@ -39,16 +42,27 @@ class OfferRepository extends BaseRepository
 
         if (!empty($filters['search'])) {
             $search = trim((string) $filters['search']);
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                    ->orWhere('title_ar', 'like', "%{$search}%")
-                    ->orWhere('title_en', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%")
-                    ->orWhereHas('merchant', function ($mq) use ($search) {
-                        $mq->where('company_name', 'like', "%{$search}%")
-                            ->orWhere('company_name_ar', 'like', "%{$search}%")
-                            ->orWhere('company_name_en', 'like', "%{$search}%");
+            $like = "%{$search}%";
+            $offerCols = array_values(array_filter(
+                ['title', 'title_ar', 'title_en', 'description', 'description_ar', 'description_en'],
+                fn ($c) => Schema::hasColumn('offers', $c)
+            ));
+            $merchantCols = array_values(array_filter(
+                ['company_name', 'company_name_ar', 'company_name_en'],
+                fn ($c) => Schema::hasColumn('merchants', $c)
+            ));
+
+            $query->where(function ($q) use ($offerCols, $merchantCols, $like) {
+                foreach ($offerCols as $i => $col) {
+                    $i === 0 ? $q->where($col, 'like', $like) : $q->orWhere($col, 'like', $like);
+                }
+                if (! empty($merchantCols)) {
+                    $q->orWhereHas('merchant', function ($mq) use ($merchantCols, $like) {
+                        foreach ($merchantCols as $i => $col) {
+                            $i === 0 ? $mq->where($col, 'like', $like) : $mq->orWhere($col, 'like', $like);
+                        }
                     });
+                }
             });
         }
 
