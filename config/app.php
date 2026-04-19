@@ -80,6 +80,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Mobile user avatar uploads (kilobytes). Laravel file rule uses KB.
+    | Default matches admin (128 MB). Must be ≤ PHP upload_max_filesize / post_max_size.
+    |--------------------------------------------------------------------------
+    */
+    'max_user_avatar_upload_kb' => (int) env('MAX_USER_AVATAR_UPLOAD_KB', 131072),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

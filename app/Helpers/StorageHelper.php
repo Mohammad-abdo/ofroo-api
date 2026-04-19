@@ -224,35 +224,42 @@ class StorageHelper
     }
 
     /**
-     * Validate image file
-     * 
-     * @param UploadedFile $file
-     * @param int $maxSizeMB
-     * @return array ['valid' => bool, 'error' => string|null]
+     * Validate image file (aligned with {@see \App\Support\ImageUploadRules} mimes).
+     *
+     * @param  UploadedFile  $file
+     * @param  int|null  $maxSizeKb  Max size in kilobytes; null uses config max_user_avatar_upload_kb.
+     * @return array{valid: bool, error: string|null}
      */
-    public static function validateImage(UploadedFile $file, int $maxSizeMB = 2): array
+    public static function validateImage(UploadedFile $file, ?int $maxSizeKb = null): array
     {
-        $allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml'];
-        $maxSize = $maxSizeMB * 1024 * 1024;
-
-        if (!in_array($file->getMimeType(), $allowedMimes)) {
-            return [
-                'valid' => false,
-                'error' => 'Invalid file type. Allowed types: ' . implode(', ', $allowedMimes),
-            ];
-        }
-
-        if ($file->getSize() > $maxSize) {
-            return [
-                'valid' => false,
-                'error' => "File size exceeds maximum allowed size of {$maxSizeMB}MB",
-            ];
-        }
-
-        if (!$file->isValid()) {
+        if (! $file->isValid()) {
             return [
                 'valid' => false,
                 'error' => 'File upload failed or file is corrupted',
+            ];
+        }
+
+        $maxSizeKb = $maxSizeKb ?? (int) config('app.max_user_avatar_upload_kb', 131072);
+        $allowedMimes = [
+            'image/jpeg', 'image/jpg', 'image/pjpeg', 'image/png', 'image/gif', 'image/webp',
+            'image/bmp', 'image/x-ms-bmp', 'image/svg+xml', 'image/tiff', 'image/tif', 'image/x-tiff',
+            'image/avif', 'image/heic', 'image/heif', 'image/x-icon', 'image/vnd.microsoft.icon',
+        ];
+
+        $mime = $file->getMimeType();
+        if ($mime && ! in_array($mime, $allowedMimes, true)) {
+            return [
+                'valid' => false,
+                'error' => 'Invalid file type. Use a common image format (JPEG, PNG, WebP, HEIC, etc.).',
+            ];
+        }
+
+        if ($file->getSize() > $maxSizeKb * 1024) {
+            $mb = round($maxSizeKb / 1024, 1);
+
+            return [
+                'valid' => false,
+                'error' => "File size exceeds maximum allowed size ({$mb}MB).",
             ];
         }
 

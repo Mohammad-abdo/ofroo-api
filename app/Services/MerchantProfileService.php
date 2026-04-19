@@ -128,7 +128,7 @@ class MerchantProfileService
     private function handleLogoUpdate(Merchant $merchant, ?object $file, ?string $logoUrl): ?string
     {
         if ($file !== null) {
-            $validation = StorageHelper::validateImage($file, 2);
+            $validation = StorageHelper::validateImage($file, 2048);
             if (!$validation['valid']) {
                 throw new \InvalidArgumentException($validation['error']);
             }
@@ -165,7 +165,7 @@ class MerchantProfileService
 
     public function uploadLogo(Merchant $merchant, object $file): string
     {
-        $validation = StorageHelper::validateImage($file, 2);
+        $validation = StorageHelper::validateImage($file, 2048);
         if (!$validation['valid']) {
             throw new \InvalidArgumentException($validation['error']);
         }

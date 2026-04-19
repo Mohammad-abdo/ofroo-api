@@ -106,7 +106,9 @@ class UserController extends Controller
 
         $this->normalizeProfileCityPayload($request);
 
-        $validator = Validator::make($request->all(), [
+        $maxAvatarKb = (int) config('app.max_user_avatar_upload_kb', 131072);
+
+        $rules = [
             'name' => 'sometimes|string|max:255',
             'email' => [
                 'sometimes',
@@ -122,7 +124,10 @@ class UserController extends Controller
             ],
             'language' => 'sometimes|in:ar,en',
             'gender' => 'sometimes|in:male,female',
-            'avatar' => 'sometimes|nullable|string|max:500',
+            // Laravel applies max:N to file uploads as KB, not characters — a string rule here broke multipart avatar uploads at ~500 KB.
+            'avatar' => $request->hasFile('avatar')
+                ? ImageUploadRules::sometimesFileMax($maxAvatarKb)
+                : 'sometimes|nullable|string|max:2048',
             'city' => 'sometimes|nullable|array',
             'city.id' => 'sometimes|nullable|integer|exists:cities,id',
             'governorate' => 'sometimes|nullable|array',
@@ -130,7 +135,9 @@ class UserController extends Controller
             'city_id' => 'sometimes|nullable|exists:cities,id',
             'governorate_id' => 'sometimes|nullable|exists:governorates,id',
             'type' => 'sometimes|in:male,female',
-        ]);
+        ];
+
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             return response()->json([
@@ -139,13 +146,29 @@ class UserController extends Controller
             ], 422);
         }
 
+        $avatarFromUpload = null;
+        if ($request->hasFile('avatar')) {
+            $file = $request->file('avatar');
+            $validation = StorageHelper::validateImage($file, $maxAvatarKb);
+            if (! $validation['valid']) {
+                return response()->json([
+                    'message' => 'Invalid image file',
+                    'error' => $validation['error'],
+                ], 422);
+            }
+            if ($user->avatar) {
+                StorageHelper::deleteFile($user->avatar);
+            }
+            $avatarFromUpload = StorageHelper::uploadUserAvatar($file, $user->id)['url'];
+        }
+
         $updateData = array_filter([
             'name' => $request->input('name'),
             'email' => $request->input('email'),
             'phone' => $request->input('phone'),
             'language' => $request->input('language'),
             'gender' => $request->input('gender') ?? $request->input('type'),
-            'avatar' => $request->input('avatar'),
+            'avatar' => $avatarFromUpload ?? $request->input('avatar'),
         ], fn ($v) => $v !== null && $v !== '');
 
         if ($request->has('city') && is_array($request->city) && isset($request->city['id'])) {
@@ -344,8 +367,10 @@ class UserController extends Controller
     {
         $user = $request->user();
 
+        $maxAvatarKb = (int) config('app.max_user_avatar_upload_kb', 131072);
+
         $validator = Validator::make($request->all(), [
-            'avatar' => ImageUploadRules::requiredFileMax(2048),
+            'avatar' => ImageUploadRules::requiredFileMax($maxAvatarKb),
         ]);
 
         if ($validator->fails()) {
@@ -356,9 +381,8 @@ class UserController extends Controller
         }
 
         $file = $request->file('avatar');
-        
-        // Validate image
-        $validation = StorageHelper::validateImage($file, 2);
+
+        $validation = StorageHelper::validateImage($file, $maxAvatarKb);
         if (!$validation['valid']) {
             return response()->json([
                 'message' => 'Invalid image file',
