@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AdminAppPolicyController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
@@ -543,6 +544,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/settings', [AdminController::class, 'updateSettings']);
         Route::post('/settings/logo', [AdminController::class, 'uploadLogo']);
         Route::put('/categories/order', [AdminController::class, 'updateCategoryOrder']);
+
+        // Privacy policy sections (mobile: GET /api/mobile/app/policy)
+        Route::prefix('app-policies')->group(function () {
+            Route::get('/', [AdminAppPolicyController::class, 'index']);
+            Route::post('/', [AdminAppPolicyController::class, 'store']);
+            Route::put('/order', [AdminAppPolicyController::class, 'reorder']);
+            Route::get('/{id}', [AdminAppPolicyController::class, 'show'])->whereNumber('id');
+            Route::put('/{id}', [AdminAppPolicyController::class, 'update'])->whereNumber('id');
+            Route::delete('/{id}', [AdminAppPolicyController::class, 'destroy'])->whereNumber('id');
+        });
 
         // Categories Management - Full CRUD
         Route::prefix('categories')->group(function () {

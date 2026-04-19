@@ -360,13 +360,152 @@ so creating/updating an offer is never blocked by push delivery.
 
 ---
 
+---
+
+## 10) Admin Dashboard Endpoints (CMS for the mobile content)
+
+All admin routes below are protected by `auth:sanctum` + `admin` middleware
+and live under the existing `/api/admin` prefix.
+
+### 10.1 Privacy Policy sections — `GET/POST/PUT/DELETE /api/admin/app-policies`
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/admin/app-policies?q=&is_active=&per_page=` | Paginated list (admin sees ALL, including inactive) |
+| `GET` | `/api/admin/app-policies/{id}` | Single policy section |
+| `POST` | `/api/admin/app-policies` | Create |
+| `PUT` | `/api/admin/app-policies/{id}` | Update |
+| `DELETE` | `/api/admin/app-policies/{id}` | Delete |
+| `PUT` | `/api/admin/app-policies/order` | Bulk reorder |
+
+**Payload (`store`/`update`)**
+```json
+{
+  "title_ar": "سياسة الخصوصية",
+  "title_en": "Privacy Policy",
+  "description_ar": "نص السياسة...",
+  "description_en": "Policy text...",
+  "order_index": 0,
+  "is_active": true
+}
+```
+
+**Item shape returned**
+```json
+{
+  "id": 1,
+  "title_ar": "...", "title_en": "...",
+  "description_ar": "...", "description_en": "...",
+  "order_index": 0,
+  "is_active": true,
+  "created_at": "2026-04-19T12:00:00+00:00",
+  "updated_at": "2026-04-19T12:00:00+00:00"
+}
+```
+
+**Reorder body** (`PUT /api/admin/app-policies/order`)
+```json
+{
+  "order": [
+    { "id": 3, "order_index": 0 },
+    { "id": 7, "order_index": 1 },
+    { "id": 5, "order_index": 2 }
+  ]
+}
+```
+
+### 10.2 App settings — `GET/PUT /api/admin/settings`
+
+`GET /api/admin/settings` is unchanged (returns all `settings` + overlaid
+`app_coupon_settings` + `social_links`).
+
+`PUT /api/admin/settings` now additionally accepts the following keys
+(all optional, persisted to the `settings` table, read by the mobile app):
+
+| Key | Mobile endpoint that reads it |
+|---|---|
+| `support_email` | `GET /api/mobile/support` |
+| `support_whatsapp` | `GET /api/mobile/support` |
+| `support_phone` *(fallback)* | `GET /api/mobile/support` |
+| `app_description_ar` / `app_description_en` | `GET /api/mobile/app/about` |
+| `app_version` | `GET /api/mobile/app/about` |
+| `play_store_url` | `GET /api/mobile/app/share` |
+| `app_store_url` | `GET /api/mobile/app/share` |
+| `app_landing_url` | `GET /api/mobile/app/share` + share-offer |
+| `app_share_message_ar` / `app_share_message_en` | `GET /api/mobile/app/share` |
+| `app_deep_link_scheme` *(default `ofroo`)* | share-offer + checkout/coupons |
+| `app_universal_link_base` | `GET /api/mobile/offers/{id}/share` |
+| `currency` *(default `SAR`)* | `POST /api/mobile/checkout/coupons` response |
+
+Social-platform URLs (`facebook_url`, `instagram_url`, `tiktok_url`,
+`snapchat_url`, `whatsapp_url`, `telegram_url`, `twitter_url`,
+`youtube_url`) continue to flow through the existing `social_links`
+table — nothing new required there, they already appear in `GET /api/mobile/app/about`.
+
+**Example `PUT /api/admin/settings` (flat object form)**
+```json
+{
+  "support_email": "support@ofroo.com",
+  "support_whatsapp": "+966555555555",
+  "app_description_ar": "تطبيق OFROO للعروض والكوبونات",
+  "app_description_en": "OFROO — deals and coupons app",
+  "play_store_url": "https://play.google.com/store/apps/details?id=com.ofroo.app",
+  "app_store_url": "https://apps.apple.com/app/id000000000",
+  "app_landing_url": "https://app.ofroo.com",
+  "app_share_message_ar": "حمّل تطبيق OFROO للحصول على أفضل العروض والكوبونات",
+  "app_share_message_en": "Download the OFROO app for the best offers and coupons",
+  "app_deep_link_scheme": "ofroo",
+  "currency": "SAR"
+}
+```
+
+**Alternative `PUT /api/admin/settings` (array form — already supported)**
+```json
+{
+  "settings": [
+    { "key": "support_email", "value": "support@ofroo.com" },
+    { "key": "currency", "value": "SAR" }
+  ]
+}
+```
+
+### 10.3 Orders — `GET /api/admin/orders?coupon_status=...`
+
+`GET /api/admin/orders` gains the same `coupon_status` filter as mobile
+(`valid | expired | inactive | activated`). Response shape is unchanged
+when the param is omitted (fully backward compatible).
+
+| Filter | Matches at least one `CouponEntitlement` where |
+|---|---|
+| `valid` | `status=active` AND `times_used=0` AND `remaining>0` |
+| `expired` | `status IN (expired, exhausted)` |
+| `inactive` | `status=pending` |
+| `activated` | `status=active` AND `times_used>0` |
+
+### 10.4 Push notifications (server-side usage)
+
+Admin-side action buttons that trigger "notify users of new offer" should
+call the new service method instead of building FCM payloads by hand:
+
+```php
+app(\App\Services\NotificationService::class)
+    ->sendOfferPushNotification($offer, $userIds);
+```
+
+FCM credentials are read from `config('services.fcm.server_key')` or
+`FCM_SERVER_KEY` env. Missing credentials are logged and the call no-ops,
+so offer creation is never blocked by transient push issues.
+
+---
+
 ## Summary of Files Changed
 
 **New**
 - `database/migrations/2026_04_19_120000_create_app_policies_table.php`
 - `app/Models/AppPolicy.php`
 - `app/Services/QrCodeService.php`
-- `app/Http/Controllers/Api/AppContentController.php`
+- `app/Http/Controllers/Api/AppContentController.php` *(mobile)*
+- `app/Http/Controllers/Api/AdminAppPolicyController.php` *(admin CRUD for policies)*
 - `docs/MOBILE_NEW_ENDPOINTS.md` *(this file)*
 
 **Updated (backward-compatible unless listed in task 7/8/9)**
@@ -377,8 +516,13 @@ so creating/updating an offer is never blocked by push delivery.
   - Added `searchMobile()`; original `search()` untouched.
 - `app/Http/Controllers/Api/UserController.php`
   - `deleteAccount()` now accepts optional password (explicit task requirement).
+- `app/Http/Controllers/Api/AdminController.php`
+  - `updateSettings()` validator extended with new mobile-CMS keys.
+  - `getOrders()` gains optional `coupon_status` filter.
 - `app/Services/NotificationService.php`
   - Real FCM HTTP payload + `sendOfferPushNotification()`.
 - `routes/mobile.php`
-  - Wired the new routes. Mobile `/search` now points at `searchMobile`.
+  - Wired the new mobile routes. Mobile `/search` now points at `searchMobile`.
+- `routes/api.php`
+  - Wired `/api/admin/app-policies` CRUD + reorder.
   - `/api/search` (web) remains on the original `search` method.

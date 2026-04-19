@@ -789,6 +789,28 @@ class AdminController extends Controller
                 'static_support_en' => 'nullable|string',
                 'static_about_ar' => 'nullable|string',
                 'static_about_en' => 'nullable|string',
+
+                // Mobile → /api/mobile/support
+                'support_email' => 'nullable|email|max:255',
+                'support_whatsapp' => 'nullable|string|max:32',
+                'support_phone' => 'nullable|string|max:32',
+
+                // Mobile → /api/mobile/app/about
+                'app_description_ar' => 'nullable|string',
+                'app_description_en' => 'nullable|string',
+                'app_version' => 'nullable|string|max:32',
+
+                // Mobile → /api/mobile/app/share  &  /api/mobile/offers/{id}/share
+                'play_store_url' => 'nullable|url|max:500',
+                'app_store_url' => 'nullable|url|max:500',
+                'app_landing_url' => 'nullable|url|max:500',
+                'app_share_message_ar' => 'nullable|string|max:1000',
+                'app_share_message_en' => 'nullable|string|max:1000',
+                'app_deep_link_scheme' => 'nullable|string|max:64',
+                'app_universal_link_base' => 'nullable|url|max:500',
+
+                // Mobile → /api/mobile/checkout/coupons (payment.currency field)
+                'currency' => 'nullable|string|max:8',
             ]);
 
             foreach ($validated as $key => $value) {
@@ -2999,6 +3021,30 @@ class AdminController extends Controller
                 $query->where('created_at', '<=', $request->to);
             }
 
+            // Optional coupon_status filter, mirroring the mobile filter so
+            // admin can segment orders by valid | expired | inactive | activated.
+            if ($request->filled('coupon_status')) {
+                $status = strtolower(trim((string) $request->get('coupon_status')));
+                $query->whereHas('couponEntitlements', function ($q) use ($status) {
+                    switch ($status) {
+                        case 'valid':
+                            $q->where('status', 'active')
+                                ->whereRaw('(usage_limit - times_used - reserved_shares_count) > 0')
+                                ->where('times_used', 0);
+                            break;
+                        case 'expired':
+                            $q->whereIn('status', ['expired', 'exhausted']);
+                            break;
+                        case 'inactive':
+                            $q->where('status', 'pending');
+                            break;
+                        case 'activated':
+                            $q->where('status', 'active')->where('times_used', '>', 0);
+                            break;
+                    }
+                });
+            }
+
             $orders = $query->orderBy('created_at', 'desc')
                 ->paginate((int) $request->get('per_page', 15));
 
@@ -3037,7 +3083,7 @@ class AdminController extends Controller
         } catch (\Throwable $e) {
             \Log::error('Admin getOrders: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
-                'request' => $request->only(['page', 'per_page', 'status', 'merchant_id', 'user_id', 'from', 'to']),
+                'request' => $request->only(['page', 'per_page', 'status', 'merchant_id', 'user_id', 'from', 'to', 'coupon_status']),
             ]);
             // Return 200 with empty data so the UI can still render (e.g. table missing or schema mismatch)
             return response()->json([
