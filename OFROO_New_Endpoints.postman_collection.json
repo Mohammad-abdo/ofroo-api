@@ -1,0 +1,627 @@
+{
+	"info": {
+		"name": "OFROO — New & Updated Endpoints (MOBILE_NEW_ENDPOINTS.md)",
+		"description": "Postman collection covering every endpoint introduced or updated in MOBILE_NEW_ENDPOINTS.md. Base URL is stored in the {{base_url}} collection variable (e.g. https://your-host). Authenticated requests require {{token}} to be set (Sanctum Bearer token).",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"version": "1.0.0"
+	},
+	"variable": [
+		{ "key": "base_url", "value": "https://your-host", "type": "string" },
+		{ "key": "token",    "value": "YOUR_SANCTUM_TOKEN", "type": "string" }
+	],
+	"item": [
+		{
+			"name": "1. Checkout — QR Generation + Coupon Order",
+			"item": [
+				{
+					"name": "POST Checkout Coupons (mobile prefix)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept",       "value": "application/json" },
+							{ "key": "Authorization","value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_id\": 12,\n    \"coupon_ids\": [101, 102, 103],\n    \"payment_method\": \"cash\",\n    \"notes\": \"Deliver after 5pm\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mobile/checkout/coupons",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "checkout", "coupons"]
+						},
+						"description": "Creates an order from specific coupon IDs, generates QR codes and deep links. Cart items matching the purchased coupon IDs are automatically cleared on success.\n\nConstraints:\n- user_id must match the authenticated user (403)\n- All coupons must belong to the same merchant (422)\n- No coupon may be expired (422)\n- card payments blocked when electronic-payments feature flag is off (403)"
+					},
+					"response": [
+						{
+							"name": "201 Created — success",
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"message\": \"Order created successfully\",\n  \"data\": {\n    \"order\": {\n      \"id\": 987,\n      \"user_id\": 12,\n      \"merchant_id\": 5,\n      \"total_amount\": 135.00,\n      \"payment_method\": \"cash\",\n      \"payment_status\": \"pending\",\n      \"created_at\": \"2026-04-19T12:30:00+00:00\"\n    },\n    \"coupons\": [\n      {\n        \"entitlement_id\": 5543,\n        \"coupon\": { \"id\": 101, \"title\": \"كوبون بيتزا\", \"price\": 45.0 },\n        \"redeem_token\": \"W-ABCDEFG...\",\n        \"qr_code_base64\": \"data:image/png;base64,iVBORw0KGgo...\",\n        \"usage_limit\": 1,\n        \"remaining_uses\": 1,\n        \"status\": \"pending\"\n      }\n    ],\n    \"payment\": {\n      \"method\": \"cash\",\n      \"status\": \"pending\",\n      \"amount\": 135.00,\n      \"currency\": \"SAR\"\n    },\n    \"qr_code\": {\n      \"payload\": \"{\\\"type\\\":\\\"order\\\",\\\"order_id\\\":987,\\\"user_id\\\":12,\\\"token\\\":\\\"W-...\\\"}\",\n      \"base64\": \"data:image/png;base64,iVBORw0KGgo...\",\n      \"format\": \"png\"\n    },\n    \"shareable_link\": \"https://app.ofroo.com/orders/987\",\n    \"deep_link\": \"ofroo://orders/987?token=W-ABCDEFG...\"\n  }\n}"
+						},
+						{
+							"name": "403 — user_id mismatch or payments disabled",
+							"status": "Forbidden",
+							"code": 403,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"message\": \"user_id does not match the authenticated user\" }"
+						},
+						{
+							"name": "422 — validation / expired coupon / multi-merchant",
+							"status": "Unprocessable Entity",
+							"code": 422,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"message\": \"All coupons must belong to the same merchant\" }"
+						}
+					]
+				},
+				{
+					"name": "POST Checkout Coupons (orders namespace alias)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept",       "value": "application/json" },
+							{ "key": "Authorization","value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_id\": 12,\n    \"coupon_ids\": [101, 102],\n    \"payment_method\": \"cash\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mobile/orders/checkout/coupons",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "orders", "checkout", "coupons"]
+						},
+						"description": "Alias of POST /api/mobile/checkout/coupons — identical behaviour."
+					},
+					"response": []
+				},
+				{
+					"name": "GET Orders (with coupon_status filter)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept",       "value": "application/json" },
+							{ "key": "Authorization","value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/orders?coupon_status=valid&page=1&per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "orders"],
+							"query": [
+								{ "key": "coupon_status", "value": "valid",  "description": "valid | expired | inactive | activated — omit for all orders" },
+								{ "key": "page",          "value": "1" },
+								{ "key": "per_page",      "value": "15" }
+							]
+						},
+						"description": "List authenticated user's orders. The optional coupon_status query parameter filters by the state of coupon entitlements inside each order.\n\n| Value     | Arabic         | Filter logic |\n|-----------|----------------|--------------|\n| valid     | صالح           | status=active AND times_used=0 AND remaining>0 |\n| expired   | منتهي          | status IN (expired, exhausted) |\n| inactive  | غير مفعل      | status=pending |\n| activated | تم تفعيله     | status=active AND times_used>0 |"
+					},
+					"response": [
+						{
+							"name": "200 OK — paginated order list",
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"data\": [\n    { \"id\": 987, \"total_amount\": 135.00, \"payment_status\": \"pending\", \"created_at\": \"2026-04-19T12:30:00+00:00\" }\n  ],\n  \"meta\": {\n    \"current_page\": 1,\n    \"last_page\": 1,\n    \"per_page\": 15,\n    \"total\": 1\n  }\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "2. Share Offer With Friends",
+			"item": [
+				{
+					"name": "GET Share Offer",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/offers/77/share?language=ar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "offers", "77", "share"],
+							"query": [
+								{ "key": "language", "value": "ar", "description": "ar | en (optional)" }
+							]
+						},
+						"description": "Public endpoint. Returns offer details + shareable URLs for WhatsApp, Facebook, Snapchat, TikTok."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"data\": {\n    \"offer\": {\n      \"id\": 77,\n      \"title\": \"خصم 30% على البيتزا\",\n      \"title_ar\": \"خصم 30% على البيتزا\",\n      \"title_en\": \"30% off on pizza\",\n      \"description\": \"عرض ساري حتى نهاية الشهر\",\n      \"price\": 45.0,\n      \"discount\": 30.0,\n      \"image\": \"https://cdn.example.com/storage/offers/77/cover.jpg\",\n      \"images\": [\"https://cdn.example.com/storage/offers/77/cover.jpg\"],\n      \"merchant\": {\n        \"id\": 5,\n        \"company_name\": \"Pizza Palace\",\n        \"logo_url\": \"https://cdn.example.com/storage/merchants/5/logo.png\"\n      }\n    },\n    \"share\": {\n      \"text\": \"شاهد هذا العرض على OFROO: خصم 30% على البيتزا\",\n      \"app_link\": \"ofroo://offers/77\",\n      \"deep_link\": \"ofroo://offers/77\",\n      \"web_link\": \"https://app.ofroo.com/offers/77\",\n      \"universal_link\": \"https://app.ofroo.com/offers/77\",\n      \"platforms\": [\n        { \"platform\": \"whatsapp\", \"share_url\": \"https://wa.me/?text=...\" },\n        { \"platform\": \"facebook\", \"share_url\": \"https://www.facebook.com/sharer/sharer.php?u=...\" },\n        { \"platform\": \"snapchat\", \"share_url\": \"https://www.snapchat.com/scan?attachmentUrl=...\" },\n        { \"platform\": \"tiktok\",   \"share_url\": \"https://www.tiktok.com/upload?lang=en&url=...\" }\n      ]\n    }\n  }\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "3. Share App via Social Media",
+			"item": [
+				{
+					"name": "GET App Share",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/app/share",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "app", "share"]
+						},
+						"description": "Public endpoint. Returns store links and per-platform share URLs (WhatsApp, Facebook, Snapchat, TikTok). Data is read from admin-managed settings keys: play_store_url, app_store_url, app_landing_url, app_share_message_ar, app_share_message_en."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"data\": {\n    \"app_link\": \"https://app.ofroo.com\",\n    \"android_url\": \"https://play.google.com/store/apps/details?id=com.ofroo.app\",\n    \"ios_url\": \"https://apps.apple.com/app/id000000000\",\n    \"message_ar\": \"حمّل تطبيق OFROO للحصول على أفضل العروض والكوبونات\",\n    \"message_en\": \"Download the OFROO app for the best offers and coupons\",\n    \"platforms\": [\n      { \"platform\": \"whatsapp\", \"share_url\": \"https://wa.me/?text=...\",                                 \"icon\": \"https://host/storage/images/share/whatsapp.png\" },\n      { \"platform\": \"facebook\", \"share_url\": \"https://www.facebook.com/sharer/sharer.php?u=...\",         \"icon\": \"https://host/storage/images/share/facebook.png\" },\n      { \"platform\": \"snapchat\", \"share_url\": \"https://www.snapchat.com/scan?attachmentUrl=...\",          \"icon\": \"https://host/storage/images/share/snapchat.png\" },\n      { \"platform\": \"tiktok\",   \"share_url\": \"https://www.tiktok.com/upload?lang=en&url=...\",            \"icon\": \"https://host/storage/images/share/tiktok.png\" }\n    ]\n  }\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "4. Help & Support",
+			"item": [
+				{
+					"name": "GET Support Info",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/support",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "support"]
+						},
+						"description": "Public endpoint. Returns support email, WhatsApp number and ready-made wa.me link. Values are never null — empty string is returned when not configured."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"data\": {\n    \"email\": \"support@ofroo.com\",\n    \"whatsapp_number\": \"+966555555555\",\n    \"whatsapp_link\": \"https://wa.me/966555555555\"\n  }\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "5. About App & Social Media Links",
+			"item": [
+				{
+					"name": "GET App About",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/app/about?language=ar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "app", "about"],
+							"query": [
+								{ "key": "language", "value": "ar", "description": "ar | en (optional)" }
+							]
+						},
+						"description": "Public endpoint. Returns CMS-managed about sections plus social media links. Falls back to legacy app_description_* settings when the app_sections table is empty."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"data\": {\n    \"sections\": [\n      {\n        \"id\": 3,\n        \"type\": \"about\",\n        \"title\": \"من نحن\",\n        \"title_ar\": \"من نحن\",\n        \"title_en\": \"Who We Are\",\n        \"description\": \"OFROO تطبيق عروض وكوبونات...\",\n        \"description_ar\": \"OFROO تطبيق عروض وكوبونات...\",\n        \"description_en\": \"OFROO is an app for deals and coupons...\"\n      }\n    ],\n    \"description\":    \"OFROO تطبيق عروض وكوبونات...\",\n    \"description_ar\": \"OFROO تطبيق عروض وكوبونات...\",\n    \"description_en\": \"OFROO is an app for deals and coupons...\",\n    \"app_version\": \"1.0.0\",\n    \"social_links\": [\n      { \"platform\": \"facebook\",  \"url\": \"https://facebook.com/ofroo\",  \"icon\": \"https://host/storage/images/social/facebook.png\" },\n      { \"platform\": \"instagram\", \"url\": \"https://instagram.com/ofroo\", \"icon\": \"https://host/storage/images/social/instagram.png\" },\n      { \"platform\": \"tiktok\",    \"url\": \"https://tiktok.com/@ofroo\",   \"icon\": \"https://host/storage/images/social/tiktok.png\" }\n    ]\n  }\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "6. Privacy Policy",
+			"item": [
+				{
+					"name": "GET Privacy Policy",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/app/policy?language=ar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "app", "policy"],
+							"query": [
+								{ "key": "language", "value": "ar", "description": "ar | en (optional)" }
+							]
+						},
+						"description": "Public endpoint. Returns privacy policy sections from the app_policies table (type=privacy). Falls back to legacy static_privacy_ar / static_privacy_en settings when the table is empty."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"data\": [\n    {\n      \"id\": 1,\n      \"type\": \"privacy\",\n      \"title\": \"سياسة الخصوصية\",\n      \"title_ar\": \"سياسة الخصوصية\",\n      \"title_en\": \"Privacy Policy\",\n      \"description\": \"نص السياسة...\",\n      \"description_ar\": \"نص السياسة...\",\n      \"description_en\": \"Policy text...\"\n    }\n  ]\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "7. Delete Account",
+			"item": [
+				{
+					"name": "DELETE User Account (no password)",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept",       "value": "application/json" },
+							{ "key": "Authorization","value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mobile/user/account",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "user", "account"]
+						},
+						"description": "One-tap delete: password is now optional. The Sanctum bearer token is sufficient proof of ownership. Anonymises PII, deletes avatar, revokes all tokens, and soft-deletes the User row."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"message\": \"Account deleted successfully\" }"
+						},
+						{
+							"name": "422 — wrong password supplied",
+							"status": "Unprocessable Entity",
+							"code": 422,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"message\": \"The given data was invalid.\", \"errors\": { \"password\": [\"The password is incorrect.\"] } }"
+						}
+					]
+				},
+				{
+					"name": "DELETE User Account (with password)",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept",       "value": "application/json" },
+							{ "key": "Authorization","value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{ \"password\": \"current-password\" }"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mobile/user/account",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "user", "account"]
+						},
+						"description": "Backward-compatible: supply password for extra verification. If provided, it is validated before deletion."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "8. Mobile Search (Fixed)",
+			"item": [
+				{
+					"name": "GET Mobile Search",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept",       "value": "application/json" },
+							{ "key": "Authorization","value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/search?q=بيتزا&page=1&per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "search"],
+							"query": [
+								{ "key": "q",        "value": "بيتزا", "description": "Search term (Arabic/English). Also accepts 'search' as alias." },
+								{ "key": "page",     "value": "1" },
+								{ "key": "per_page", "value": "15", "description": "1–50, default 15" }
+							]
+						},
+						"description": "Unified, paginated search across offers + coupons + categories. Each result item includes a 'type' discriminator. The non-mobile /api/search endpoint is unchanged."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"data\": [\n    { \"id\": 77,  \"title\": \"خصم 30% على البيتزا\", \"image\": \"https://host/.../cover.jpg\",  \"type\": \"offer\" },\n    { \"id\": 210, \"title\": \"كوبون بيتزا\",          \"image\": \"https://host/.../coupon.jpg\", \"type\": \"coupon\" },\n    { \"id\": 4,   \"title\": \"المطاعم\",              \"image\": \"https://host/.../cat.jpg\",    \"type\": \"category\" }\n  ],\n  \"meta\": {\n    \"current_page\": 1,\n    \"last_page\": 1,\n    \"per_page\": 15,\n    \"total\": 3,\n    \"q\": \"بيتزا\",\n    \"counts\": { \"offers\": 1, \"coupons\": 1, \"categories\": 1 }\n  }\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "10. Admin — CMS & Settings",
+			"item": [
+				{
+					"name": "10.1 Static Sections (App Sections CRUD)",
+					"item": [
+						{
+							"name": "GET App Sections List",
+							"request": {
+								"method": "GET",
+								"header": [
+									{ "key": "Accept",       "value": "application/json" },
+									{ "key": "Authorization","value": "Bearer {{token}}" }
+								],
+								"url": {
+									"raw": "{{base_url}}/api/admin/app-sections?type=about&q=&is_active=1&per_page=50",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "app-sections"],
+									"query": [
+										{ "key": "type",      "value": "about",    "description": "privacy | about | support (optional)" },
+										{ "key": "q",         "value": "",         "description": "Search term (optional)" },
+										{ "key": "is_active", "value": "1",        "description": "1 | 0 (optional)" },
+										{ "key": "per_page",  "value": "50" }
+									]
+								},
+								"description": "Paginated list. Admin sees ALL rows including inactive. Alias: /api/admin/app-policies"
+							},
+							"response": [
+								{
+									"name": "200 OK",
+									"status": "OK",
+									"code": 200,
+									"_postman_previewlanguage": "json",
+									"header": [{ "key": "Content-Type", "value": "application/json" }],
+									"body": "{\n  \"data\": [\n    {\n      \"id\": 1,\n      \"type\": \"privacy\",\n      \"title_ar\": \"سياسة الخصوصية\",\n      \"title_en\": \"Privacy Policy\",\n      \"description_ar\": \"...\",\n      \"description_en\": \"...\",\n      \"order_index\": 0,\n      \"is_active\": true,\n      \"created_at\": \"2026-04-19T12:00:00+00:00\",\n      \"updated_at\": \"2026-04-19T12:00:00+00:00\"\n    }\n  ],\n  \"meta\": {\n    \"current_page\": 1,\n    \"last_page\": 1,\n    \"per_page\": 50,\n    \"total\": 3,\n    \"types\":  [\"privacy\", \"about\", \"support\"],\n    \"counts\": { \"privacy\": 2, \"about\": 1, \"support\": 0 }\n  }\n}"
+								}
+							]
+						},
+						{
+							"name": "GET App Section (single)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{ "key": "Accept",       "value": "application/json" },
+									{ "key": "Authorization","value": "Bearer {{token}}" }
+								],
+								"url": {
+									"raw": "{{base_url}}/api/admin/app-sections/1",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "app-sections", "1"]
+								},
+								"description": "Fetch a single section by ID."
+							},
+							"response": []
+						},
+						{
+							"name": "POST Create App Section",
+							"request": {
+								"method": "POST",
+								"header": [
+									{ "key": "Content-Type", "value": "application/json" },
+									{ "key": "Accept",       "value": "application/json" },
+									{ "key": "Authorization","value": "Bearer {{token}}" }
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"type\": \"about\",\n    \"title_ar\": \"من نحن\",\n    \"title_en\": \"About Us\",\n    \"description_ar\": \"OFROO تطبيق عروض...\",\n    \"description_en\": \"OFROO is a deals app...\",\n    \"order_index\": 0,\n    \"is_active\": true\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/app-sections",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "app-sections"]
+								},
+								"description": "Create a new section. 'type' is required (privacy | about | support). Aliases: policy→privacy, about_app→about, help→support."
+							},
+							"response": []
+						},
+						{
+							"name": "PUT Update App Section",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{ "key": "Content-Type", "value": "application/json" },
+									{ "key": "Accept",       "value": "application/json" },
+									{ "key": "Authorization","value": "Bearer {{token}}" }
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"title_ar\": \"من نحن (محدّث)\",\n    \"title_en\": \"About Us (updated)\",\n    \"description_ar\": \"نص محدّث...\",\n    \"description_en\": \"Updated text...\",\n    \"is_active\": true\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/app-sections/1",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "app-sections", "1"]
+								},
+								"description": "Update an existing section. 'type' is optional in update."
+							},
+							"response": []
+						},
+						{
+							"name": "DELETE App Section",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{ "key": "Accept",       "value": "application/json" },
+									{ "key": "Authorization","value": "Bearer {{token}}" }
+								],
+								"url": {
+									"raw": "{{base_url}}/api/admin/app-sections/1",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "app-sections", "1"]
+								},
+								"description": "Delete a section by ID."
+							},
+							"response": []
+						},
+						{
+							"name": "PUT Bulk Reorder App Sections",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{ "key": "Content-Type", "value": "application/json" },
+									{ "key": "Accept",       "value": "application/json" },
+									{ "key": "Authorization","value": "Bearer {{token}}" }
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"order\": [\n        { \"id\": 3, \"order_index\": 0 },\n        { \"id\": 7, \"order_index\": 1 },\n        { \"id\": 5, \"order_index\": 2 }\n    ]\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/app-sections/order",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "app-sections", "order"]
+								},
+								"description": "Bulk reorder sections. Provide an array of { id, order_index } pairs."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "10.1a Settings Overlay",
+					"item": [
+						{
+							"name": "GET Admin Settings (with static_sections overlay)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{ "key": "Accept",       "value": "application/json" },
+									{ "key": "Authorization","value": "Bearer {{token}}" }
+								],
+								"url": {
+									"raw": "{{base_url}}/api/admin/settings",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "settings"]
+								},
+								"description": "Returns the existing settings map PLUS two new sibling keys: 'static_sections' (privacy/about/support rows) and 'endpoints' (CRUD URLs for the mobile CMS). All existing keys are unchanged."
+							},
+							"response": [
+								{
+									"name": "200 OK",
+									"status": "OK",
+									"code": 200,
+									"_postman_previewlanguage": "json",
+									"header": [{ "key": "Content-Type", "value": "application/json" }],
+									"body": "{\n  \"data\": { \"...existing settings map...\": true },\n  \"static_sections\": {\n    \"privacy\": [ { \"id\": 1, \"type\": \"privacy\", \"title_ar\": \"...\", \"title_en\": \"...\", \"description_ar\": \"...\", \"description_en\": \"...\", \"order_index\": 0, \"is_active\": true } ],\n    \"about\":   [],\n    \"support\": []\n  },\n  \"endpoints\": {\n    \"app_sections_crud\": \"/api/admin/app-sections\",\n    \"app_policies_crud\": \"/api/admin/app-policies\",\n    \"mobile_policy\":     \"/api/mobile/app/policy\",\n    \"mobile_about\":      \"/api/mobile/app/about\",\n    \"mobile_support\":    \"/api/mobile/support\"\n  }\n}"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "10.2 Admin Settings Update (new mobile keys)",
+					"item": [
+						{
+							"name": "PUT Admin Settings (flat form — new mobile keys)",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{ "key": "Content-Type", "value": "application/json" },
+									{ "key": "Accept",       "value": "application/json" },
+									{ "key": "Authorization","value": "Bearer {{token}}" }
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"support_email\": \"support@ofroo.com\",\n    \"support_whatsapp\": \"+966555555555\",\n    \"app_description_ar\": \"تطبيق OFROO للعروض والكوبونات\",\n    \"app_description_en\": \"OFROO — deals and coupons app\",\n    \"play_store_url\": \"https://play.google.com/store/apps/details?id=com.ofroo.app\",\n    \"app_store_url\": \"https://apps.apple.com/app/id000000000\",\n    \"app_landing_url\": \"https://app.ofroo.com\",\n    \"app_share_message_ar\": \"حمّل تطبيق OFROO للحصول على أفضل العروض والكوبونات\",\n    \"app_share_message_en\": \"Download the OFROO app for the best offers and coupons\",\n    \"app_deep_link_scheme\": \"ofroo\",\n    \"currency\": \"SAR\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/settings",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "settings"]
+								},
+								"description": "Flat key-value form. New mobile-CMS keys are now accepted by the validator. All pre-existing keys continue to work unchanged."
+							},
+							"response": []
+						},
+						{
+							"name": "PUT Admin Settings (array form)",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{ "key": "Content-Type", "value": "application/json" },
+									{ "key": "Accept",       "value": "application/json" },
+									{ "key": "Authorization","value": "Bearer {{token}}" }
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"settings\": [\n        { \"key\": \"support_email\",   \"value\": \"support@ofroo.com\" },\n        { \"key\": \"support_whatsapp\",\"value\": \"+966555555555\" },\n        { \"key\": \"currency\",         \"value\": \"SAR\" }\n    ]\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/settings",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "settings"]
+								},
+								"description": "Array form (already supported). Each item is { key, value }."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "10.3 Admin Orders (coupon_status filter)",
+					"item": [
+						{
+							"name": "GET Admin Orders (with coupon_status filter)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{ "key": "Accept",       "value": "application/json" },
+									{ "key": "Authorization","value": "Bearer {{token}}" }
+								],
+								"url": {
+									"raw": "{{base_url}}/api/admin/orders?coupon_status=valid",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "orders"],
+									"query": [
+										{ "key": "coupon_status", "value": "valid", "description": "valid | expired | inactive | activated (optional — omit for all orders)" }
+									]
+								},
+								"description": "Admin order list gains the same coupon_status filter as the mobile endpoint. Response shape is unchanged when the param is omitted."
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		}
+	]
+}

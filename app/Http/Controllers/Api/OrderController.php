@@ -403,6 +403,23 @@ class OrderController extends Controller
             ], 500);
         }
 
+        // Clear the cart items that correspond to the purchased coupons so the
+        // user's cart is empty after a successful checkout (best-effort — a failure
+        // here must not roll back the already-committed order).
+        try {
+            $userCart = \App\Models\Cart::where('user_id', $user->id)->first();
+            if ($userCart) {
+                \App\Models\CartItem::where('cart_id', $userCart->id)
+                    ->whereIn('coupon_id', $coupons->pluck('id')->all())
+                    ->delete();
+            }
+        } catch (\Throwable $cartEx) {
+            \Illuminate\Support\Facades\Log::warning('checkoutCoupons: failed to clear cart items after order commit', [
+                'order_id' => $order->id,
+                'error'    => $cartEx->getMessage(),
+            ]);
+        }
+
         $order->load(['items.offer', 'couponEntitlements.coupon.offer', 'merchant']);
 
         $scheme = (string) \App\Models\Setting::getValue('app_deep_link_scheme', 'ofroo');
