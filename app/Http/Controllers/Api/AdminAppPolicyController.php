@@ -207,10 +207,15 @@ class AdminAppPolicyController extends Controller
         $v = strtolower(trim((string) $raw));
 
         return match ($v) {
-            'policy', 'privacy_policy', 'privacy-policy' => AppPolicy::TYPE_PRIVACY,
-            'about_app', 'about-app', 'app_about' => AppPolicy::TYPE_ABOUT,
-            'help', 'help_support', 'contact' => AppPolicy::TYPE_SUPPORT,
-            default => in_array($v, AppPolicy::TYPES, true) ? $v : AppPolicy::TYPE_PRIVACY,
+            'policy', 'privacy_policy', 'privacy-policy'                   => AppPolicy::TYPE_PRIVACY,
+            'about_app', 'about-app', 'app_about'                          => AppPolicy::TYPE_ABOUT,
+            'help', 'help_support', 'contact'                               => AppPolicy::TYPE_SUPPORT,
+            'terms_of_use', 'terms-of-use', 'usage_terms', 'شروط_الاستخدام' => AppPolicy::TYPE_TERMS,
+            'merchant-terms', 'merchant_term', 'شروط_التاجر'                => AppPolicy::TYPE_MERCHANT_TERMS,
+            'platform-rules', 'platform_rule', 'قواعد_المنصة'               => AppPolicy::TYPE_PLATFORM_RULES,
+            default                                                          => in_array($v, AppPolicy::TYPES, true)
+                ? $v
+                : AppPolicy::TYPE_PRIVACY,
         };
     }
 

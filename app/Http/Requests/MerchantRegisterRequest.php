@@ -14,6 +14,14 @@ class MerchantRegisterRequest extends FormRequest
         return true;
     }
 
+    public function messages(): array
+    {
+        return [
+            'accepted_terms.required' => 'يجب الموافقة على الشروط والأحكام | You must accept the terms and conditions.',
+            'accepted_terms.accepted'  => 'يجب الموافقة على الشروط والأحكام | You must accept the terms and conditions.',
+        ];
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *
@@ -39,6 +47,7 @@ class MerchantRegisterRequest extends FormRequest
             'phone_merchant' => 'nullable|string|max:50',
             'whatsapp_link' => 'nullable|url|max:255',
             'city' => 'required|string|max:255|in:القاهرة,الجيزة,الإسكندرية,المنصورة,طنطا,أسيوط,الأقصر,أسوان,بورسعيد,السويس,الإسماعيلية,شبرا الخيمة,زقازيق,بنها,كفر الشيخ,دمياط,المنيا,سوهاج,قنا,البحر الأحمر,مطروح,شمال سيناء,جنوب سيناء,الوادي الجديد,البحيرة,الدقهلية,الشرقية,القليوبية,الفيوم,بني سويف',
+            'accepted_terms' => 'required|accepted',
         ];
     }
 }

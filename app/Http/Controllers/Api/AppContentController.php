@@ -114,6 +114,76 @@ class AppContentController extends Controller
     }
 
     /**
+     * Legal pages — all four content pages managed from the admin dashboard.
+     *
+     * Returns:
+     *   - شروط الاستخدام   (terms)
+     *   - سياسة الخصوصية  (privacy)
+     *   - شروط التاجر      (merchant_terms)
+     *   - قواعد المنصة    (platform_rules)
+     *
+     * Each item contains `{ type, label_ar, label_en, sections[] }`.
+     * Sections are admin-managed rows from the `app_policies` table.
+     *
+     * GET /api/mobile/app/legal-pages
+     * Optional query: ?language=ar|en   (default: ar)
+     * Optional query: ?type=terms       (filter to a single type)
+     */
+    public function legalPages(Request $request): JsonResponse
+    {
+        $language = $request->get('language', 'ar');
+        $filterType = $request->get('type');
+
+        $typeConfig = [
+            AppPolicy::TYPE_TERMS => [
+                'label_ar' => 'شروط الاستخدام',
+                'label_en' => 'Terms of Use',
+                'default_title_ar' => 'شروط الاستخدام',
+                'default_title_en' => 'Terms of Use',
+            ],
+            AppPolicy::TYPE_PRIVACY => [
+                'label_ar' => 'سياسة الخصوصية',
+                'label_en' => 'Privacy Policy',
+                'legacy_key_ar' => 'static_privacy_ar',
+                'legacy_key_en' => 'static_privacy_en',
+                'default_title_ar' => 'سياسة الخصوصية',
+                'default_title_en' => 'Privacy Policy',
+            ],
+            AppPolicy::TYPE_MERCHANT_TERMS => [
+                'label_ar' => 'شروط التاجر',
+                'label_en' => 'Merchant Terms',
+                'default_title_ar' => 'شروط التاجر',
+                'default_title_en' => 'Merchant Terms',
+            ],
+            AppPolicy::TYPE_PLATFORM_RULES => [
+                'label_ar' => 'قواعد المنصة',
+                'label_en' => 'Platform Rules',
+                'default_title_ar' => 'قواعد المنصة',
+                'default_title_en' => 'Platform Rules',
+            ],
+        ];
+
+        if ($filterType !== null && array_key_exists($filterType, $typeConfig)) {
+            $typeConfig = [$filterType => $typeConfig[$filterType]];
+        }
+
+        $result = [];
+        foreach ($typeConfig as $type => $config) {
+            $fallback = array_diff_key($config, array_flip(['label_ar', 'label_en']));
+            $sections = $this->sectionsFor($type, $language, $fallback);
+            $result[] = [
+                'type'     => $type,
+                'label_ar' => $config['label_ar'],
+                'label_en' => $config['label_en'],
+                'label'    => $language === 'en' ? $config['label_en'] : $config['label_ar'],
+                'sections' => $sections,
+            ];
+        }
+
+        return response()->json(['data' => $result]);
+    }
+
+    /**
      * Load and shape sections for the mobile app, preferring admin-managed
      * rows in `app_policies` and falling back to legacy settings keys.
      *

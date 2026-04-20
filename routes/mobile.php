@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\RegulatoryCheckController;
 use App\Http\Controllers\Api\FinancialReportsCacheController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AdController;
+use App\Http\Controllers\Api\MerchantApplicationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -132,6 +133,12 @@ Route::get('/app/about', [AppContentController::class, 'about']);
 Route::get('/app/policy', [AppContentController::class, 'policy']);
 
 // ================================
+// 4.4 الصفحات القانونية (Legal Pages) - Public
+// شروط الاستخدام / سياسة الخصوصية / شروط التاجر / قواعد المنصة
+// ================================
+Route::get('/app/legal-pages', [AppContentController::class, 'legalPages']);
+
+// ================================
 // Protected Routes - كل ما يخص المستخدم يتطلب تسجيل الدخول (auth:sanctum)
 // Cart, Orders, Payment (checkout), Profile, Wallet, Coupons, Reviews, Support, Loyalty
 // ================================
@@ -141,6 +148,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // 2. المصادقة - Protected
     // ================================
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+    // ================================
+    // 2.1 حالة طلب التسجيل كتاجر (Merchant Application Status)
+    // يتيح للمستخدم معرفة ما إذا كان طلبه مقبولاً أو مرفوضاً أو قيد المراجعة
+    // ================================
+    Route::get('/merchant/application/status', [MerchantApplicationController::class, 'status']);
     
     // ================================
     // 4. العروض - Protected (بحث، واتساب، مفضلة)

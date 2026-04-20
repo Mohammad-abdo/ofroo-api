@@ -1,0 +1,456 @@
+{
+	"info": {
+		"name": "OFROO — Merchant Registration, Application Status & Legal Pages",
+		"description": "Three new endpoint groups:\n1. POST /api/mobile/auth/register-merchant — register as merchant (requires accepting T&C)\n2. GET  /api/mobile/merchant/application/status — check approval status\n3. GET  /api/mobile/app/legal-pages — all 4 legal pages managed from the admin dashboard\n\nAdmin CRUD for legal pages also included.\n\nSet {{base_url}} (e.g. https://your-host) and {{token}} (Sanctum Bearer) in collection variables.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"version": "1.0.0"
+	},
+	"variable": [
+		{ "key": "base_url", "value": "https://your-host", "type": "string" },
+		{ "key": "token",    "value": "YOUR_SANCTUM_TOKEN", "type": "string" }
+	],
+	"item": [
+		{
+			"name": "1. Register as Merchant",
+			"description": "POST /api/mobile/auth/register-merchant\n\nCreates a User (role=merchant) + a Merchant row with approved=false (pending admin review).\nReturns Arabic success message: \"تم إرسال طلبك بنجاح\".\n\nConstraints:\n- accepted_terms MUST be true/1 — validated with Laravel's 'accepted' rule.\n- All coupon IDs must belong to the same merchant.",
+			"item": [
+				{
+					"name": "Register as Merchant (full fields)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var json = pm.response.json();",
+									"    if (json.token) {",
+									"        pm.collectionVariables.set('token', json.token);",
+									"        console.log('Token saved:', json.token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept",       "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"أحمد محمد\",\n    \"email\": \"ahmed.merchant@example.com\",\n    \"phone\": \"+201012345678\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\",\n    \"company_name\": \"مطعم البيتزا الذهبية\",\n    \"company_name_ar\": \"مطعم البيتزا الذهبية\",\n    \"company_name_en\": \"Golden Pizza Restaurant\",\n    \"description\": \"أفضل بيتزا في القاهرة\",\n    \"description_ar\": \"أفضل بيتزا في القاهرة\",\n    \"description_en\": \"Best pizza in Cairo\",\n    \"address\": \"15 شارع التحرير، وسط البلد\",\n    \"city\": \"القاهرة\",\n    \"accepted_terms\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mobile/auth/register-merchant",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "auth", "register-merchant"]
+						},
+						"description": "Registers a new merchant account.\n\nKey field: **accepted_terms** must be `true` — the user must explicitly agree to the terms and conditions.\n\nOn success (201): returns token + Arabic message \"تم إرسال طلبك بنجاح\".\nThe test script auto-saves the token to the collection variable."
+					},
+					"response": [
+						{
+							"name": "201 Created — success",
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"success\": true,\n  \"message\": \"تم إرسال طلبك بنجاح\",\n  \"message_ar\": \"تم إرسال طلبك بنجاح، سيتم مراجعته من قِبَل الإدارة وستصلك إشعار بالقرار.\",\n  \"message_en\": \"Your request has been submitted successfully. It will be reviewed by the admin and you will be notified of the decision.\",\n  \"token\": \"1|abcdefgh...\",\n  \"data\": {\n    \"token\": \"1|abcdefgh...\",\n    \"user\": { \"id\": 42, \"name\": \"أحمد محمد\", \"email\": \"ahmed.merchant@example.com\" },\n    \"merchant\": {\n      \"id\": 7,\n      \"company_name\": \"مطعم البيتزا الذهبية\",\n      \"company_name_ar\": \"مطعم البيتزا الذهبية\",\n      \"company_name_en\": \"Golden Pizza Restaurant\",\n      \"approved\": false,\n      \"application_status\": \"pending\",\n      \"accepted_terms\": true\n    }\n  }\n}"
+						},
+						{
+							"name": "422 — accepted_terms not accepted",
+							"status": "Unprocessable Entity",
+							"code": 422,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"message\": \"The accepted terms field must be accepted.\",\n  \"errors\": {\n    \"accepted_terms\": [\n      \"يجب الموافقة على الشروط والأحكام | You must accept the terms and conditions.\"\n    ]\n  }\n}"
+						},
+						{
+							"name": "422 — email/phone already taken",
+							"status": "Unprocessable Entity",
+							"code": 422,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"message\": \"The email has already been taken.\",\n  \"errors\": { \"email\": [\"The email has already been taken.\"] }\n}"
+						}
+					]
+				},
+				{
+					"name": "Register as Merchant (minimal required fields)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept",       "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"سارة علي\",\n    \"email\": \"sara.merchant@example.com\",\n    \"phone\": \"+201098765432\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\",\n    \"company_name\": \"متجر سارة\",\n    \"city\": \"الجيزة\",\n    \"accepted_terms\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mobile/auth/register-merchant",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "auth", "register-merchant"]
+						},
+						"description": "Minimal fields only. accepted_terms is still required."
+					},
+					"response": []
+				},
+				{
+					"name": "Register as Merchant (rejected — T&C not accepted)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept",       "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"تجربة\",\n    \"email\": \"test.fail@example.com\",\n    \"phone\": \"+201011111111\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\",\n    \"company_name\": \"اختبار\",\n    \"city\": \"القاهرة\",\n    \"accepted_terms\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mobile/auth/register-merchant",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "auth", "register-merchant"]
+						},
+						"description": "Should return 422 because accepted_terms = false."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Merchant Application Status",
+			"description": "GET /api/mobile/merchant/application/status\n\nAuth required (Bearer token). Returns the current approval status of the authenticated user's merchant application.\n\nPossible status values:\n- pending   → application submitted, waiting for admin review\n- accepted  → approved = true (merchant can now log in fully)\n- rejected  → status = disabled (admin explicitly rejected)",
+			"item": [
+				{
+					"name": "GET Merchant Application Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept",        "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/merchant/application/status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "merchant", "application", "status"]
+						},
+						"description": "Returns status, bilingual message, merchant ID and company name.\n\nStatus → Arabic label:\n  pending  → قيد المراجعة\n  accepted → مقبول\n  rejected → مرفوض"
+					},
+					"response": [
+						{
+							"name": "200 — pending",
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"data\": {\n    \"status\": \"pending\",\n    \"status_ar\": \"قيد المراجعة\",\n    \"message\": \"طلبك قيد المراجعة، سيتم إشعارك عند اتخاذ القرار.\",\n    \"message_ar\": \"طلبك قيد المراجعة، سيتم إشعارك عند اتخاذ القرار.\",\n    \"message_en\": \"Your application is under review. You will be notified once a decision is made.\",\n    \"merchant_id\": 7,\n    \"company_name\": \"مطعم البيتزا الذهبية\",\n    \"accepted_terms\": true,\n    \"rejection_reason\": null,\n    \"applied_at\": \"2026-04-20T10:00:00+00:00\"\n  }\n}"
+						},
+						{
+							"name": "200 — accepted",
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"data\": {\n    \"status\": \"accepted\",\n    \"status_ar\": \"مقبول\",\n    \"message\": \"تم قبول طلبك، يمكنك الآن استخدام حساب التاجر.\",\n    \"message_ar\": \"تم قبول طلبك، يمكنك الآن استخدام حساب التاجر.\",\n    \"message_en\": \"Your application has been accepted. You can now use your merchant account.\",\n    \"merchant_id\": 7,\n    \"company_name\": \"مطعم البيتزا الذهبية\",\n    \"accepted_terms\": true,\n    \"rejection_reason\": null,\n    \"applied_at\": \"2026-04-20T10:00:00+00:00\"\n  }\n}"
+						},
+						{
+							"name": "200 — rejected",
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"data\": {\n    \"status\": \"rejected\",\n    \"status_ar\": \"مرفوض\",\n    \"message\": \"تم رفض طلبك.\",\n    \"message_ar\": \"تم رفض طلبك.\",\n    \"message_en\": \"Your application has been rejected.\",\n    \"merchant_id\": 7,\n    \"company_name\": \"مطعم البيتزا الذهبية\",\n    \"accepted_terms\": true,\n    \"rejection_reason\": \"البيانات التجارية غير مكتملة\",\n    \"applied_at\": \"2026-04-20T10:00:00+00:00\"\n  }\n}"
+						},
+						{
+							"name": "404 — no merchant application",
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"message\": \"لا يوجد طلب تسجيل تاجر مرتبط بهذا الحساب\",\n  \"message_ar\": \"لا يوجد طلب تسجيل تاجر مرتبط بهذا الحساب\",\n  \"message_en\": \"No merchant application found for this account.\"\n}"
+						},
+						{
+							"name": "401 — unauthenticated",
+							"status": "Unauthorized",
+							"code": 401,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"message\": \"Unauthenticated.\" }"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "3. Legal Pages (Public)",
+			"description": "GET /api/mobile/app/legal-pages\n\nPublic endpoint. Returns all four legal sections managed from the admin dashboard:\n  - terms          → شروط الاستخدام\n  - privacy        → سياسة الخصوصية\n  - merchant_terms → شروط التاجر\n  - platform_rules → قواعد المنصة\n\nEach item has { type, label_ar, label_en, label, sections[] }.\nSections are admin-managed rows from the app_policies table.",
+			"item": [
+				{
+					"name": "GET Legal Pages (all, Arabic)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/app/legal-pages?language=ar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "app", "legal-pages"],
+							"query": [
+								{ "key": "language", "value": "ar", "description": "ar | en (optional, default ar)" }
+							]
+						},
+						"description": "Returns all 4 legal page groups in Arabic."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"data\": [\n    {\n      \"type\": \"terms\",\n      \"label_ar\": \"شروط الاستخدام\",\n      \"label_en\": \"Terms of Use\",\n      \"label\": \"شروط الاستخدام\",\n      \"sections\": [\n        {\n          \"id\": 5,\n          \"type\": \"terms\",\n          \"title\": \"شروط الاستخدام\",\n          \"title_ar\": \"شروط الاستخدام\",\n          \"title_en\": \"Terms of Use\",\n          \"description\": \"مرحباً بك في تطبيق OFROO. باستخدامك لهذا التطبيق...\",\n          \"description_ar\": \"مرحباً بك في تطبيق OFROO...\",\n          \"description_en\": \"Welcome to OFROO...\"\n        }\n      ]\n    },\n    {\n      \"type\": \"privacy\",\n      \"label_ar\": \"سياسة الخصوصية\",\n      \"label_en\": \"Privacy Policy\",\n      \"label\": \"سياسة الخصوصية\",\n      \"sections\": [ { \"id\": 6, \"type\": \"privacy\", \"title\": \"سياسة الخصوصية\", \"description\": \"تلتزم OFROO بحماية خصوصيتك...\" } ]\n    },\n    {\n      \"type\": \"merchant_terms\",\n      \"label_ar\": \"شروط التاجر\",\n      \"label_en\": \"Merchant Terms\",\n      \"label\": \"شروط التاجر\",\n      \"sections\": [ { \"id\": 7, \"type\": \"merchant_terms\", \"title\": \"شروط التاجر\", \"description\": \"للانضمام إلى منصة OFROO كتاجر...\" } ]\n    },\n    {\n      \"type\": \"platform_rules\",\n      \"label_ar\": \"قواعد المنصة\",\n      \"label_en\": \"Platform Rules\",\n      \"label\": \"قواعد المنصة\",\n      \"sections\": [ { \"id\": 8, \"type\": \"platform_rules\", \"title\": \"قواعد المنصة\", \"description\": \"تهدف قواعد المنصة إلى ضمان تجربة آمنة...\" } ]\n    }\n  ]\n}"
+						}
+					]
+				},
+				{
+					"name": "GET Legal Pages (all, English)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/app/legal-pages?language=en",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "app", "legal-pages"],
+							"query": [
+								{ "key": "language", "value": "en" }
+							]
+						},
+						"description": "Same endpoint but titles/descriptions returned in English."
+					},
+					"response": []
+				},
+				{
+					"name": "GET Legal Pages (single type — terms)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/app/legal-pages?type=terms&language=ar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "app", "legal-pages"],
+							"query": [
+								{ "key": "type",     "value": "terms",  "description": "terms | privacy | merchant_terms | platform_rules" },
+								{ "key": "language", "value": "ar" }
+							]
+						},
+						"description": "Filter to a single type. Returns only شروط الاستخدام sections."
+					},
+					"response": []
+				},
+				{
+					"name": "GET Legal Pages (single type — merchant_terms)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/app/legal-pages?type=merchant_terms&language=ar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "app", "legal-pages"],
+							"query": [
+								{ "key": "type",     "value": "merchant_terms" },
+								{ "key": "language", "value": "ar" }
+							]
+						},
+						"description": "Returns only شروط التاجر sections."
+					},
+					"response": []
+				},
+				{
+					"name": "GET Legal Pages (single type — platform_rules)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/mobile/app/legal-pages?type=platform_rules&language=ar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "app", "legal-pages"],
+							"query": [
+								{ "key": "type",     "value": "platform_rules" },
+								{ "key": "language", "value": "ar" }
+							]
+						},
+						"description": "Returns only قواعد المنصة sections."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "4. Admin — Manage Legal Pages (CRUD)",
+			"description": "Admin dashboard endpoints for managing the 4 legal page types from the backend.\nAll requests require auth:sanctum + admin middleware.\n\nNew types accepted by the backend:\n  terms          → شروط الاستخدام\n  merchant_terms → شروط التاجر\n  platform_rules → قواعد المنصة\n  (privacy, about, support continue to work as before)",
+			"item": [
+				{
+					"name": "GET List Legal Sections (admin)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept",        "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/app-sections?type=terms&per_page=50",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "app-sections"],
+							"query": [
+								{ "key": "type",      "value": "terms",  "description": "terms | privacy | merchant_terms | platform_rules | about | support" },
+								{ "key": "per_page",  "value": "50" }
+							]
+						},
+						"description": "Admin list. Filter by type to see one page group."
+					},
+					"response": []
+				},
+				{
+					"name": "POST Create Legal Section — terms (شروط الاستخدام)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept",       "value": "application/json" },
+							{ "key": "Authorization","value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"type\": \"terms\",\n    \"title_ar\": \"شروط الاستخدام\",\n    \"title_en\": \"Terms of Use\",\n    \"description_ar\": \"نص شروط الاستخدام بالعربية...\",\n    \"description_en\": \"Terms of use text in English...\",\n    \"order_index\": 0,\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/app-sections",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "app-sections"]
+						},
+						"description": "Create a new Terms of Use section."
+					},
+					"response": []
+				},
+				{
+					"name": "POST Create Legal Section — merchant_terms (شروط التاجر)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept",       "value": "application/json" },
+							{ "key": "Authorization","value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"type\": \"merchant_terms\",\n    \"title_ar\": \"شروط التاجر\",\n    \"title_en\": \"Merchant Terms\",\n    \"description_ar\": \"نص شروط التاجر بالعربية...\",\n    \"description_en\": \"Merchant terms text in English...\",\n    \"order_index\": 0,\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/app-sections",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "app-sections"]
+						},
+						"description": "Create a new Merchant Terms section."
+					},
+					"response": []
+				},
+				{
+					"name": "POST Create Legal Section — platform_rules (قواعد المنصة)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept",       "value": "application/json" },
+							{ "key": "Authorization","value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"type\": \"platform_rules\",\n    \"title_ar\": \"قواعد المنصة\",\n    \"title_en\": \"Platform Rules\",\n    \"description_ar\": \"نص قواعد المنصة بالعربية...\",\n    \"description_en\": \"Platform rules text in English...\",\n    \"order_index\": 0,\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/app-sections",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "app-sections"]
+						},
+						"description": "Create a new Platform Rules section."
+					},
+					"response": []
+				},
+				{
+					"name": "PUT Update Legal Section",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept",       "value": "application/json" },
+							{ "key": "Authorization","value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title_ar\": \"شروط الاستخدام (محدّثة)\",\n    \"title_en\": \"Terms of Use (updated)\",\n    \"description_ar\": \"النص المحدّث بالعربية...\",\n    \"description_en\": \"Updated text in English...\",\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/app-sections/1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "app-sections", "1"]
+						},
+						"description": "Update any section by ID. Replace '1' with actual section ID."
+					},
+					"response": []
+				},
+				{
+					"name": "DELETE Legal Section",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{ "key": "Accept",        "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/app-sections/1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "app-sections", "1"]
+						},
+						"description": "Delete a section by ID."
+					},
+					"response": []
+				},
+				{
+					"name": "PUT Bulk Reorder Legal Sections",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept",       "value": "application/json" },
+							{ "key": "Authorization","value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"order\": [\n        { \"id\": 5, \"order_index\": 0 },\n        { \"id\": 6, \"order_index\": 1 },\n        { \"id\": 7, \"order_index\": 2 }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/app-sections/order",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "app-sections", "order"]
+						},
+						"description": "Bulk reorder any sections (works for all types)."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

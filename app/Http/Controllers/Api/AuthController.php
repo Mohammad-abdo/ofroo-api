@@ -359,8 +359,9 @@ class AuthController extends Controller
             'phone' => $request->phone_merchant,
             'whatsapp_link' => $request->whatsapp_link,
             'city' => $request->city ?? null,
-            'country' => 'مصر', // Default to Egypt
-            'approved' => false, // Requires admin approval
+            'country' => 'مصر',
+            'approved' => false,
+            'accepted_terms' => true,
         ]);
 
         $user->load('role');
@@ -369,9 +370,9 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Merchant registered successfully. Waiting for admin approval.',
-            'message_ar' => 'تم التسجيل بنجاح. في انتظار موافقة الإدارة.',
-            'message_en' => 'Merchant registered successfully. Waiting for admin approval.',
+            'message' => 'تم إرسال طلبك بنجاح',
+            'message_ar' => 'تم إرسال طلبك بنجاح، سيتم مراجعته من قِبَل الإدارة وستصلك إشعار بالقرار.',
+            'message_en' => 'Your request has been submitted successfully. It will be reviewed by the admin and you will be notified of the decision.',
             'token' => $token,
             'data' => [
                 'token' => $token,
@@ -382,6 +383,8 @@ class AuthController extends Controller
                     'company_name_ar' => $merchant->company_name_ar,
                     'company_name_en' => $merchant->company_name_en,
                     'approved' => (bool) $merchant->approved,
+                    'application_status' => 'pending',
+                    'accepted_terms' => true,
                 ],
             ],
             'user' => new UserResource($user),

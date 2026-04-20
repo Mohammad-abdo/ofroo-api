@@ -40,12 +40,15 @@ class Merchant extends Model
         'tax_number',
         'commission_mode',
         'commission_custom_percent',
+        'accepted_terms',
+        'rejection_reason',
     ];
 
     protected function casts(): array
     {
         return [
             'approved' => 'boolean',
+            'accepted_terms' => 'boolean',
             'whatsapp_enabled' => 'boolean',
             'suspended_at' => 'datetime',
             'suspended_until' => 'datetime',
