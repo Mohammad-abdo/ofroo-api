@@ -118,10 +118,17 @@ class OrderTest extends TestCase
             'user_id' => $this->user->id,
             'payment_method' => 'cash',
         ]);
+        $this->assertDatabaseMissing('cart_items', [
+            'cart_id' => $cart->id,
+        ]);
+
+        $cartResponse = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/mobile/cart');
+        $cartResponse->assertOk()
+            ->assertJsonPath('data.items', []);
 
         // Check that coupons were created
         $order = Order::where('user_id', $this->user->id)->first();
         $this->assertGreaterThan(0, Coupon::where('order_id', $order->id)->count());
     }
 }
-

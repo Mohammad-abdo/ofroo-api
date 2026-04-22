@@ -31,7 +31,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "mobile", "checkout", "coupons"]
 						},
-						"description": "Creates an order from specific coupon IDs, generates QR codes and deep links. Cart items matching the purchased coupon IDs are automatically cleared on success.\n\nConstraints:\n- user_id must match the authenticated user (403)\n- All coupons must belong to the same merchant (422)\n- No coupon may be expired (422)\n- card payments blocked when electronic-payments feature flag is off (403)"
+						"description": "Creates an order from specific coupon IDs, generates QR codes and deep links. On success the user's entire cart is cleared automatically (same behaviour as cart checkout).\n\nConstraints:\n- user_id must match the authenticated user (403)\n- All coupons must belong to the same merchant (422)\n- No coupon may be expired (422)\n- card payments blocked when electronic-payments feature flag is off (403)"
 					},
 					"response": [
 						{
