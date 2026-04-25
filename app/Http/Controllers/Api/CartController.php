@@ -11,10 +11,39 @@ use App\Models\Coupon;
 use App\Models\Offer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class CartController extends Controller
 {
+    /**
+     * 400 response when requested units exceed remaining uses for this coupon row.
+     *
+     * @param  int  $cartLineQuantity  Current quantity in cart for this coupon (0 if none).
+     */
+    private function couponQuantityExceededResponse(
+        int $couponId,
+        int $offerId,
+        int $requestedQuantity,
+        int $remaining,
+        int $usageLimit,
+        int $timesUsed,
+        int $cartLineQuantity = 0
+    ): JsonResponse {
+        return response()->json([
+            'message' => 'Requested quantity exceeds available coupon uses.',
+            'message_ar' => 'الكمية المطلوبة تتجاوز عدد مرات استخدام الكوبون المتاحة لهذا السطر.',
+            'message_en' => 'Requested quantity exceeds available coupon uses for this coupon.',
+            'data' => [
+                'coupon_id' => $couponId,
+                'offer_id' => $offerId,
+                'requested_quantity' => $requestedQuantity,
+                'remaining' => $remaining,
+                'usage_limit' => $usageLimit,
+                'times_used' => $timesUsed,
+                'cart_line_quantity' => $cartLineQuantity,
+            ],
+        ], 400);
+    }
+
     /**
      * Ensure request is authenticated. Routes must use auth:sanctum middleware; this is a safety net.
      */
@@ -121,36 +150,38 @@ class CartController extends Controller
 
     /**
      * Add item to cart (requires auth + token).
-     * Accepts either:
-     * - coupon_id: add this specific coupon (one coupon per line).
-     * - offer_id + quantity: add quantity coupons from this offer (allocated at checkout).
+     *
+     * Two shapes (do not mix semantics in the client):
+     *
+     * 1) Offer-level slots — body: offer_id + quantity, omit coupon_id (or null).
+     *    Capacity = sum of remaining uses across active coupons on that offer
+     *    (same logic as Offer available_coupons_count).
+     *
+     * 2) Specific coupon row — body: coupon_id + offer_id (optional cross-check) + optional quantity (default 1).
+     *    Capacity = (usage_limit - times_used) for that coupon row only; cart merges quantity on the same line.
      */
     public function add(Request $request): JsonResponse
     {
         if ($response = $this->ensureAuthenticated($request)) {
             return $response;
         }
-
-        // Decide which cart flow to use before validating the request payload.
-        $user = $request->user();
-        $cart = Cart::firstOrCreate(['user_id' => $user->id]);
-
-        // Coupon-based add: route directly to the dedicated handler.
-        if ($request->has('coupon_id') && $request->coupon_id) {
-            return $this->addCouponToCart($request, $cart);
-        }
-
-        // Offer-based add: quantity is required when no specific coupon is sent.
         $request->validate([
             'offer_id' => 'required|exists:offers,id',
             'coupon_id' => 'nullable|exists:coupons,id',
             'quantity' => 'required_without:coupon_id|integer|min:1',
         ]);
+        
+        $user = $request->user();
+        $cart = Cart::firstOrCreate(['user_id' => $user->id]);
 
-        // Load the offer once so availability checks and cart insertion share the same record.
+        if ($request->has('coupon_id') && $request->coupon_id) {
+            return $this->addCouponToCart($request, $cart);
+        }
+
+      
+
         $offer = Offer::with('coupons')->findOrFail($request->offer_id);
 
-        // Block offers that are not yet live.
         if ($offer->start_date && $offer->start_date->isFuture()) {
             return response()->json([
                 'success' => false,
@@ -159,7 +190,6 @@ class CartController extends Controller
                 'message_en' => 'This offer has not started yet.',
             ], 400);
         }
-        // Block offers that already passed their end date.
         if ($offer->end_date && $offer->end_date->isPast()) {
             return response()->json([
                 'success' => false,
@@ -169,7 +199,6 @@ class CartController extends Controller
             ], 400);
         }
 
-        // Ensure the offer is active and enough coupons remain for the requested quantity.
         $available = $offer->available_coupons_count;
 
         if ($offer->status !== 'active' || $available < $request->quantity) {
@@ -178,23 +207,26 @@ class CartController extends Controller
                 'message' => 'Offer not available or coupon usage limit exhausted.',
                 'message_ar' => 'العرض غير متاح أو تم استنفاد حد استخدام الكوبون',
                 'message_en' => 'This offer is unavailable or the coupon usage limit has been exhausted.',
+                'data' => [
+                    'offer_id' => (int) $offer->id,
+                    'requested_quantity' => (int) $request->quantity,
+                    'available' => (int) $available,
+                    'offer_status' => (string) ($offer->status ?? ''),
+                ],
             ], 400);
         }
 
-        // Reuse an existing line item when the cart already contains this offer.
         $cartItem = CartItem::where('cart_id', $cart->id)
             ->where('offer_id', $offer->id)
             ->whereNull('coupon_id')
             ->first();
 
         if ($cartItem) {
-            // Merge the requested quantity into the current cart line.
             $cartItem->update([
                 'quantity' => $cartItem->quantity + $request->quantity,
             ]);
             $lineTotalQuantity = (int) $cartItem->fresh()->quantity;
         } else {
-            // Create a new cart line for the offer when it does not already exist.
             CartItem::create([
                 'cart_id' => $cart->id,
                 'offer_id' => $offer->id,
@@ -219,18 +251,17 @@ class CartController extends Controller
     }
 
     /**
-     * Add a specific coupon to cart (user buys one coupon from the offer).
-     * Body: coupon_id (required), offer_id (optional - validated if sent).
+     * Add a specific coupon row to the cart (quantity defaults to 1; capped by usage_limit - times_used).
+     * Body: coupon_id (required), offer_id (optional cross-check), quantity (optional, min 1).
      */
     private function addCouponToCart(Request $request, Cart $cart): JsonResponse
     {
         $request->validate([
             'coupon_id' => 'required|exists:coupons,id',
             'offer_id' => 'nullable|exists:offers,id',
-            'quantity' => 'nullable|integer|min:1',
+            'quantity' => 'sometimes|integer|min:1',
         ]);
 
-        // Fetch the coupon with its linked offer so validation stays consistent.
         $coupon = Coupon::with('offer')->findOrFail($request->coupon_id);
 
         if ($request->filled('offer_id') && (int) $coupon->offer_id !== (int) $request->offer_id) {
@@ -241,7 +272,6 @@ class CartController extends Controller
             ], 400);
         }
 
-        // Reject coupons that are not attached to a valid offer.
         if ($coupon->offer_id === null || ! $coupon->offer) {
             return response()->json([
                 'message' => 'Coupon has no offer.',
@@ -251,7 +281,6 @@ class CartController extends Controller
         }
 
         $offer = $coupon->offer;
-        // Keep the parent offer active before inserting the coupon line.
         if ($offer->status !== 'active') {
             return response()->json([
                 'message' => 'Offer is not active.',
@@ -260,7 +289,6 @@ class CartController extends Controller
             ], 400);
         }
 
-        // Validate coupon availability, status, expiry, and usage cap.
         if (($coupon->status ?? '') !== 'active') {
             return response()->json([
                 'message' => 'Coupon is not available.',
@@ -281,23 +309,34 @@ class CartController extends Controller
         $limit = (int) ($coupon->usage_limit ?? 1);
         $used = (int) ($coupon->times_used ?? 0);
         $remaining = max(0, $limit - $used);
+
         if ($remaining <= 0) {
             return response()->json([
                 'message' => 'Coupon usage limit exhausted.',
                 'message_ar' => 'تم استنفاد حد استخدام هذا الكوبون.',
                 'message_en' => 'This coupon has been exhausted.',
+                'data' => [
+                    'coupon_id' => (int) $coupon->id,
+                    'offer_id' => (int) $offer->id,
+                    'remaining' => 0,
+                    'usage_limit' => $limit,
+                    'times_used' => $used,
+                ],
             ], 400);
         }
 
         if ($requestedQuantity > $remaining) {
-            return response()->json([
-                'message' => 'Requested quantity exceeds available coupon uses.',
-                'message_ar' => 'Requested quantity exceeds available coupon uses.',
-                'message_en' => 'Requested quantity exceeds available coupon uses.',
-            ], 400);
+            return $this->couponQuantityExceededResponse(
+                (int) $coupon->id,
+                (int) $offer->id,
+                $requestedQuantity,
+                $remaining,
+                $limit,
+                $used,
+                0
+            );
         }
 
-        // Avoid duplicating the same coupon inside the same cart.
         $existing = CartItem::where('cart_id', $cart->id)
             ->where('coupon_id', $coupon->id)
             ->first();
@@ -305,11 +344,15 @@ class CartController extends Controller
         if ($existing) {
             $newQuantity = (int) $existing->quantity + $requestedQuantity;
             if ($newQuantity > $remaining) {
-                return response()->json([
-                    'message' => 'Requested quantity exceeds available coupon uses.',
-                    'message_ar' => 'Requested quantity exceeds available coupon uses.',
-                    'message_en' => 'Requested quantity exceeds available coupon uses.',
-                ], 400);
+                return $this->couponQuantityExceededResponse(
+                    (int) $coupon->id,
+                    (int) $offer->id,
+                    $requestedQuantity,
+                    $remaining,
+                    $limit,
+                    $used,
+                    (int) $existing->quantity
+                );
             }
 
             $existing->update([
@@ -318,10 +361,11 @@ class CartController extends Controller
 
             return response()->json([
                 'message' => 'Coupon quantity updated in cart successfully',
-                'message_ar' => 'Coupon quantity updated in cart successfully',
+                'message_ar' => 'تم تحديث كمية الكوبون في السلة بنجاح',
                 'message_en' => 'Coupon quantity updated in cart successfully',
                 'data' => [
                     'cart_id' => $cart->id,
+                    'offer_id' => (int) $offer->id,
                     'coupon_id' => (int) $coupon->id,
                     'quantity_added' => $requestedQuantity,
                     'line_total_quantity' => $newQuantity,
@@ -329,15 +373,6 @@ class CartController extends Controller
             ]);
         }
 
-        if ($existing) {
-            return response()->json([
-                'message' => 'This coupon is already in your cart.',
-                'message_ar' => 'هذا الكوبون موجود بالفعل في السلة.',
-                'message_en' => 'This coupon is already in your cart.',
-            ], 400);
-        }
-
-        // Insert the coupon as a single cart row with its add-time price snapshot.
         CartItem::create([
             'cart_id' => $cart->id,
             'offer_id' => $offer->id,
@@ -350,6 +385,13 @@ class CartController extends Controller
             'message' => 'Coupon added to cart successfully',
             'message_ar' => 'تم إضافة الكوبون إلى السلة',
             'message_en' => 'Coupon added to cart successfully',
+            'data' => [
+                'cart_id' => $cart->id,
+                'offer_id' => (int) $offer->id,
+                'coupon_id' => (int) $coupon->id,
+                'quantity_added' => $requestedQuantity,
+                'line_total_quantity' => $requestedQuantity,
+            ],
         ]);
     }
 
