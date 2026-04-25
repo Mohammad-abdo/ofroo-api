@@ -128,9 +128,22 @@ class OrderController extends Controller
      */
     public function checkout(Request $request): JsonResponse
     {
+        // Normalize common mobile aliases before validation.
+        if (! $request->filled('payment_method') && $request->filled('payment_method_type')) {
+            $request->merge([
+                'payment_method' => $request->input('payment_method_type'),
+            ]);
+        }
+
+        $normalizedPaymentMethod = strtolower((string) ($request->input('payment_method') ?? ''));
+        if ($normalizedPaymentMethod === 'cash_on_delivery') {
+            $request->merge(['payment_method' => 'cash']);
+        }
+
+        // Validate the checkout request before touching cart data.
         $request->validate([
             'payment_method' => 'required|in:cash,card,none',
-            'cart_id' => 'required|exists:carts,id',
+            'cart_id' => 'nullable|exists:carts,id',
         ]);
 
         // Check if electronic payments are enabled for card payments
@@ -140,11 +153,19 @@ class OrderController extends Controller
             ], 403);
         }
 
+        // Load the authenticated user's cart snapshot for checkout processing.
         $user = $request->user();
-        $cart = Cart::where('user_id', $user->id)
-            ->where('id', $request->cart_id)
-            ->with(['items.offer', 'items.coupon'])
-            ->firstOrFail();
+        $cartQuery = Cart::where('user_id', $user->id)
+            ->with(['items.offer', 'items.coupon']);
+
+        if ($request->filled('cart_id')) {
+            $cartQuery->where('id', $request->cart_id);
+        } else {
+            // Backward compatible fallback: use the user's latest cart when cart_id is omitted.
+            $cartQuery->orderByDesc('id');
+        }
+
+        $cart = $cartQuery->firstOrFail();
 
         if ($cart->items->isEmpty()) {
             return response()->json([
@@ -154,19 +175,18 @@ class OrderController extends Controller
 
         DB::beginTransaction();
         try {
-            // Calculate total
+            // Calculate the checkout total from the current cart contents.
             $totalAmount = $cart->items->sum(function ($item) {
                 return $item->price_at_add * $item->quantity;
             });
 
-            // Determine merchant (assuming single merchant per order)
+            // Determine merchant for the order using the first cart item.
             $merchantId = $cart->items->first()->offer->merchant_id;
 
             $paymentMethod = $request->payment_method ?? 'cash';
 
-            // For online payment, process payment first
+            // For online payment, process payment before creating the order.
             if ($paymentMethod !== 'cash') {
-                // Process online payment
                 $paymentGatewayService = app(\App\Services\PaymentGatewayService::class);
                 $payment = $paymentGatewayService->processPayment(
                     null, // Order not created yet
@@ -183,7 +203,7 @@ class OrderController extends Controller
                 }
             }
 
-            // Create order
+            // Persist the order record once the payment branch has passed.
             $order = Order::create([
                 'user_id' => $user->id,
                 'merchant_id' => $merchantId,
@@ -193,12 +213,12 @@ class OrderController extends Controller
                 'notes' => $request->notes,
             ]);
 
-            // Link payment to order if exists
+            // Link the payment object to the order when one exists.
             if (isset($payment)) {
                 app(\App\Services\PaymentGatewayService::class)->linkPaymentToOrder($payment, $order);
             }
 
-            // Create order items
+            // Convert each cart item into a persisted order item.
             foreach ($cart->items as $cartItem) {
                 OrderItem::create([
                     'order_id' => $order->id,
@@ -215,15 +235,15 @@ class OrderController extends Controller
                 }
             }
 
-            // Generate coupons (status: pending for cash, paid for online)
+            // Generate coupons for the order using the current payment state.
             $coupons = $this->couponService->createCouponsForOrder($order);
 
-            // If payment is successful, update coupon status
+            // If payment is successful, update coupon status accordingly.
             if ($order->payment_status === 'paid') {
                 $this->couponService->updateCouponStatusAfterPayment($order);
             }
 
-            // Clear cart
+            // Empty the cart only after order creation succeeds.
             $cart->items()->delete();
 
             DB::commit();

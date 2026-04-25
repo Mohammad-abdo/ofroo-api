@@ -131,20 +131,26 @@ class CartController extends Controller
             return $response;
         }
 
+        // Decide which cart flow to use before validating the request payload.
         $user = $request->user();
         $cart = Cart::firstOrCreate(['user_id' => $user->id]);
 
+        // Coupon-based add: route directly to the dedicated handler.
         if ($request->has('coupon_id') && $request->coupon_id) {
             return $this->addCouponToCart($request, $cart);
         }
 
+        // Offer-based add: quantity is required when no specific coupon is sent.
         $request->validate([
             'offer_id' => 'required|exists:offers,id',
-            'quantity' => 'required|integer|min:1',
+            'coupon_id' => 'nullable|exists:coupons,id',
+            'quantity' => 'required_without:coupon_id|integer|min:1',
         ]);
 
+        // Load the offer once so availability checks and cart insertion share the same record.
         $offer = Offer::with('coupons')->findOrFail($request->offer_id);
 
+        // Block offers that are not yet live.
         if ($offer->start_date && $offer->start_date->isFuture()) {
             return response()->json([
                 'success' => false,
@@ -153,6 +159,7 @@ class CartController extends Controller
                 'message_en' => 'This offer has not started yet.',
             ], 400);
         }
+        // Block offers that already passed their end date.
         if ($offer->end_date && $offer->end_date->isPast()) {
             return response()->json([
                 'success' => false,
@@ -162,6 +169,7 @@ class CartController extends Controller
             ], 400);
         }
 
+        // Ensure the offer is active and enough coupons remain for the requested quantity.
         $available = $offer->available_coupons_count;
 
         if ($offer->status !== 'active' || $available < $request->quantity) {
@@ -173,17 +181,20 @@ class CartController extends Controller
             ], 400);
         }
 
+        // Reuse an existing line item when the cart already contains this offer.
         $cartItem = CartItem::where('cart_id', $cart->id)
             ->where('offer_id', $offer->id)
             ->whereNull('coupon_id')
             ->first();
 
         if ($cartItem) {
+            // Merge the requested quantity into the current cart line.
             $cartItem->update([
                 'quantity' => $cartItem->quantity + $request->quantity,
             ]);
             $lineTotalQuantity = (int) $cartItem->fresh()->quantity;
         } else {
+            // Create a new cart line for the offer when it does not already exist.
             CartItem::create([
                 'cart_id' => $cart->id,
                 'offer_id' => $offer->id,
@@ -218,6 +229,7 @@ class CartController extends Controller
             'offer_id' => 'nullable|exists:offers,id',
         ]);
 
+        // Fetch the coupon with its linked offer so validation stays consistent.
         $coupon = Coupon::with('offer')->findOrFail($request->coupon_id);
 
         if ($request->filled('offer_id') && (int) $coupon->offer_id !== (int) $request->offer_id) {
@@ -228,6 +240,7 @@ class CartController extends Controller
             ], 400);
         }
 
+        // Reject coupons that are not attached to a valid offer.
         if ($coupon->offer_id === null || ! $coupon->offer) {
             return response()->json([
                 'message' => 'Coupon has no offer.',
@@ -237,6 +250,7 @@ class CartController extends Controller
         }
 
         $offer = $coupon->offer;
+        // Keep the parent offer active before inserting the coupon line.
         if ($offer->status !== 'active') {
             return response()->json([
                 'message' => 'Offer is not active.',
@@ -245,6 +259,7 @@ class CartController extends Controller
             ], 400);
         }
 
+        // Validate coupon availability, status, expiry, and usage cap.
         if (($coupon->status ?? '') !== 'active') {
             return response()->json([
                 'message' => 'Coupon is not available.',
@@ -271,6 +286,7 @@ class CartController extends Controller
             ], 400);
         }
 
+        // Avoid duplicating the same coupon inside the same cart.
         $existing = CartItem::where('cart_id', $cart->id)
             ->where('coupon_id', $coupon->id)
             ->first();
@@ -283,6 +299,7 @@ class CartController extends Controller
             ], 400);
         }
 
+        // Insert the coupon as a single cart row with its add-time price snapshot.
         CartItem::create([
             'cart_id' => $cart->id,
             'offer_id' => $offer->id,
