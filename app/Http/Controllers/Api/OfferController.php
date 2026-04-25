@@ -9,6 +9,7 @@ use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\Offer;
 use App\Repositories\OfferRepository;
+use App\Services\NotificationService;
 use App\Services\OfferService;
 use App\Support\ApiMediaUrl;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class OfferController extends Controller
@@ -384,7 +386,22 @@ class OfferController extends Controller
             }
         }
 
+        $previousStatus = strtolower((string) ($offer->status ?? ''));
         $offer->update(['status' => $request->status]);
+
+        if ($request->status === 'active'
+            && in_array($previousStatus, ['pending_approval', 'pending', 'draft'], true)) {
+            try {
+                app(NotificationService::class)->broadcastNewOfferToCustomerUsers(
+                    $offer->fresh(['merchant'])
+                );
+            } catch (\Throwable $e) {
+                Log::warning('toggleStatus: new-offer broadcast failed', [
+                    'offer_id' => $offer->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return response()->json([
             'message' => 'Offer status updated successfully',

@@ -330,72 +330,79 @@ class OrderController extends Controller
 
             foreach ($orders as $order) {
                 try {
-                if ($order->payment_status === 'paid') {
-                    $walletService->processOrderPayment($order);
-                    $invoiceService->generateOrderInvoice($order, $user);
-                    $loyaltyService->awardPointsForOrder($order);
+                    if ($order->payment_status === 'paid') {
+                        $walletService->processOrderPayment($order);
+                        $invoiceService->generateOrderInvoice($order, $user);
+                        $loyaltyService->awardPointsForOrder($order);
 
-                    $order->load(['couponEntitlements.coupon']);
-                    $couponPayload = $order->couponEntitlements->map(function ($e) {
-                        return [
-                            'redeem_token' => $e->redeem_token,
-                            'usage_limit' => (int) $e->usage_limit,
-                            'remaining_uses' => $e->remainingUses(),
-                            'coupon_title' => $e->coupon->title ?? $e->coupon->title_ar ?? '',
-                        ];
-                    })->values()->all();
+                        $order->load(['couponEntitlements.coupon']);
+                        $couponPayload = $order->couponEntitlements->map(function ($e) {
+                            return [
+                                'redeem_token' => $e->redeem_token,
+                                'usage_limit' => (int) $e->usage_limit,
+                                'remaining_uses' => $e->remainingUses(),
+                                'coupon_title' => $e->coupon->title ?? $e->coupon->title_ar ?? '',
+                            ];
+                        })->values()->all();
 
-                    \App\Jobs\SendOrderConfirmationEmail::dispatch($order, $couponPayload, $user->language ?? 'ar');
+                        \App\Jobs\SendOrderConfirmationEmail::dispatch($order, $couponPayload, $user->language ?? 'ar');
+                    }
+                } catch (\Throwable $paidSideEffectException) {
+                    Log::warning('Order post-commit paid side-effects failed', [
+                        'order_id' => $order->id,
+                        'user_id' => $user->id,
+                        'error' => $paidSideEffectException->getMessage(),
+                    ]);
                 }
 
-                // Always create an in-app notification so users can see checkout result
-                // even when email queue/push delivery is delayed.
-                $notificationTitleAr = $order->payment_status === 'paid'
-                    ? 'تم تأكيد طلبك'
-                    : 'تم استلام طلبك';
-                $notificationTitleEn = $order->payment_status === 'paid'
-                    ? 'Your order is confirmed'
-                    : 'Your order has been received';
-                $notificationMessageAr = "تم إنشاء الطلب رقم #{$order->id} بقيمة {$order->total_amount}";
-                $notificationMessageEn = "Order #{$order->id} created successfully. Total: {$order->total_amount}";
+                // In-app + push + activity log must run even if wallet/invoice/loyalty failed above.
+                try {
+                    $notificationTitleAr = $order->payment_status === 'paid'
+                        ? 'تم تأكيد طلبك'
+                        : 'تم استلام طلبك';
+                    $notificationTitleEn = $order->payment_status === 'paid'
+                        ? 'Your order is confirmed'
+                        : 'Your order has been received';
+                    $notificationMessageAr = "تم إنشاء الطلب رقم #{$order->id} بقيمة {$order->total_amount}";
+                    $notificationMessageEn = "Order #{$order->id} created successfully. Total: {$order->total_amount}";
 
-                $notificationPayload = [
-                    'type' => 'order',
-                    'order_id' => (int) $order->id,
-                    'payment_status' => (string) $order->payment_status,
-                    'title_ar' => $notificationTitleAr,
-                    'title_en' => $notificationTitleEn,
-                    'title' => $notificationTitleEn,
-                    'message_ar' => $notificationMessageAr,
-                    'message_en' => $notificationMessageEn,
-                    'message' => $notificationMessageEn,
-                ];
+                    $notificationPayload = [
+                        'type' => 'order',
+                        'order_id' => (int) $order->id,
+                        'payment_status' => (string) $order->payment_status,
+                        'title_ar' => $notificationTitleAr,
+                        'title_en' => $notificationTitleEn,
+                        'title' => $notificationTitleEn,
+                        'message_ar' => $notificationMessageAr,
+                        'message_en' => $notificationMessageEn,
+                        'message' => $notificationMessageEn,
+                    ];
 
-                $notificationService->sendNotification($user, 'order', $notificationPayload);
+                    $notificationService->sendNotification($user, 'order', $notificationPayload);
 
-                if (($user->push_notifications ?? true) === true) {
-                    $notificationService->sendFcmNotification(
-                        $user,
-                        $notificationTitleEn,
-                        $notificationMessageEn,
-                        [
-                            'type' => 'order',
-                            'order_id' => (string) $order->id,
-                            'payment_status' => (string) $order->payment_status,
-                            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-                            'route' => '/orders/' . $order->id,
-                        ]
+                    if (($user->push_notifications ?? true) === true) {
+                        $notificationService->sendFcmNotification(
+                            $user,
+                            $notificationTitleEn,
+                            $notificationMessageEn,
+                            [
+                                'type' => 'order',
+                                'order_id' => (string) $order->id,
+                                'payment_status' => (string) $order->payment_status,
+                                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                                'route' => '/orders/' . $order->id,
+                            ]
+                        );
+                    }
+
+                    $activityLogService->logCreate(
+                        $user->id,
+                        Order::class,
+                        $order->id,
+                        "Order #{$order->id} created with total amount {$order->total_amount} EGP"
                     );
-                }
-
-                $activityLogService->logCreate(
-                    $user->id,
-                    Order::class,
-                    $order->id,
-                    "Order #{$order->id} created with total amount {$order->total_amount} EGP"
-                );
                 } catch (\Throwable $sideEffectException) {
-                    Log::warning('Order post-commit side-effect failed', [
+                    Log::warning('Order post-commit notification/activity failed', [
                         'order_id' => $order->id,
                         'user_id' => $user->id,
                         'error' => $sideEffectException->getMessage(),
@@ -569,6 +576,51 @@ class OrderController extends Controller
             \Illuminate\Support\Facades\Log::warning('checkoutCoupons: failed to clear cart after order commit', [
                 'order_id' => $order->id,
                 'error'    => $cartEx->getMessage(),
+            ]);
+        }
+
+        try {
+            $notificationService = app(\App\Services\NotificationService::class);
+            $notificationTitleAr = $order->payment_status === 'paid'
+                ? 'تم تأكيد طلبك'
+                : 'تم استلام طلبك';
+            $notificationTitleEn = $order->payment_status === 'paid'
+                ? 'Your order is confirmed'
+                : 'Your order has been received';
+            $notificationMessageAr = "تم إنشاء الطلب رقم #{$order->id} بقيمة {$order->total_amount}";
+            $notificationMessageEn = "Order #{$order->id} created successfully. Total: {$order->total_amount}";
+
+            $notificationService->sendNotification($user, 'order', [
+                'type' => 'order',
+                'order_id' => (int) $order->id,
+                'payment_status' => (string) $order->payment_status,
+                'title_ar' => $notificationTitleAr,
+                'title_en' => $notificationTitleEn,
+                'title' => $notificationTitleEn,
+                'message_ar' => $notificationMessageAr,
+                'message_en' => $notificationMessageEn,
+                'message' => $notificationMessageEn,
+            ]);
+
+            if (($user->push_notifications ?? true) === true) {
+                $notificationService->sendFcmNotification(
+                    $user,
+                    $notificationTitleEn,
+                    $notificationMessageEn,
+                    [
+                        'type' => 'order',
+                        'order_id' => (string) $order->id,
+                        'payment_status' => (string) $order->payment_status,
+                        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                        'route' => '/orders/' . $order->id,
+                    ]
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::warning('checkoutCoupons: notification failed', [
+                'order_id' => $order->id,
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
             ]);
         }
 

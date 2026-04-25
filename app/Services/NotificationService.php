@@ -86,8 +86,9 @@ class NotificationService
      * mobile app can render a rich notification and deep-link to the offer.
      *
      * @param  int|iterable<int>  $userIds
+     * @param  array<string, mixed>|null  $inboxOverrides  Optional keys merged into stored `data` for GET /user/notifications (title_ar, title_en, message_ar, message_en).
      */
-    public function sendOfferPushNotification(Offer $offer, int|iterable $userIds, ?string $customTitle = null, ?string $customBody = null): void
+    public function sendOfferPushNotification(Offer $offer, int|iterable $userIds, ?string $customTitle = null, ?string $customBody = null, ?array $inboxOverrides = null): void
     {
         $ids = is_iterable($userIds) ? collect($userIds) : collect([$userIds]);
         $ids = $ids->map(fn ($v) => (int) $v)->filter()->unique()->values();
@@ -100,10 +101,10 @@ class NotificationService
         $image = $images[0] ?? '';
         $title = $customTitle !== null && $customTitle !== ''
             ? $customTitle
-            : (string) ($offer->title ?? $offer->title_en ?? '');
+            : (string) ($offer->title_en ?? $offer->title ?? '');
         $body = $customBody !== null && $customBody !== ''
             ? $customBody
-            : (string) ($offer->description ?? $offer->description_en ?? '');
+            : (string) ($offer->description_en ?? $offer->description ?? '');
 
         $data = [
             'offer_id' => (string) $offer->id,
@@ -112,13 +113,100 @@ class NotificationService
             'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
             'route' => '/offers/' . $offer->id,
             'type' => 'offer',
+            'merchant_id' => (int) ($offer->merchant_id ?? 0),
+            'title_ar' => (string) ($offer->title ?? $offer->title_en ?? ''),
+            'title_en' => (string) ($offer->title_en ?? $offer->title ?? ''),
+            'message_ar' => (string) ($offer->description ?? $offer->description_en ?? ''),
+            'message_en' => (string) ($offer->description_en ?? $offer->description ?? ''),
         ];
+
+        if ($inboxOverrides !== null && $inboxOverrides !== []) {
+            $data = array_merge($data, array_filter(
+                $inboxOverrides,
+                static fn ($v) => $v !== null && $v !== ''
+            ));
+        }
 
         User::query()->whereIn('id', $ids->all())->get()
             ->each(function (User $user) use ($title, $body, $data) {
-                $this->sendFcmNotification($user, $title, $body, $data);
+                $lang = strtolower((string) ($user->language ?? 'ar'));
+                $fcmTitle = $lang === 'en'
+                    ? (string) ($data['title_en'] ?? $title)
+                    : (string) ($data['title_ar'] ?? $title);
+                $fcmBody = $lang === 'en'
+                    ? (string) ($data['message_en'] ?? $body)
+                    : (string) ($data['message_ar'] ?? $body);
+
+                $this->sendFcmNotification($user, $fcmTitle, $fcmBody, $data);
                 $this->sendNotification($user, 'offer', $data);
             });
+    }
+
+    /**
+     * Notify all customer-role users when an offer goes live (admin approval / first activation).
+     * Chunked like admin broadcasts; failures on one user must not stop the batch.
+     *
+     * @return int Number of users processed (not deduplicated across chunks)
+     */
+    public function broadcastNewOfferToCustomerUsers(Offer $offer): int
+    {
+        $offer->loadMissing('merchant');
+
+        $merchantAr = (string) ($offer->merchant->company_name_ar ?? $offer->merchant->company_name ?? '');
+        $merchantEn = (string) ($offer->merchant->company_name_en ?? $offer->merchant->company_name ?? '');
+        $offerTitleAr = (string) ($offer->title ?? $offer->title_en ?? '');
+        $offerTitleEn = (string) ($offer->title_en ?? $offer->title ?? '');
+
+        $headlineAr = 'عرض جديد' . ($merchantAr !== '' ? " — {$merchantAr}" : '');
+        $headlineEn = 'New offer' . ($merchantEn !== '' ? " — {$merchantEn}" : '');
+        $bodyAr = $offerTitleAr !== '' ? $offerTitleAr : 'تصفح التطبيق للاطلاع على التفاصيل.';
+        $bodyEn = $offerTitleEn !== '' ? $offerTitleEn : 'Open the app for details.';
+
+        $inbox = [
+            'title_ar' => $headlineAr,
+            'title_en' => $headlineEn,
+            'message_ar' => $bodyAr,
+            'message_en' => $bodyEn,
+        ];
+
+        $unblocked = fn (\Illuminate\Database\Eloquent\Builder $q) => $q->where(function ($w) {
+            $w->whereNull('is_blocked')->orWhere('is_blocked', false);
+        });
+
+        $notifsOff = fn (\Illuminate\Database\Eloquent\Builder $q) => $q->where(function ($w) {
+            $w->whereNull('notifications_enabled')->orWhere('notifications_enabled', true);
+        });
+
+        $processed = 0;
+
+        User::query()
+            ->tap($unblocked)
+            ->tap($notifsOff)
+            ->whereHas('role', fn ($r) => $r->where('name', 'user'))
+            ->orderBy('id')
+            ->chunkById(200, function ($users) use ($offer, $bodyEn, $headlineEn, $inbox, &$processed) {
+                $ids = $users->pluck('id')->all();
+                if ($ids === []) {
+                    return;
+                }
+                try {
+                    $this->sendOfferPushNotification(
+                        $offer,
+                        $ids,
+                        $headlineEn,
+                        $bodyEn,
+                        $inbox
+                    );
+                } catch (Throwable $e) {
+                    Log::warning('broadcastNewOfferToCustomerUsers: chunk failed', [
+                        'offer_id' => $offer->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+                $processed += count($ids);
+            });
+
+        return $processed;
     }
 
     /**

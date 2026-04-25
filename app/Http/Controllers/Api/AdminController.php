@@ -23,6 +23,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
@@ -1614,6 +1615,22 @@ class AdminController extends Controller
         });
 
         $offer->refresh();
+
+        if ($request->status === 'active') {
+            try {
+                $offer->loadMissing('merchant');
+                $processed = app(NotificationService::class)->broadcastNewOfferToCustomerUsers($offer);
+                Log::info('approveOffer: new-offer customer notifications', [
+                    'offer_id' => $offer->id,
+                    'users_notified' => $processed,
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('approveOffer: new-offer broadcast failed', [
+                    'offer_id' => $offer->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return response()->json([
             'message' => 'Offer ' . ($request->status === 'active' ? 'approved' : 'rejected') . ' successfully',
