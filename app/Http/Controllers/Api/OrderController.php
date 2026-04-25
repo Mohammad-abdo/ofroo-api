@@ -173,25 +173,42 @@ class OrderController extends Controller
             ], 400);
         }
 
+        $paymentMethod = $request->payment_method ?? 'cash';
+        $overallTotalAmount = (float) $cart->items->sum(function ($item) {
+            return $item->price_at_add * $item->quantity;
+        });
+
+        // Group cart lines by merchant to support mixed offers from different merchants.
+        $groupedByMerchant = $cart->items->groupBy(function ($item) {
+            return (string) ($item->offer->merchant_id ?? '');
+        });
+
+        if ($groupedByMerchant->has('')) {
+            return response()->json([
+                'message' => 'One or more cart items are not linked to a merchant',
+            ], 422);
+        }
+
+        // Current payment flow supports one online payment intent; mixed-merchant carts must checkout as cash.
+        if ($paymentMethod !== 'cash' && $groupedByMerchant->count() > 1) {
+            return response()->json([
+                'message' => 'Online checkout for multiple merchants is not supported. Please use cash or split the cart.',
+            ], 422);
+        }
+
         DB::beginTransaction();
         try {
-            // Calculate the checkout total from the current cart contents.
-            $totalAmount = $cart->items->sum(function ($item) {
-                return $item->price_at_add * $item->quantity;
-            });
-
-            // Determine merchant for the order using the first cart item.
-            $merchantId = $cart->items->first()->offer->merchant_id;
-
-            $paymentMethod = $request->payment_method ?? 'cash';
-
-            // For online payment, process payment before creating the order.
+            $payment = null;
             if ($paymentMethod !== 'cash') {
                 $paymentGatewayService = app(\App\Services\PaymentGatewayService::class);
+                $paymentData = $request->payment_data ?? [];
+                if (! isset($paymentData['amount'])) {
+                    $paymentData['amount'] = $overallTotalAmount;
+                }
                 $payment = $paymentGatewayService->processPayment(
                     null, // Order not created yet
                     $paymentMethod,
-                    $request->payment_data ?? []
+                    $paymentData
                 );
 
                 if ($payment->status !== 'success') {
@@ -203,92 +220,147 @@ class OrderController extends Controller
                 }
             }
 
-            // Persist the order record once the payment branch has passed.
-            $order = Order::create([
-                'user_id' => $user->id,
-                'merchant_id' => $merchantId,
-                'total_amount' => $totalAmount,
-                'payment_method' => $paymentMethod,
-                'payment_status' => $paymentMethod === 'cash' ? 'pending' : ($payment ? $payment->status : null) ?? 'pending',
-                'notes' => $request->notes,
-            ]);
+            $orders = collect();
 
-            // Link the payment object to the order when one exists.
-            if (isset($payment)) {
-                app(\App\Services\PaymentGatewayService::class)->linkPaymentToOrder($payment, $order);
-            }
+            foreach ($groupedByMerchant as $merchantId => $merchantItems) {
+                $merchantTotal = $merchantItems->sum(function ($item) {
+                    return $item->price_at_add * $item->quantity;
+                });
 
-            // Convert each cart item into a persisted order item.
-            foreach ($cart->items as $cartItem) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'offer_id' => $cartItem->offer_id,
-                    'quantity' => $cartItem->quantity,
-                    'unit_price' => $cartItem->price_at_add,
-                    'total_price' => $cartItem->price_at_add * $cartItem->quantity,
+                $order = Order::create([
+                    'user_id' => $user->id,
+                    'merchant_id' => (int) $merchantId,
+                    'total_amount' => $merchantTotal,
+                    'payment_method' => $paymentMethod,
+                    'payment_status' => $paymentMethod === 'cash' ? 'pending' : ($payment ? $payment->status : null) ?? 'pending',
+                    'notes' => $request->notes,
                 ]);
 
-                if ($cartItem->coupon_id) {
-                    \App\Models\Coupon::where('id', $cartItem->coupon_id)->increment('times_used', 1);
-                } else {
-                    $cartItem->offer->consumeCoupons($cartItem->quantity);
+                // Link payment when a single online payment is used.
+                if (isset($payment)) {
+                    app(\App\Services\PaymentGatewayService::class)->linkPaymentToOrder($payment, $order);
                 }
+
+                foreach ($merchantItems as $cartItem) {
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'offer_id' => $cartItem->offer_id,
+                        'quantity' => $cartItem->quantity,
+                        'unit_price' => $cartItem->price_at_add,
+                        'total_price' => $cartItem->price_at_add * $cartItem->quantity,
+                    ]);
+
+                    if ($cartItem->coupon_id) {
+                        \App\Models\Coupon::where('id', $cartItem->coupon_id)->increment('times_used', 1);
+                    } else {
+                        $cartItem->offer->consumeCoupons($cartItem->quantity);
+                    }
+                }
+
+                $this->couponService->createCouponsForOrder($order);
+                if ($order->payment_status === 'paid') {
+                    $this->couponService->updateCouponStatusAfterPayment($order);
+                }
+
+                $orders->push($order);
             }
 
-            // Generate coupons for the order using the current payment state.
-            $coupons = $this->couponService->createCouponsForOrder($order);
-
-            // If payment is successful, update coupon status accordingly.
-            if ($order->payment_status === 'paid') {
-                $this->couponService->updateCouponStatusAfterPayment($order);
-            }
-
-            // Empty the cart only after order creation succeeds.
+            // Empty the cart only after all merchant orders are created.
             $cart->items()->delete();
 
             DB::commit();
 
-            // Process financial transaction if payment is paid
-            if ($order->payment_status === 'paid') {
-                // Use WalletService for wallet transactions
-                $walletService = app(\App\Services\WalletService::class);
-                $walletService->processOrderPayment($order);
+            $walletService = app(\App\Services\WalletService::class);
+            $invoiceService = app(\App\Services\InvoiceGenerationService::class);
+            $loyaltyService = app(\App\Services\LoyaltyService::class);
+            $activityLogService = app(\App\Services\ActivityLogService::class);
+            $notificationService = app(\App\Services\NotificationService::class);
 
-                // Generate invoice
-                $invoiceService = app(\App\Services\InvoiceGenerationService::class);
-                $invoiceService->generateOrderInvoice($order, $user);
+            foreach ($orders as $order) {
+                if ($order->payment_status === 'paid') {
+                    $walletService->processOrderPayment($order);
+                    $invoiceService->generateOrderInvoice($order, $user);
+                    $loyaltyService->awardPointsForOrder($order);
 
-                // Award loyalty points
-                $loyaltyService = app(\App\Services\LoyaltyService::class);
-                $loyaltyService->awardPointsForOrder($order);
+                    $order->load(['couponEntitlements.coupon']);
+                    $couponPayload = $order->couponEntitlements->map(function ($e) {
+                        return [
+                            'redeem_token' => $e->redeem_token,
+                            'usage_limit' => (int) $e->usage_limit,
+                            'remaining_uses' => $e->remainingUses(),
+                            'coupon_title' => $e->coupon->title ?? $e->coupon->title_ar ?? '',
+                        ];
+                    })->values()->all();
 
-                // Send email with wallet lines (entitlements)
-                $order->load(['couponEntitlements.coupon']);
-                $couponPayload = $order->couponEntitlements->map(function ($e) {
-                    return [
-                        'redeem_token' => $e->redeem_token,
-                        'usage_limit' => (int) $e->usage_limit,
-                        'remaining_uses' => $e->remainingUses(),
-                        'coupon_title' => $e->coupon->title ?? $e->coupon->title_ar ?? '',
-                    ];
-                })->values()->all();
+                    \App\Jobs\SendOrderConfirmationEmail::dispatch($order, $couponPayload, $user->language ?? 'ar');
+                }
 
-                \App\Jobs\SendOrderConfirmationEmail::dispatch($order, $couponPayload, $user->language ?? 'ar');
+                // Always create an in-app notification so users can see checkout result
+                // even when email queue/push delivery is delayed.
+                $notificationTitleAr = $order->payment_status === 'paid'
+                    ? 'تم تأكيد طلبك'
+                    : 'تم استلام طلبك';
+                $notificationTitleEn = $order->payment_status === 'paid'
+                    ? 'Your order is confirmed'
+                    : 'Your order has been received';
+                $notificationMessageAr = "تم إنشاء الطلب رقم #{$order->id} بقيمة {$order->total_amount}";
+                $notificationMessageEn = "Order #{$order->id} created successfully. Total: {$order->total_amount}";
+
+                $notificationPayload = [
+                    'type' => 'order',
+                    'order_id' => (int) $order->id,
+                    'payment_status' => (string) $order->payment_status,
+                    'title_ar' => $notificationTitleAr,
+                    'title_en' => $notificationTitleEn,
+                    'title' => $notificationTitleEn,
+                    'message_ar' => $notificationMessageAr,
+                    'message_en' => $notificationMessageEn,
+                    'message' => $notificationMessageEn,
+                ];
+
+                $notificationService->sendNotification($user, 'order', $notificationPayload);
+
+                if (($user->push_notifications ?? true) === true) {
+                    $notificationService->sendFcmNotification(
+                        $user,
+                        $notificationTitleEn,
+                        $notificationMessageEn,
+                        [
+                            'type' => 'order',
+                            'order_id' => (string) $order->id,
+                            'payment_status' => (string) $order->payment_status,
+                            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                            'route' => '/orders/' . $order->id,
+                        ]
+                    );
+                }
+
+                $activityLogService->logCreate(
+                    $user->id,
+                    Order::class,
+                    $order->id,
+                    "Order #{$order->id} created with total amount {$order->total_amount} EGP"
+                );
             }
 
-            // Log activity
-            $activityLogService = app(\App\Services\ActivityLogService::class);
-            $activityLogService->logCreate(
-                $user->id,
-                Order::class,
-                $order->id,
-                "Order #{$order->id} created with total amount {$order->total_amount} EGP"
-            );
+            $orders->load(['items', 'coupons', 'couponEntitlements.coupon']);
+
+            if ($orders->count() === 1) {
+                return response()->json([
+                    'message' => 'Order created successfully',
+                    'data' => [
+                        'order' => new OrderResource($orders->first()),
+                    ],
+                ], 201);
+            }
 
             return response()->json([
-                'message' => 'Order created successfully',
+                'message' => 'Orders created successfully',
                 'data' => [
-                    'order' => new OrderResource($order->load(['items', 'coupons', 'couponEntitlements.coupon'])),
+                    'order' => new OrderResource($orders->first()),
+                    'orders' => OrderResource::collection($orders),
+                    'orders_count' => $orders->count(),
+                    'total_amount' => (float) $orders->sum('total_amount'),
                 ],
             ], 201);
         } catch (\Exception $e) {
