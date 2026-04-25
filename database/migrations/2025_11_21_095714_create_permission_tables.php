@@ -23,7 +23,9 @@ return new class extends Migration
 
         // Drop tables if they exist to avoid conflicts (in correct order to handle foreign keys)
         // Disable foreign key checks temporarily
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        }
         
         // Use dropIfExists to avoid errors if tables don't exist
         if (Schema::hasTable($tableNames['role_has_permissions'])) {
@@ -43,7 +45,9 @@ return new class extends Migration
         }
         
         // Re-enable foreign key checks
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
 
         Schema::create($tableNames['permissions'], static function (Blueprint $table) {
             // $table->engine('InnoDB');
@@ -151,7 +155,9 @@ return new class extends Migration
         throw_if(empty($tableNames), Exception::class, 'Error: config/permission.php not found and defaults could not be merged. Please publish the package configuration before proceeding, or drop the tables manually.');
 
         // Disable foreign key checks temporarily
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        }
         
         // Drop tables in correct order (child tables first, then parent tables)
         // Use dropIfExists to avoid errors if tables don't exist
@@ -172,6 +178,8 @@ return new class extends Migration
         }
         
         // Re-enable foreign key checks
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
     }
 };

@@ -15,8 +15,10 @@ return new class extends Migration
         // Note: This table might conflict with Spatie Permission package
         // If Spatie Permission is being used, this migration should be skipped or table renamed
         // Drop if exists to avoid conflicts
-        // Disable foreign key checks temporarily
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        // Disable foreign key checks temporarily (MySQL only — SQLite rejects SET FOREIGN_KEY_CHECKS)
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        }
         
         // Drop foreign keys from related tables first
         $tableNames = config('permission.table_names', []);
@@ -43,8 +45,10 @@ return new class extends Migration
         
         Schema::dropIfExists('permissions');
         
-        // Re-enable foreign key checks
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        // Re-enable foreign key checks (MySQL only)
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
         
         Schema::create('permissions', function (Blueprint $table) {
             $table->id();
@@ -69,13 +73,17 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Disable foreign key checks temporarily
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        // Disable foreign key checks temporarily (MySQL only — SQLite rejects SET FOREIGN_KEY_CHECKS)
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        }
         
         // Drop table if exists
         Schema::dropIfExists('permissions');
         
-        // Re-enable foreign key checks
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        // Re-enable foreign key checks (MySQL only)
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
     }
 };
