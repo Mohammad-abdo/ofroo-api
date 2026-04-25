@@ -456,10 +456,17 @@ class UserController extends Controller
 
         return response()->json([
             'data' => $notifications->getCollection()->map(function ($notification) {
-                $data = json_decode($notification->data, true);
+                $raw = $notification->data;
+                $data = is_array($raw)
+                    ? $raw
+                    : (json_decode((string) $raw, true) ?: []);
+                if (! is_array($data)) {
+                    $data = [];
+                }
+
                 return [
                     'id' => $notification->id,
-                    'type' => $data['type'] ?? 'info',
+                    'type' => $data['type'] ?? $notification->type ?? 'info',
                     'title_ar' => $data['title_ar'] ?? $data['title'] ?? '',
                     'title_en' => $data['title_en'] ?? $data['title'] ?? '',
                     'message_ar' => $data['message_ar'] ?? $data['message'] ?? '',

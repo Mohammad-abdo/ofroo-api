@@ -9,6 +9,7 @@ use App\Models\UserDevice;
 use App\Support\ApiMediaUrl;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 class NotificationService
@@ -18,7 +19,9 @@ class NotificationService
      */
     public function sendNotification($notifiable, string $type, array $data): void
     {
+        // Laravel's `notifications` table uses a string UUID primary key — inserts fail without `id`.
         $notifiable->notifications()->create([
+            'id' => (string) Str::uuid(),
             'type' => $type,
             'data' => $data,
         ]);
@@ -179,10 +182,10 @@ class NotificationService
     /**
      * Mark notification as read.
      */
-    public function markAsRead($notifiable, int $notificationId): void
+    public function markAsRead($notifiable, string|int $notificationId): void
     {
         $notifiable->notifications()
-            ->where('id', $notificationId)
+            ->where('id', (string) $notificationId)
             ->update(['read_at' => now()]);
     }
 }
