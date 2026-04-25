@@ -18,6 +18,7 @@ use App\Services\QrCodeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Log;
 
 class OrderController extends Controller
@@ -144,7 +145,12 @@ class OrderController extends Controller
         // Validate the checkout request before touching cart data.
         $request->validate([
             'payment_method' => 'required|in:cash,card,none',
-            'cart_id' => 'nullable|exists:carts,id',
+            'cart_id' => [
+                'nullable',
+                Rule::exists('carts', 'id')->where(function ($q) use ($request) {
+                    $q->where('user_id', $request->user()->id);
+                }),
+            ],
         ]);
 
         // Check if electronic payments are enabled for card payments
@@ -154,51 +160,96 @@ class OrderController extends Controller
             ], 403);
         }
 
-        // Load the authenticated user's cart snapshot for checkout processing.
         $user = $request->user();
-        $cartQuery = Cart::where('user_id', $user->id)
-            ->with(['items.offer', 'items.coupon']);
 
-        if ($request->filled('cart_id')) {
-            $cartQuery->where('id', $request->cart_id);
-        } else {
-            // Backward compatible fallback: use the user's latest cart when cart_id is omitted.
-            $cartQuery->orderByDesc('id');
-        }
-
-        $cart = $cartQuery->firstOrFail();
-
-        if ($cart->items->isEmpty()) {
-            return response()->json([
-                'message' => 'Cart is empty',
-            ], 400);
-        }
-
-        $paymentMethod = $request->payment_method ?? 'cash';
-        $overallTotalAmount = (float) $cart->items->sum(function ($item) {
-            return $item->price_at_add * $item->quantity;
-        });
-
-        // Group cart lines by merchant to support mixed offers from different merchants.
-        $groupedByMerchant = $cart->items->groupBy(function ($item) {
-            return (string) ($item->offer->merchant_id ?? '');
-        });
-
-        if ($groupedByMerchant->has('')) {
-            return response()->json([
-                'message' => 'One or more cart items are not linked to a merchant',
-            ], 422);
-        }
-
-        // Current payment flow supports one online payment intent; mixed-merchant carts must checkout as cash.
-        if ($paymentMethod !== 'cash' && $groupedByMerchant->count() > 1) {
-            return response()->json([
-                'message' => 'Online checkout for multiple merchants is not supported. Please use cash or split the cart.',
-            ], 422);
-        }
-
+        /**
+         * Lock the cart row for update inside the transaction so:
+         * - we read the latest cart_items (no stale empty read while another checkout clears the cart)
+         * - concurrent checkouts for the same user serialize instead of double-charging / odd errors
+         */
         DB::beginTransaction();
         try {
+            $cartQuery = Cart::query()
+                ->where('user_id', $user->id)
+                ->lockForUpdate();
+
+            if ($request->filled('cart_id')) {
+                $cartQuery->where('id', (int) $request->input('cart_id'));
+            }
+
+            $cart = $cartQuery->first();
+
+            if (! $cart) {
+                DB::rollBack();
+
+                return response()->json([
+                    'message' => 'Cart not found for this account.',
+                    'message_ar' => 'لم يتم العثور على سلة لهذا الحساب. تأكد من cart_id أو سجّل الدخول بنفس المستخدم الذي أضاف للسلة.',
+                    'message_en' => 'No cart found for this account. Check cart_id or use the same user who added items to the cart.',
+                    'data' => [
+                        'cart_id_requested' => $request->filled('cart_id') ? (int) $request->input('cart_id') : null,
+                    ],
+                ], 404);
+            }
+
+            $cart->load(['items.offer', 'items.coupon']);
+
+            if ($cart->items->isEmpty()) {
+                DB::rollBack();
+
+                $recentOrders = Order::query()
+                    ->where('user_id', $user->id)
+                    ->where('created_at', '>=', now()->subMinutes(15))
+                    ->orderByDesc('id')
+                    ->limit(5)
+                    ->get(['id', 'created_at', 'total_amount', 'payment_status']);
+
+                return response()->json([
+                    'message' => 'Cart is empty',
+                    'message_ar' => 'سلة التسوق فارغة. إذا أكملتَ الدفع للتو، قد يكون الطلب قد أُنشئ بالفعل — راجع recent_orders. وإلا أضف عناصر عبر POST /api/cart/add بنفس التوكن.',
+                    'message_en' => 'Your cart is empty. If you just paid, the order may already exist—see recent_orders. Otherwise add items with POST /api/cart/add using the same Bearer token.',
+                    'data' => [
+                        'cart_id' => (int) $cart->id,
+                        'items_count' => 0,
+                        'items_count_db' => (int) $cart->items()->count(),
+                        'hint' => 'Checkout deletes cart lines after a successful order. Repeating checkout returns empty until you add items again.',
+                        'recent_orders' => $recentOrders->map(fn (Order $o) => [
+                            'id' => $o->id,
+                            'created_at' => $o->created_at?->toIso8601String(),
+                            'total_amount' => (float) $o->total_amount,
+                            'payment_status' => (string) ($o->payment_status ?? ''),
+                        ])->values()->all(),
+                    ],
+                ], 400);
+            }
+
+            $paymentMethod = $request->payment_method ?? 'cash';
+            $overallTotalAmount = (float) $cart->items->sum(function ($item) {
+                return $item->price_at_add * $item->quantity;
+            });
+
+            // Group cart lines by merchant to support mixed offers from different merchants.
+            $groupedByMerchant = $cart->items->groupBy(function ($item) {
+                return (string) ($item->offer->merchant_id ?? '');
+            });
+
+            if ($groupedByMerchant->has('')) {
+                DB::rollBack();
+
+                return response()->json([
+                    'message' => 'One or more cart items are not linked to a merchant',
+                ], 422);
+            }
+
+            // Current payment flow supports one online payment intent; mixed-merchant carts must checkout as cash.
+            if ($paymentMethod !== 'cash' && $groupedByMerchant->count() > 1) {
+                DB::rollBack();
+
+                return response()->json([
+                    'message' => 'Online checkout for multiple merchants is not supported. Please use cash or split the cart.',
+                ], 422);
+            }
+
             $payment = null;
             if ($paymentMethod !== 'cash') {
                 $paymentGatewayService = app(\App\Services\PaymentGatewayService::class);

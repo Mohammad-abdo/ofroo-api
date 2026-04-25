@@ -12,6 +12,7 @@ use App\Models\Setting;
 use App\Models\SocialLink;
 use App\Services\CommissionRateResolver;
 use App\Services\FeatureFlagService;
+use App\Services\NotificationService;
 use App\Models\User;
 use App\Models\Coupon;
 use App\Models\Category;
@@ -4202,9 +4203,74 @@ class AdminController extends Controller
             ], 422);
         }
 
-        // TODO: Implement actual notification sending logic
-        // This would send notifications to users/merchants based on target_audience
-        // For now, we'll just mark it as sent
+        if ($notification->scheduled_at && $notification->scheduled_at->isFuture()) {
+            return response()->json([
+                'message' => 'This notification is scheduled for a future time and cannot be sent manually yet.',
+                'message_ar' => 'هذا الإشعار مجدول لوقت لاحق ولا يمكن إرساله يدوياً الآن.',
+                'message_en' => 'This notification is scheduled for a future time and cannot be sent manually yet.',
+                'data' => ['scheduled_at' => $notification->scheduled_at->toIso8601String()],
+            ], 422);
+        }
+
+        $recipientIds = $this->adminBroadcastRecipientUserIds($notification);
+        if ($recipientIds->isEmpty()) {
+            return response()->json([
+                'message' => 'No recipients matched this notification audience.',
+                'message_ar' => 'لا يوجد مستخدمون مطابقون لجمهور هذا الإشعار.',
+                'message_en' => 'No recipients matched this notification audience.',
+                'data' => [
+                    'target_audience' => $notification->target_audience,
+                    'target_user_ids' => $notification->target_user_ids ?? [],
+                    'target_merchant_ids' => $notification->target_merchant_ids ?? [],
+                ],
+            ], 422);
+        }
+
+        /** @var NotificationService $notificationService */
+        $notificationService = app(NotificationService::class);
+
+        $inAppPayload = [
+            'title' => (string) ($notification->title ?? ''),
+            'title_ar' => (string) ($notification->title_ar ?? ''),
+            'title_en' => (string) ($notification->title_en ?? ''),
+            'message' => (string) ($notification->message ?? ''),
+            'message_ar' => (string) ($notification->message_ar ?? ''),
+            'message_en' => (string) ($notification->message_en ?? ''),
+            'type' => (string) ($notification->type ?? 'info'),
+            'admin_notification_id' => (string) $notification->id,
+            'action_url' => (string) ($notification->action_url ?? ''),
+            'action_text' => (string) ($notification->action_text ?? ''),
+            'image_url' => (string) ($notification->image_url ?? ''),
+        ];
+
+        $recipientCount = 0;
+        User::query()
+            ->whereIn('id', $recipientIds->all())
+            ->where(function ($q) {
+                $q->whereNull('is_blocked')->orWhere('is_blocked', false);
+            })
+            ->orderBy('id')
+            ->chunkById(200, function ($users) use ($notificationService, $notification, $inAppPayload, &$recipientCount) {
+                foreach ($users as $user) {
+                    $notificationService->sendNotification($user, 'admin_broadcast', $inAppPayload);
+
+                    $lang = strtolower((string) ($user->language ?? 'ar'));
+                    $title = $lang === 'en'
+                        ? (string) (($notification->title_en ?: $notification->title) ?? '')
+                        : (string) (($notification->title_ar ?: $notification->title) ?? '');
+                    $body = $lang === 'en'
+                        ? (string) (($notification->message_en ?: $notification->message) ?? '')
+                        : (string) (($notification->message_ar ?: $notification->message) ?? '');
+
+                    if (($user->push_notifications ?? true) === true) {
+                        $notificationService->sendFcmNotification($user, $title, $body, array_merge($inAppPayload, [
+                            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                            'route' => '/notifications',
+                        ]));
+                    }
+                    $recipientCount++;
+                }
+            });
 
         $notification->update([
             'is_sent' => true,
@@ -4213,8 +4279,81 @@ class AdminController extends Controller
 
         return response()->json([
             'message' => 'Notification sent successfully',
-            'data' => $notification->fresh(),
+            'message_ar' => 'تم إرسال الإشعار بنجاح',
+            'message_en' => 'Notification sent successfully',
+            'data' => [
+                'notification' => $notification->fresh(),
+                'recipient_count' => $recipientCount,
+            ],
         ]);
+    }
+
+    /**
+     * Resolve which user IDs should receive an admin broadcast.
+     *
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    private function adminBroadcastRecipientUserIds(\App\Models\AdminNotification $notification): \Illuminate\Support\Collection
+    {
+        $audience = (string) ($notification->target_audience ?? 'all');
+
+        $unblocked = fn (\Illuminate\Database\Eloquent\Builder $q) => $q->where(function ($w) {
+            $w->whereNull('is_blocked')->orWhere('is_blocked', false);
+        });
+
+        switch ($audience) {
+            case 'users':
+                return User::query()
+                    ->tap($unblocked)
+                    ->whereHas('role', fn ($r) => $r->where('name', 'user'))
+                    ->pluck('id')->unique()->values();
+
+            case 'merchants':
+                return User::query()
+                    ->tap($unblocked)
+                    ->whereHas('role', fn ($r) => $r->where('name', 'merchant'))
+                    ->pluck('id')->unique()->values();
+
+            case 'admins':
+                return User::query()
+                    ->tap($unblocked)
+                    ->whereHas('role', fn ($r) => $r->whereIn('name', [
+                        'admin', 'employee', 'data_entry', 'accountant',
+                    ]))
+                    ->pluck('id')->unique()->values();
+
+            case 'specific':
+                $ids = collect($notification->target_user_ids ?? [])
+                    ->map(fn ($v) => (int) $v)
+                    ->filter(fn ($id) => $id > 0)
+                    ->unique()
+                    ->values();
+
+                $merchantIds = collect($notification->target_merchant_ids ?? [])
+                    ->map(fn ($v) => (int) $v)
+                    ->filter(fn ($id) => $id > 0)
+                    ->unique()
+                    ->values();
+
+                if ($merchantIds->isNotEmpty()) {
+                    $ownerUserIds = Merchant::query()
+                        ->whereIn('id', $merchantIds->all())
+                        ->whereNotNull('user_id')
+                        ->pluck('user_id');
+                    $ids = $ids->merge($ownerUserIds)->unique()->values();
+                }
+
+                return $ids;
+
+            case 'all':
+            default:
+                return User::query()
+                    ->tap($unblocked)
+                    ->whereHas('role', fn ($r) => $r->whereIn('name', ['user', 'merchant']))
+                    ->pluck('id')
+                    ->unique()
+                    ->values();
+        }
     }
 
     // ==================== Malls Management ====================
