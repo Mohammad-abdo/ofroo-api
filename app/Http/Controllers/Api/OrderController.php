@@ -18,6 +18,7 @@ use App\Services\QrCodeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class OrderController extends Controller
 {
@@ -251,7 +252,7 @@ class OrderController extends Controller
                     ]);
 
                     if ($cartItem->coupon_id) {
-                        \App\Models\Coupon::where('id', $cartItem->coupon_id)->increment('times_used', 1);
+                        \App\Models\Coupon::where('id', $cartItem->coupon_id)->increment('times_used', (int) $cartItem->quantity);
                     } else {
                         $cartItem->offer->consumeCoupons($cartItem->quantity);
                     }
@@ -277,6 +278,7 @@ class OrderController extends Controller
             $notificationService = app(\App\Services\NotificationService::class);
 
             foreach ($orders as $order) {
+                try {
                 if ($order->payment_status === 'paid') {
                     $walletService->processOrderPayment($order);
                     $invoiceService->generateOrderInvoice($order, $user);
@@ -341,6 +343,13 @@ class OrderController extends Controller
                     $order->id,
                     "Order #{$order->id} created with total amount {$order->total_amount} EGP"
                 );
+                } catch (\Throwable $sideEffectException) {
+                    Log::warning('Order post-commit side-effect failed', [
+                        'order_id' => $order->id,
+                        'user_id' => $user->id,
+                        'error' => $sideEffectException->getMessage(),
+                    ]);
+                }
             }
 
             $orders->load(['items', 'coupons', 'couponEntitlements.coupon']);
