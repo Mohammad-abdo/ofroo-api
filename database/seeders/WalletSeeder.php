@@ -82,7 +82,7 @@ class WalletSeeder extends Seeder
                     'metadata' => [
                         'description' => $faker->sentence(),
                     ],
-                    'created_at' => $faker->dateTimeBetween('-6 months', 'now'),
+                    'created_at' => $faker->dateTime('now'),
                 ]);
 
                 $merchantWallet->save();

@@ -26,6 +26,9 @@ return new class extends Migration
             $table->string('phone', 50)->nullable()->comment('Phone number');
             $table->string('whatsapp_link', 255)->nullable()->comment('WhatsApp link');
             $table->boolean('approved')->default(false)->comment('Admin approval status');
+            $table->boolean('accepted_terms')->default(false)->comment('Accepted terms and conditions');
+            $table->boolean('is_blocked')->default(false)->comment('Is blocked');
+            $table->integer("branches_number")->default(0)->comment('Branch number');
             $table->timestamps();
             
             $table->index('user_id');

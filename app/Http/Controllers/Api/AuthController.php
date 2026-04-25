@@ -358,12 +358,14 @@ class AuthController extends Controller
             'address_en' => $request->address_en,
             'phone' => $request->phone_merchant,
             'whatsapp_link' => $request->whatsapp_link,
+            'category_id' => $request->category_id,
+            'mall_id' => $request->mall_id ?? null,
+            'branches_number' => $request->branches_number,
             'city' => $request->city ?? null,
             'country' => 'مصر',
             'approved' => false,
             'accepted_terms' => true,
         ]);
-
         $user->load('role');
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -373,22 +375,6 @@ class AuthController extends Controller
             'message' => 'تم إرسال طلبك بنجاح',
             'message_ar' => 'تم إرسال طلبك بنجاح، سيتم مراجعته من قِبَل الإدارة وستصلك إشعار بالقرار.',
             'message_en' => 'Your request has been submitted successfully. It will be reviewed by the admin and you will be notified of the decision.',
-            'token' => $token,
-            'data' => [
-                'token' => $token,
-                'user' => (new UserResource($user))->resolve(),
-                'merchant' => [
-                    'id' => $merchant->id,
-                    'company_name' => $merchant->company_name,
-                    'company_name_ar' => $merchant->company_name_ar,
-                    'company_name_en' => $merchant->company_name_en,
-                    'approved' => (bool) $merchant->approved,
-                    'application_status' => 'pending',
-                    'accepted_terms' => true,
-                ],
-            ],
-            'user' => new UserResource($user),
-            'merchant' => $merchant,
         ], 201);
     }
 

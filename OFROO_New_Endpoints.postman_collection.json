@@ -377,6 +377,49 @@
 			]
 		},
 		{
+			"name": "9. Merchant Registration",
+			"item": [
+				{
+					"name": "POST Register As Merchant",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"أحمد محمد\",\n    \"email\": \"ahmed.merchant@example.com\",\n    \"phone\": \"+201012345678\",\n  \"branches_number\": 3,  \n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\",\n    \"company_name\": \"مطعم البيتزا الذهبية\",\n    \"company_name_ar\": \"مطعم البيتزا الذهبية\",\n    \"company_name_en\": \"Golden Pizza Restaurant\", \n     \"description\": \"أفضل بيتزا في القاهرة\",\n    \"description_ar\": \"أفضل بيتزا في القاهرة\",\n    \"description_en\": \"Best pizza in Cairo\",\n    \"address\": \"15 شارع التحرير، وسط البلد\",\n    \"city\": \"القاهرة\",\n    \"accepted_terms\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mobile/auth/register-merchant",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "auth", "register-merchant"]
+						},
+						"description": "Public endpoint to register a new merchant account. 'accepted_terms' is required and must be true."
+					},
+					"response": [
+						{
+							"name": "201 Created",
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"success\": true,\n  \"message\": \"تم إرسال طلبك بنجاح\",\n  \"message_ar\": \"تم إرسال طلبك بنجاح، سيتم مراجعته من قِبَل الإدارة وستصلك إشعار بالقرار.\",\n  \"message_en\": \"Your request has been submitted successfully. It will be reviewed by the admin and you will be notified of the decision.\",\n  \"token\": \"1|abcdefgh...\",\n  \"data\": {\n    \"token\": \"1|abcdefgh...\",\n    \"user\": { \"id\": 42, \"name\": \"أحمد محمد\", \"email\": \"ahmed.merchant@example.com\" },\n    \"merchant\": {\n      \"id\": 7,\n  \"category_id\": 1, \n   \"branches_number\": 3,\n  \"company_name\": \"مطعم البيتزا الذهبية\",\n      \"company_name_ar\": \"مطعم البيتزا الذهبية\",\n      \"company_name_en\": \"Golden Pizza Restaurant\",\n      \"approved\": false,\n      \"application_status\": \"pending\",\n      \"accepted_terms\": true\n    }\n  }\n}"
+						},
+						{
+							"name": "422 Unprocessable Entity — terms not accepted",
+							"status": "Unprocessable Entity",
+							"code": 422,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"message\": \"The accepted terms field must be accepted.\",\n  \"errors\": {\n    \"accepted_terms\": [\n      \"يجب الموافقة على الشروط والأحكام | You must accept the terms and conditions.\"\n    ]\n  }\n}"
+						}
+					]
+				}
+			]
+		},
+		{
 			"name": "10. Admin — CMS & Settings",
 			"item": [
 				{

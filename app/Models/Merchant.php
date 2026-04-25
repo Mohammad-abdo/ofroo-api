@@ -41,6 +41,7 @@ class Merchant extends Model
         'commission_mode',
         'commission_custom_percent',
         'accepted_terms',
+        'branches_number',
         'rejection_reason',
     ];
 
