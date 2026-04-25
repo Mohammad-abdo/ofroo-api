@@ -352,7 +352,10 @@ class OrderController extends Controller
                 }
             }
 
-            $orders->load(['items', 'coupons', 'couponEntitlements.coupon']);
+            // $orders is a Support Collection of Order models — call load() per model, not on the collection.
+            foreach ($orders as $orderModel) {
+                $orderModel->load(['items', 'coupons', 'couponEntitlements.coupon']);
+            }
 
             if ($orders->count() === 1) {
                 return response()->json([
