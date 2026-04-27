@@ -699,16 +699,80 @@ class OrderController extends Controller
     }
 
     /**
-     * Get user wallet coupons
+     * Get user wallet coupons (CouponEntitlement rows for the authenticated user).
+     *
+     * GET /api/wallet/coupons
+     * GET /api/mobile/wallet/coupons
+     *
+     * Query (all optional):
+     * - per_page (default 15)
+     * - status: comma-separated entitlement statuses: active, pending, exhausted (default: all three)
+     * - merchant_id: filter by offer.merchant_id
+     * - offer_id: filter by coupon.offer_id
+     * - category_id: filter by offer.category_id
+     * - mall_id: filter by offer.mall_id
+     * - search: matches coupon title / title_ar / title_en / coupon_code / barcode (partial)
      */
     public function walletCoupons(Request $request): JsonResponse
     {
         $user = $request->user();
-        $entitlements = CouponEntitlement::with(['coupon.offer.merchant'])
-            ->where('user_id', $user->id)
-            ->whereIn('status', ['active', 'pending', 'exhausted'])
+
+        $allowedStatuses = ['active', 'pending', 'exhausted'];
+
+        $query = CouponEntitlement::with(['coupon.offer.merchant'])
+            ->where('user_id', $user->id);
+
+        if ($request->filled('status')) {
+            $requested = collect(preg_split('/\s*,\s*/', (string) $request->query('status'), -1, PREG_SPLIT_NO_EMPTY))
+                ->map(fn (string $s) => strtolower(trim($s)))
+                ->unique()
+                ->values();
+            $statusFilter = $requested->intersect($allowedStatuses)->values()->all();
+            if ($statusFilter !== []) {
+                $query->whereIn('status', $statusFilter);
+            } else {
+                $query->whereIn('status', $allowedStatuses);
+            }
+        } else {
+            $query->whereIn('status', $allowedStatuses);
+        }
+
+        if ($request->filled('merchant_id')) {
+            $mid = (int) $request->query('merchant_id');
+            $query->whereHas('coupon.offer', fn ($q) => $q->where('merchant_id', $mid));
+        }
+
+        if ($request->filled('offer_id')) {
+            $oid = (int) $request->query('offer_id');
+            $query->whereHas('coupon', fn ($q) => $q->where('offer_id', $oid));
+        }
+
+        if ($request->filled('category_id')) {
+            $cid = (int) $request->query('category_id');
+            $query->whereHas('coupon.offer', fn ($q) => $q->where('category_id', $cid));
+        }
+
+        if ($request->filled('mall_id')) {
+            $mallId = (int) $request->query('mall_id');
+            $query->whereHas('coupon.offer', fn ($q) => $q->where('mall_id', $mallId));
+        }
+
+        if ($request->filled('search')) {
+            $term = '%'.str_replace(['%', '_'], ['\\%', '\\_'], trim((string) $request->query('search'))).'%';
+            $query->whereHas('coupon', function ($q) use ($term) {
+                $q->where(function ($inner) use ($term) {
+                    $inner->where('title', 'like', $term)
+                        ->orWhere('title_ar', 'like', $term)
+                        ->orWhere('title_en', 'like', $term)
+                        ->orWhere('coupon_code', 'like', $term)
+                        ->orWhere('barcode', 'like', $term);
+                });
+            });
+        }
+
+        $entitlements = $query
             ->orderBy('created_at', 'desc')
-            ->paginate($request->get('per_page', 15));
+            ->paginate($request->integer('per_page', 15));
 
         return response()->json([
             'data' => CouponEntitlementResource::collection($entitlements->items()),

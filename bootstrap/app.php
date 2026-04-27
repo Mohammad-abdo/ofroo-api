@@ -4,6 +4,7 @@ use App\Http\Middleware\AddCorsHeaders;
 use App\Http\Middleware\CheckAdmin;
 use App\Http\Middleware\CheckMerchant;
 use App\Http\Middleware\CheckPermission;
+use App\Http\Middleware\EnsureTokenIsAccess;
 use App\Http\Middleware\ForceJsonResponse;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -29,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => CheckAdmin::class,
             'merchant' => CheckMerchant::class,
             'permission' => CheckPermission::class,
+            'access.token' => EnsureTokenIsAccess::class,
         ]);
 
         // CORS first so all API responses (including errors) can include headers; then JSON

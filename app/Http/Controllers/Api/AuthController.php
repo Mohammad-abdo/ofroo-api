@@ -14,6 +14,7 @@ use App\Models\LoginAttempt;
 use App\Models\Merchant;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\ApiTokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -46,13 +47,12 @@ class AuthController extends Controller
 
         $user->load('role');
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $pair = ApiTokenService::issuePair($user);
 
-        return response()->json([
+        return response()->json(ApiTokenService::mergeTokenResponse([
             'message' => 'User registered successfully',
             'user' => new UserResource($user),
-            'token' => $token,
-        ], 201);
+        ], $pair), 201);
     }
 
     /**
@@ -87,13 +87,12 @@ class AuthController extends Controller
 
         $user->load(['role', 'cityRelation', 'governorateRelation']);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $pair = ApiTokenService::issuePair($user);
 
-        return response()->json([
+        return response()->json(ApiTokenService::mergeTokenResponse([
             'message' => 'User registered successfully',
             'user' => new UserResource($user),
-            'token' => $token,
-        ], 201);
+        ], $pair), 201);
     }
 
     /**
@@ -137,8 +136,6 @@ class AuthController extends Controller
             $loginAttempt->update(['success' => true]);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
-
         // Log login activity
         $activityLogService = app(\App\Services\ActivityLogService::class);
         $activityLogService->logLogin($user->id);
@@ -165,11 +162,12 @@ class AuthController extends Controller
 
         $user->load(['role', 'activeMerchantStaff']);
 
-        return response()->json([
+        $pair = ApiTokenService::issuePair($user);
+
+        return response()->json(ApiTokenService::mergeTokenResponse([
             'message' => 'Login successful',
             'user' => new UserResource($user),
-            'token' => $token,
-        ]);
+        ], $pair));
     }
 
     /**
@@ -318,12 +316,78 @@ class AuthController extends Controller
         ]);
 
         $user->load('role');
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $pair = ApiTokenService::issuePair($user);
+
+        return response()->json(ApiTokenService::mergeTokenResponse([
+            'message' => 'OTP verified successfully',
+            'user' => new UserResource($user),
+        ], $pair));
+    }
+
+    /**
+     * Exchange a valid refresh token for a new access + refresh pair.
+     */
+    public function refreshToken(Request $request): JsonResponse
+    {
+        $plain = $request->input('refresh_token');
+        if (! is_string($plain) || trim($plain) === '') {
+            $bearer = $request->bearerToken();
+            $plain = is_string($bearer) ? trim($bearer) : '';
+        } else {
+            $plain = trim($plain);
+        }
+
+        if ($plain === '') {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => [
+                    'refresh_token' => ['The refresh token field is required (body refresh_token or Authorization: Bearer).'],
+                ],
+            ], 422);
+        }
+
+        $pat = PersonalAccessToken::findToken($plain);
+        if (! $pat || ! ($pat->tokenable instanceof User)) {
+            return response()->json([
+                'message' => 'Invalid or expired refresh token',
+                'message_ar' => 'رمز التحديث غير صالح أو منتهٍ.',
+                'error' => 'invalid_refresh_token',
+            ], 401);
+        }
+
+        if ($pat->name !== ApiTokenService::NAME_REFRESH) {
+            return response()->json([
+                'message' => 'Invalid token type. Send a refresh token, not an access token.',
+                'message_ar' => 'أرسل refresh_token وليس توكن الوصول.',
+                'error' => 'invalid_token_type',
+            ], 422);
+        }
+
+        if ($pat->expires_at && $pat->expires_at->isPast()) {
+            $pat->delete();
+
+            return response()->json([
+                'message' => 'Invalid or expired refresh token',
+                'message_ar' => 'رمز التحديث غير صالح أو منتهٍ.',
+                'error' => 'invalid_refresh_token',
+            ], 401);
+        }
+
+        /** @var User $user */
+        $user = $pat->tokenable;
+        $pat->delete();
+
+        $pair = ApiTokenService::issuePair($user);
 
         return response()->json([
-            'message' => 'OTP verified successfully',
-            'token' => $token,
-            'user' => new UserResource($user),
+            'message' => 'Token refreshed',
+            'message_ar' => 'تم تحديث الجلسة',
+            'message_en' => 'Token refreshed',
+            'token' => $pair['access_token'],
+            'refresh_token' => $pair['refresh_token'],
+            'expires_in' => $pair['expires_in'],
+            'token_type' => 'Bearer',
+            'refresh_expires_at' => $pair['refresh_expires_at'],
         ]);
     }
 
@@ -470,17 +534,16 @@ class AuthController extends Controller
 
         $user->load('role');
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $pair = ApiTokenService::issuePair($user);
 
-        return response()->json([
+        return response()->json(ApiTokenService::mergeTokenResponse([
             'success' => true,
             'message' => 'تم إرسال طلبك بنجاح',
             'message_ar' => 'تم إرسال طلبك بنجاح، سيتم مراجعته من قِبَل الإدارة وستصلك إشعار بالقرار.',
             'message_en' => 'Your request has been submitted successfully. It will be reviewed by the admin and you will be notified of the decision.',
-            'token' => $token,
             'user' => new UserResource($user),
             'existing_account' => (bool) $existingUser,
-        ], 201);
+        ], $pair), 201);
     }
 
     /**
@@ -518,20 +581,30 @@ class AuthController extends Controller
 
         $user = $merchant->user;
         $user->load('role');
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $pair = ApiTokenService::issuePair($user);
 
         // Log login
         $activityLogService = app(\App\Services\ActivityLogService::class);
         $activityLogService->logLogin($user->id);
+
+        $tokenPayload = ApiTokenService::mergeTokenResponse([], $pair);
 
         return response()->json([
             'success' => true,
             'message' => 'Login successful',
             'message_ar' => 'تم تسجيل الدخول بنجاح',
             'message_en' => 'Login successful',
-            'token' => $token,
+            'token' => $tokenPayload['token'],
+            'refresh_token' => $tokenPayload['refresh_token'],
+            'expires_in' => $tokenPayload['expires_in'],
+            'token_type' => $tokenPayload['token_type'],
+            'refresh_expires_at' => $tokenPayload['refresh_expires_at'],
             'data' => [
-                'token' => $token,
+                'token' => $tokenPayload['token'],
+                'refresh_token' => $tokenPayload['refresh_token'],
+                'expires_in' => $tokenPayload['expires_in'],
+                'token_type' => $tokenPayload['token_type'],
+                'refresh_expires_at' => $tokenPayload['refresh_expires_at'],
                 'user' => (new UserResource($user))->resolve(),
                 'merchant' => [
                     'id' => $merchant->id,

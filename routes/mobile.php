@@ -77,6 +77,8 @@ Route::prefix('auth')->group(function () {
     
     // تسجيل الدخول
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+
+    Route::post('/refresh', [AuthController::class, 'refreshToken'])->middleware('throttle:30,1');
     
     // تسجيل تاجر جديد
     Route::post('/register-merchant', [AuthController::class, 'registerMerchant'])->middleware('throttle:3,1');
@@ -142,7 +144,7 @@ Route::get('/app/legal-pages', [AppContentController::class, 'legalPages']);
 // Protected Routes - كل ما يخص المستخدم يتطلب تسجيل الدخول (auth:sanctum)
 // Cart, Orders, Payment (checkout), Profile, Wallet, Coupons, Reviews, Support, Loyalty
 // ================================
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
     
     // ================================
     // 2. المصادقة - Protected

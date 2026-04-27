@@ -70,6 +70,7 @@ Route::get('/docs/openapi.yaml', [DocumentationController::class, 'openapiYaml']
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+    Route::post('/refresh', [AuthController::class, 'refreshToken'])->middleware('throttle:30,1');
     Route::post('/register-merchant', [AuthController::class, 'registerMerchant'])->middleware('throttle:3,1');
     Route::post('/otp/request', [AuthController::class, 'requestOtp'])->middleware('throttle:3,1');
     Route::post('/otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:5,1');
@@ -145,7 +146,7 @@ Route::get('/test-admin-auth', function () {
             'file' => $e->getFile()
         ], 500);
     }
-})->middleware('auth:sanctum');
+})->middleware(['auth:sanctum', 'access.token']);
 
 // Test admin notifications directly
 Route::get('/test-admin-notifications', function () {
@@ -188,7 +189,7 @@ Route::post('/test-mark-read/{id}', function ($id) {
 // Authenticated routes only - كل المسارات التالية تتطلب تسجيل الدخول + Token
 // (Authorization: Bearer <token>). السلة والمفضلة والطلبات مرتبطة بالمستخدم المسجل.
 // =============================================================================
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
     // Offers (create/update/delete/favorite require auth)
@@ -430,7 +431,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // Admin routes
-    Route::prefix('admin')->middleware(['auth:sanctum', 'admin'])->group(function () {
+    Route::prefix('admin')->middleware(['auth:sanctum', 'access.token', 'admin'])->group(function () {
         Route::prefix('users')->group(function () {
             Route::get('/', [AdminController::class, 'users']);
             Route::get('/{id}', [AdminController::class, 'getUser']);
