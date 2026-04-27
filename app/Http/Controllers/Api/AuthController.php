@@ -349,14 +349,16 @@ class AuthController extends Controller
             ?: $request->company_name_en
             ?: '';
 
-        // Create merchant (pending approval)
+        // Create merchant (pending approval); legacy `company_name` / `description` / `address` columns use bilingual fields + nulls where applicable.
         $merchant = \App\Models\Merchant::create([
             'user_id' => $user->id,
             'company_name' => $resolvedCompanyName,
             'company_name_ar' => $request->company_name_ar,
             'company_name_en' => $request->company_name_en,
+            'description' => null,
             'description_ar' => $request->description_ar,
             'description_en' => $request->description_en,
+            'address' => null,
             'address_ar' => $request->address_ar,
             'address_en' => $request->address_en,
             'phone' => $request->phone_merchant,
