@@ -347,13 +347,10 @@ class AuthController extends Controller
         // Create merchant (pending approval)
         $merchant = \App\Models\Merchant::create([
             'user_id' => $user->id,
-            'company_name' => $request->company_name,
             'company_name_ar' => $request->company_name_ar,
             'company_name_en' => $request->company_name_en,
-            'description' => $request->description,
             'description_ar' => $request->description_ar,
             'description_en' => $request->description_en,
-            'address' => $request->address,
             'address_ar' => $request->address_ar,
             'address_en' => $request->address_en,
             'phone' => $request->phone_merchant,
