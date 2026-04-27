@@ -15,6 +15,7 @@ use App\Models\OrderItem;
 use App\Services\CouponService;
 use App\Services\FinancialService;
 use App\Services\QrCodeService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -706,7 +707,9 @@ class OrderController extends Controller
      *
      * Query (all optional):
      * - per_page (default 15)
-     * - status: comma-separated entitlement statuses: active, pending, exhausted (default: all three)
+     * - status: comma-separated filters. Literal entitlement statuses: active, pending, exhausted, cancelled, expired.
+     *   Special: `expired` also matches time-based expiry (coupon.expires_at past, coupon.status=expired, offer ended).
+     *   Default when omitted: active, pending, exhausted (hides cancelled; use status=cancelled to list those).
      * - merchant_id: filter by offer.merchant_id
      * - offer_id: filter by coupon.offer_id
      * - category_id: filter by offer.category_id
@@ -717,7 +720,8 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        $allowedStatuses = ['active', 'pending', 'exhausted'];
+        $defaultStatuses = ['active', 'pending', 'exhausted'];
+        $literalStatuses = ['active', 'pending', 'exhausted', 'cancelled', 'expired'];
 
         $query = CouponEntitlement::with(['coupon.offer.merchant'])
             ->where('user_id', $user->id);
@@ -727,14 +731,29 @@ class OrderController extends Controller
                 ->map(fn (string $s) => strtolower(trim($s)))
                 ->unique()
                 ->values();
-            $statusFilter = $requested->intersect($allowedStatuses)->values()->all();
-            if ($statusFilter !== []) {
-                $query->whereIn('status', $statusFilter);
+            $known = $requested->intersect($literalStatuses)->values();
+
+            if ($known->isEmpty()) {
+                $query->whereIn('status', $defaultStatuses);
             } else {
-                $query->whereIn('status', $allowedStatuses);
+                $wantsExpiredSemantics = $known->contains('expired');
+                $literalOnly = $known->reject(fn (string $s) => $s === 'expired')->values()->all();
+
+                if ($wantsExpiredSemantics && $literalOnly === []) {
+                    $this->applyWalletExpiredFilter($query);
+                } elseif ($wantsExpiredSemantics) {
+                    $query->where(function (Builder $w) use ($literalOnly) {
+                        $w->whereIn('status', $literalOnly)
+                            ->orWhere(function (Builder $inner) {
+                                $this->applyWalletExpiredFilter($inner);
+                            });
+                    });
+                } else {
+                    $query->whereIn('status', $literalOnly);
+                }
             }
         } else {
-            $query->whereIn('status', $allowedStatuses);
+            $query->whereIn('status', $defaultStatuses);
         }
 
         if ($request->filled('merchant_id')) {
@@ -783,6 +802,56 @@ class OrderController extends Controller
                 'total' => $entitlements->total(),
             ],
         ]);
+    }
+
+    /**
+     * Single wallet entitlement (coupon instance) for the authenticated user.
+     * Includes paid line quantity when linked to an order item, plus order summary.
+     *
+     * GET /api/wallet/coupons/{id}
+     * GET /api/mobile/wallet/coupons/{id}
+     */
+    public function walletCouponShow(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+
+        $entitlement = CouponEntitlement::query()
+            ->where('user_id', $user->id)
+            ->whereKey($id)
+            ->with([
+                'coupon.offer.merchant',
+                'order',
+                'orderItem',
+            ])
+            ->firstOrFail();
+
+        return response()->json([
+            'data' => new CouponEntitlementResource($entitlement),
+        ]);
+    }
+
+    /**
+     * Wallet filter `status=expired`: entitlement row expired/cancelled, or linked coupon/offer ended by time or status.
+     */
+    private function applyWalletExpiredFilter(Builder $query): void
+    {
+        $query->where(function (Builder $w) {
+            $w->whereIn('status', ['expired', 'cancelled'])
+                ->orWhereHas('coupon', function (Builder $c) {
+                    $c->where('status', 'expired')
+                        ->orWhere(function (Builder $c2) {
+                            $c2->whereNotNull('expires_at')
+                                ->where('expires_at', '<', now());
+                        });
+                })
+                ->orWhereHas('coupon.offer', function (Builder $o) {
+                    $o->where('status', 'expired')
+                        ->orWhere(function (Builder $o2) {
+                            $o2->whereNotNull('end_date')
+                                ->where('end_date', '<', now());
+                        });
+                });
+        });
     }
 
     /**

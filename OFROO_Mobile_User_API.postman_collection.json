@@ -64,6 +64,47 @@
 					}
 				},
 				{
+					"name": "Refresh access token (Sanctum)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "refresh"]
+						},
+						"description": "When access token expires (~1h), call this with the **refresh_token** from login (NOT the access token).\n\nSame endpoints also work:\n- `POST {{base_url}}/api/auth/token/refresh` (JSON body)\n- `POST {{base_url}}/api/mobile/auth/refresh` and `…/mobile/auth/token/refresh`\n\nOptional: `Authorization: Bearer <refresh_token>` instead of body.\n\nResponse: `token`, `refresh_token`, `expires_in`, `refresh_expires_at`, `user`. Old refresh is revoked — save the new pair."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const j = pm.response.json();",
+									"    if (j.token) pm.collectionVariables.set('access_token', j.token);",
+									"    if (j.refresh_token) pm.collectionVariables.set('refresh_token', j.refresh_token);",
+									"}"
+								]
+							}
+						}
+					]
+				},
+				{
 					"name": "Login with Google",
 					"request": {
 						"method": "POST",
@@ -2471,7 +2512,13 @@
 			"key": "access_token",
 			"value": "",
 			"type": "string",
-			"description": "Access token from login/register. Auto-populated after authentication."
+			"description": "Short-lived access token (Bearer). From login/register or refresh."
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string",
+			"description": "Long-lived refresh token. Use only with POST /api/auth/refresh (or /token/refresh, /api/mobile/auth/refresh)."
 		}
 	],
 	"event": [
@@ -2495,6 +2542,9 @@
 					"    var jsonData = pm.response.json();",
 					"    if (jsonData.token || jsonData.data?.token) {",
 					"        pm.collectionVariables.set('access_token', jsonData.token || jsonData.data.token);",
+					"    }",
+					"    if (jsonData.refresh_token) {",
+					"        pm.collectionVariables.set('refresh_token', jsonData.refresh_token);",
 					"    }",
 					"}"
 				]

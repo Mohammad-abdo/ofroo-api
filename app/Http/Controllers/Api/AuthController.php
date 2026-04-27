@@ -325,7 +325,10 @@ class AuthController extends Controller
     }
 
     /**
-     * Exchange a valid refresh token for a new access + refresh pair.
+     * Exchange a valid (non-expired) refresh token for a new access + refresh pair.
+     * The old refresh token is revoked (one-time rotation).
+     *
+     * Body: { "refresh_token": "..." } or header: Authorization: Bearer &lt;refresh_token&gt;
      */
     public function refreshToken(Request $request): JsonResponse
     {
@@ -378,6 +381,7 @@ class AuthController extends Controller
         $pat->delete();
 
         $pair = ApiTokenService::issuePair($user);
+        $user->load(['role', 'activeMerchantStaff']);
 
         return response()->json([
             'message' => 'Token refreshed',
@@ -388,6 +392,7 @@ class AuthController extends Controller
             'expires_in' => $pair['expires_in'],
             'token_type' => 'Bearer',
             'refresh_expires_at' => $pair['refresh_expires_at'],
+            'user' => new UserResource($user),
         ]);
     }
 

@@ -7,9 +7,107 @@
 	},
 	"variable": [
 		{ "key": "base_url", "value": "https://your-host", "type": "string" },
-		{ "key": "token",    "value": "YOUR_SANCTUM_TOKEN", "type": "string" }
+		{ "key": "token", "value": "YOUR_SANCTUM_ACCESS_TOKEN", "type": "string", "description": "Short-lived Bearer (≈1h). Use on protected routes." },
+		{ "key": "refresh_token", "value": "", "type": "string", "description": "Long-lived refresh (≈30d). Use only with POST …/auth/refresh — never as Bearer on normal API." }
 	],
 	"item": [
+		{
+			"name": "0. Auth — Refresh tokens (Sanctum)",
+			"description": "Public POST. Send your **refresh_token** from login/register — not the access token.\n\n**Body option:** `{ \"refresh_token\": \"…\" }`\n**Header option:** `Authorization: Bearer <refresh_token>`\n\nResponse: `token` (new access), `refresh_token` (new — old one is revoked), `expires_in` (seconds), `refresh_expires_at`, `user`.\n\nThrottle: 30/min per route.",
+			"item": [
+				{
+					"name": "POST /api/mobile/auth/refresh (JSON body)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const j = pm.response.json();",
+									"    if (j.token) pm.collectionVariables.set('token', j.token);",
+									"    if (j.refresh_token) pm.collectionVariables.set('refresh_token', j.refresh_token);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mobile/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "auth", "refresh"]
+						},
+						"description": "Mobile prefix. After success, collection vars `token` + `refresh_token` are updated if the Test script runs."
+					}
+				},
+				{
+					"name": "POST /api/mobile/auth/token/refresh (alias, same handler)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mobile/auth/token/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mobile", "auth", "token", "refresh"]
+						},
+						"description": "Same as …/auth/refresh."
+					}
+				},
+				{
+					"name": "POST /api/auth/refresh (Bearer = refresh token)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{refresh_token}}" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "refresh"]
+						},
+						"description": "Non-mobile path. No JSON body — refresh token only in Authorization header."
+					}
+				},
+				{
+					"name": "POST /api/auth/token/refresh (alias)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/token/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "token", "refresh"]
+						},
+						"description": "Same handler as /api/auth/refresh."
+					}
+				}
+			]
+		},
 		{
 			"name": "1. Checkout — QR Generation + Coupon Order",
 			"item": [
