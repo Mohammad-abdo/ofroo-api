@@ -344,9 +344,15 @@ class AuthController extends Controller
             'country' => 'مصر', // Default to Egypt
         ]);
 
+        $resolvedCompanyName = $request->company_name
+            ?: $request->company_name_ar
+            ?: $request->company_name_en
+            ?: '';
+
         // Create merchant (pending approval)
         $merchant = \App\Models\Merchant::create([
             'user_id' => $user->id,
+            'company_name' => $resolvedCompanyName,
             'company_name_ar' => $request->company_name_ar,
             'company_name_en' => $request->company_name_en,
             'description_ar' => $request->description_ar,
