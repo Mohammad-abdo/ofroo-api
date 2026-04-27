@@ -113,12 +113,48 @@ class AuthTest extends TestCase
             'password_confirmation' => 'password123',
             'company_name' => 'Test Company',
             'phone' => '+201234567890',
+            'city' => 'القاهرة',
+            'accepted_terms' => true,
         ]);
 
         $response->assertStatus(201);
 
         $this->assertDatabaseHas('merchants', [
             'company_name' => 'Test Company',
+        ]);
+    }
+
+    public function test_existing_user_can_register_as_merchant_with_same_email_and_phone(): void
+    {
+        Role::create(['name' => 'user']);
+        $merchantRole = Role::create(['name' => 'merchant']);
+
+        $user = User::create([
+            'name' => 'Ahmed',
+            'email' => 'ahmed@test.com',
+            'phone' => '+201111111111',
+            'password' => 'password123',
+            'role_id' => Role::where('name', 'user')->first()->id,
+        ]);
+
+        $response = $this->postJson('/api/auth/register-merchant', [
+            'name' => 'أحمد محمد',
+            'email' => 'ahmed@test.com',
+            'phone' => '+201111111111',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'company_name_ar' => 'متجر الاختبار',
+            'company_name_en' => 'Test Shop',
+            'city' => 'القاهرة',
+            'accepted_terms' => true,
+        ]);
+
+        $response->assertStatus(201);
+        $user->refresh();
+        $this->assertSame($merchantRole->id, $user->role_id);
+        $this->assertDatabaseHas('merchants', [
+            'user_id' => $user->id,
+            'company_name_ar' => 'متجر الاختبار',
         ]);
     }
 

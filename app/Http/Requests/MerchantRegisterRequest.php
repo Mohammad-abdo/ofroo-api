@@ -58,8 +58,9 @@ class MerchantRegisterRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:150',
-            'email' => 'required|email|unique:users,email',
-            'phone' => 'required|string|unique:users,phone',
+            // Uniqueness handled in AuthController: existing user may apply as merchant with same email/phone + password.
+            'email' => 'required|email',
+            'phone' => 'required|string|max:50',
             'password' => 'required|string|min:8|confirmed',
             'language' => 'nullable|in:ar,en',
             'company_name' => 'nullable|string|max:255',

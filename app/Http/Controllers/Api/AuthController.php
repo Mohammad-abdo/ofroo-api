@@ -11,12 +11,14 @@ use App\Jobs\SendOtpEmail;
 use App\Jobs\SendOtpPhoneNotification;
 use App\Models\City;
 use App\Models\LoginAttempt;
+use App\Models\Merchant;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -327,31 +329,75 @@ class AuthController extends Controller
 
     /**
      * Register merchant
+     *
+     * New accounts: create user + merchant. Existing accounts: same email+phone, verify password,
+     * upgrade role to merchant, create or update merchant row (re-application allowed).
      */
     public function registerMerchant(\App\Http\Requests\MerchantRegisterRequest $request): JsonResponse
     {
         $merchantRole = Role::where('name', 'merchant')->first();
+        if (! $merchantRole) {
+            return response()->json([
+                'message' => 'Merchant role not found. Please run RoleSeeder.',
+            ], 422);
+        }
 
-        // Create user
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'password' => Hash::make($request->password),
-            'language' => $request->language ?? 'ar',
-            'role_id' => $merchantRole->id,
-            'city' => $request->city ?? null,
-            'country' => 'مصر', // Default to Egypt
-        ]);
+        $email = strtolower(trim((string) $request->email));
+        $phone = trim((string) $request->phone);
+
+        $byEmail = User::whereRaw('LOWER(email) = ?', [$email])->first();
+        $byPhone = User::where('phone', $phone)->first();
+
+        if ($byEmail && $byPhone && $byEmail->id !== $byPhone->id) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => [
+                    'email' => ['البريد ورقم الهاتف مرتبطان بحسابين مختلفين.'],
+                    'phone' => ['البريد ورقم الهاتف مرتبطان بحسابين مختلفين.'],
+                ],
+            ], 422);
+        }
+
+        $existingUser = $byEmail ?? $byPhone;
+        $storedPhone = '';
+
+        if ($existingUser) {
+            if (strcasecmp(trim((string) $existingUser->email), trim((string) $request->email)) !== 0) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => [
+                        'email' => ['البريد لا يطابق الحساب المرتبط بهذا الرقم.'],
+                    ],
+                ], 422);
+            }
+            $storedPhone = trim((string) ($existingUser->phone ?? ''));
+            if ($storedPhone !== '' && $storedPhone !== $phone) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => [
+                        'phone' => ['رقم الهاتف لا يطابق الحساب المرتبط بهذا البريد.'],
+                    ],
+                ], 422);
+            }
+            if (! Hash::check($request->password, $existingUser->getAuthPassword())) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => [
+                        'password' => ['كلمة المرور غير صحيحة لهذا الحساب.'],
+                    ],
+                ], 422);
+            }
+        }
 
         $resolvedCompanyName = $request->company_name
             ?: $request->company_name_ar
             ?: $request->company_name_en
             ?: '';
 
-        // Create merchant (pending approval); legacy `company_name` / `description` / `address` columns use bilingual fields + nulls where applicable.
-        $merchant = \App\Models\Merchant::create([
-            'user_id' => $user->id,
+        $addressAr = $request->address_ar ?? $request->address;
+        $addressEn = $request->address_en;
+
+        $merchantPayload = [
             'company_name' => $resolvedCompanyName,
             'company_name_ar' => $request->company_name_ar,
             'company_name_en' => $request->company_name_en,
@@ -359,8 +405,8 @@ class AuthController extends Controller
             'description_ar' => $request->description_ar,
             'description_en' => $request->description_en,
             'address' => null,
-            'address_ar' => $request->address_ar,
-            'address_en' => $request->address_en,
+            'address_ar' => $addressAr,
+            'address_en' => $addressEn,
             'phone' => $request->phone_merchant,
             'whatsapp_link' => $request->whatsapp_link,
             'category_id' => $request->category_id,
@@ -368,9 +414,60 @@ class AuthController extends Controller
             'branches_number' => $request->branches_number,
             'city' => $request->city ?? null,
             'country' => 'مصر',
-            'approved' => false,
             'accepted_terms' => true,
-        ]);
+        ];
+
+        $user = DB::transaction(function () use ($request, $merchantRole, $existingUser, $phone, $merchantPayload, $storedPhone) {
+            if ($existingUser) {
+                $user = $existingUser->fresh();
+                $userUpdates = [
+                    'name' => $request->name,
+                    'language' => $request->language ?? $user->language ?? 'ar',
+                    'role_id' => $merchantRole->id,
+                    'city' => $request->city ?? $user->city,
+                    'country' => 'مصر',
+                ];
+                if ($storedPhone === '') {
+                    $userUpdates['phone'] = $phone;
+                }
+                $user->update($userUpdates);
+
+                $merchant = $user->merchant;
+                if ($merchant) {
+                    $payload = $merchantPayload;
+                    if (! $merchant->approved) {
+                        $payload['approved'] = false;
+                    }
+                    $merchant->update($payload);
+                } else {
+                    Merchant::create(array_merge($merchantPayload, [
+                        'user_id' => $user->id,
+                        'approved' => false,
+                    ]));
+                }
+
+                return $user->fresh();
+            }
+
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'phone' => $phone,
+                'password' => Hash::make($request->password),
+                'language' => $request->language ?? 'ar',
+                'role_id' => $merchantRole->id,
+                'city' => $request->city ?? null,
+                'country' => 'مصر',
+            ]);
+
+            Merchant::create(array_merge($merchantPayload, [
+                'user_id' => $user->id,
+                'approved' => false,
+            ]));
+
+            return $user;
+        });
+
         $user->load('role');
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -380,6 +477,9 @@ class AuthController extends Controller
             'message' => 'تم إرسال طلبك بنجاح',
             'message_ar' => 'تم إرسال طلبك بنجاح، سيتم مراجعته من قِبَل الإدارة وستصلك إشعار بالقرار.',
             'message_en' => 'Your request has been submitted successfully. It will be reviewed by the admin and you will be notified of the decision.',
+            'token' => $token,
+            'user' => new UserResource($user),
+            'existing_account' => (bool) $existingUser,
         ], 201);
     }
 
