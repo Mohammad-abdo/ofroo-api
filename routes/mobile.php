@@ -79,7 +79,6 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
     Route::post('/refresh', [AuthController::class, 'refreshToken'])->middleware('throttle:30,1');
-    Route::post('/token/refresh', [AuthController::class, 'refreshToken'])->middleware('throttle:30,1');
     
     // تسجيل تاجر جديد
     Route::post('/register-merchant', [AuthController::class, 'registerMerchant'])->middleware('throttle:3,1');

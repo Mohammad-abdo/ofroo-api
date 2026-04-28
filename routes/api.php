@@ -71,8 +71,6 @@ Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
     Route::post('/refresh', [AuthController::class, 'refreshToken'])->middleware('throttle:30,1');
-    // Alias: exchange old refresh_token for new access + refresh pair (same handler as /refresh).
-    Route::post('/token/refresh', [AuthController::class, 'refreshToken'])->middleware('throttle:30,1');
     Route::post('/register-merchant', [AuthController::class, 'registerMerchant'])->middleware('throttle:3,1');
     Route::post('/otp/request', [AuthController::class, 'requestOtp'])->middleware('throttle:3,1');
     Route::post('/otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:5,1');
