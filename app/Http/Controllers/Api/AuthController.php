@@ -246,7 +246,11 @@ class AuthController extends Controller
         );
 
         if ($request->filled('phone')) {
-            SendOtpPhoneNotification::dispatch($user->id, $otp, $user->language ?? 'ar');
+            if (config('otp.phone_dispatch_sync')) {
+                SendOtpPhoneNotification::dispatchSync($user->id, $otp, $user->language ?? 'ar');
+            } else {
+                SendOtpPhoneNotification::dispatch($user->id, $otp, $user->language ?? 'ar');
+            }
         } else {
             SendOtpEmail::dispatch($user, $otp, $user->language ?? 'ar');
         }

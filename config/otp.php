@@ -20,6 +20,12 @@ return [
     */
     'phone_driver' => env('OTP_PHONE_DRIVER', 'log'),
 
+    /*
+    | If true, phone OTP is sent in the same HTTP request (no queue worker needed).
+    | If false, ensure QUEUE_CONNECTION=sync OR run `php artisan queue:work`.
+    */
+    'phone_dispatch_sync' => filter_var(env('OTP_PHONE_DISPATCH_SYNC', false), FILTER_VALIDATE_BOOLEAN),
+
     'resend_cooldown_seconds' => (int) env('OTP_RESEND_COOLDOWN_SECONDS', 45),
 
     'welniz' => [
