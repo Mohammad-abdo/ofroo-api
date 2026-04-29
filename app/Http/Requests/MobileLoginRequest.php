@@ -27,4 +27,15 @@ class MobileLoginRequest extends FormRequest
             'password' => 'required|string',
         ];
     }
+
+    /**
+     * JSON clients often send phone as a number — Laravel's `string` rule rejects it.
+     * Do not rewrite digits here: DB may store local or +20 format; normalization is applied at registration.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('phone') && is_numeric($this->input('phone'))) {
+            $this->merge(['phone' => (string) $this->input('phone')]);
+        }
+    }
 }

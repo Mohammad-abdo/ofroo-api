@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\City;
+use App\Support\EgyptPhone;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -85,6 +86,27 @@ class MobileRegisterRequest extends FormRequest
             if ($gender === 'fem') {
                 $this->merge(['gender' => 'female']);
             }
+        }
+
+        // JSON often sends phone as number — Laravel's `string` rule rejects it.
+        if ($this->has('phone')) {
+            $normalized = EgyptPhone::normalize($this->input('phone'));
+            if ($normalized !== '') {
+                $this->merge(['phone' => $normalized]);
+            }
+        }
+
+        foreach (['name', 'email', 'city', 'governorate'] as $field) {
+            if ($this->has($field) && is_string($this->input($field))) {
+                $this->merge([$field => trim($this->input($field))]);
+            }
+        }
+
+        if ($this->filled('governorate_id')) {
+            $this->merge(['governorate_id' => (int) $this->input('governorate_id')]);
+        }
+        if ($this->filled('city_id')) {
+            $this->merge(['city_id' => (int) $this->input('city_id')]);
         }
     }
 }
