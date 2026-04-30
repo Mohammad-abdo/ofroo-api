@@ -8,6 +8,7 @@ use App\Models\WalletTransaction;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AdminWalletController extends Controller
 {
@@ -99,7 +100,13 @@ class AdminWalletController extends Controller
     {
         $request->validate([
             'wallet_type' => 'required|in:merchant,admin',
-            'wallet_id' => 'required|integer',
+            // For merchant adjustments, wallet_id is the Merchant ID.
+            // For admin adjustments, the wallet is always the singleton AdminWallet::getOrCreate(),
+            // so wallet_id is not required (keeps frontend simpler and avoids guessing the ID).
+            'wallet_id' => [
+                Rule::requiredIf(fn () => $request->wallet_type === 'merchant'),
+                'integer',
+            ],
             'amount' => 'required|numeric|min:0.01',
             'action' => 'required|in:debit,credit',
             'reason' => 'required|string|min:10',
@@ -109,7 +116,7 @@ class AdminWalletController extends Controller
 
         try {
             if ($request->wallet_type === 'admin') {
-                $wallet = AdminWallet::findOrFail($request->wallet_id);
+                $wallet = AdminWallet::getOrCreate();
                 if ($request->action === 'credit') {
                     $transaction = $this->walletService->creditAdminWallet(
                         $request->amount,
