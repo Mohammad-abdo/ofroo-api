@@ -58,6 +58,11 @@ class OtpDeliveryManager
             ]);
             throw new RuntimeException('Welniz OTP delivery failed: HTTP '.$response->status());
         }
+
+        Log::info('✅ OTP Welniz: sent successfully', [
+            'phone' => $phone,
+            'status' => $response->status(),
+        ]);
     }
 
     private function sendHttpJson(string $phone, string $message): void
