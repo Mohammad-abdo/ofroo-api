@@ -4973,7 +4973,7 @@ class AdminController extends Controller
             $request->merge(['start_date' => $ad->start_date->format('Y-m-d H:i:s')]);
         }
 
-        $request->validate([
+        $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
             'title_ar' => 'sometimes|string|max:255',
             'title_en' => 'sometimes|string|max:255',
@@ -5003,7 +5003,7 @@ class AdminController extends Controller
             'clicks_count' => 'sometimes|integer|min:0',
         ]);
 
-        $updateData = collect($request->validated())
+        $updateData = collect($validated)
             ->except(['image', 'video'])
             ->all();
 
