@@ -125,6 +125,13 @@ Route::get('/ads', [AdController::class, 'index']);
 Route::get('/ads/{id}', [AdController::class, 'show'])->where('id', '[0-9]+');
 
 // ================================
+// 4.2.1 البانرات (Banners) - Public
+// Returns only active banners (ad_type=banner) ordered by order_index.
+// Optional: ?position=home_top|home_bottom|...
+// ================================
+Route::get('/banners', [AdController::class, 'banners']);
+
+// ================================
 // 4.3 مشاركة عرض + معلومات عامة (Public)
 // ================================
 Route::get('/offers/{offerId}/share', [AppContentController::class, 'shareOffer'])

@@ -138,4 +138,36 @@ class AdController extends Controller
         $ad = Ad::with(['merchant', 'category'])->findOrFail($id);
         return response()->json(['data' => $this->adPayload($ad)]);
     }
+
+    /**
+     * GET /api/mobile/banners
+     * Return active banners (ad_type = 'banner') within their date window,
+     * ordered by order_index. Supports optional ?position= filter.
+     */
+    public function banners(Request $request): JsonResponse
+    {
+        $now = now();
+
+        $query = Ad::with(['merchant', 'category'])
+            ->where('ad_type', 'banner')
+            ->where('is_active', true)
+            ->where(function ($q) use ($now) {
+                $q->whereNull('start_date')->orWhere('start_date', '<=', $now);
+            })
+            ->where(function ($q) use ($now) {
+                $q->whereNull('end_date')->orWhere('end_date', '>=', $now);
+            });
+
+        if ($request->filled('position')) {
+            $query->where('position', $request->position);
+        }
+
+        $banners = $query->orderBy('order_index')->orderBy('created_at', 'desc')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $banners->map(fn (Ad $ad) => $this->adPayload($ad))->values(),
+            'total' => $banners->count(),
+        ]);
+    }
 }
