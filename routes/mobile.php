@@ -125,11 +125,15 @@ Route::get('/ads', [AdController::class, 'index']);
 Route::get('/ads/{id}', [AdController::class, 'show'])->where('id', '[0-9]+');
 
 // ================================
-// 4.2.1 البانرات (Banners) - Public
-// Returns only active banners (ad_type=banner) ordered by order_index.
-// Optional: ?position=home_top|home_bottom|...
+// 4.2.1 إعلانات حسب النوع (Ads by Type) - Public
+// Each endpoint returns only active ads of that type, ordered by order_index.
+// All support: ?position= ?merchant_id= ?category_id= ?per_page=
 // ================================
-Route::get('/banners', [AdController::class, 'banners']);
+Route::get('/banners',          [AdController::class, 'banners']);   // ad_type=banner
+Route::get('/ads/popup',        [AdController::class, 'popups']);    // ad_type=popup
+Route::get('/ads/video',        [AdController::class, 'videos']);    // ad_type=video
+Route::get('/ads/sidebar',      [AdController::class, 'sidebars']); // ad_type=sidebar
+Route::get('/ads/inline',       [AdController::class, 'inline']);   // ad_type=inline
 
 // ================================
 // 4.3 مشاركة عرض + معلومات عامة (Public)

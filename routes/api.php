@@ -788,6 +788,34 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
             Route::delete('/{id}', [AdminController::class, 'deleteMall']);
         });
 
+        // ─── Wallet Management ───────────────────────────────────────────────────────
+        Route::prefix('wallet')->group(function () {
+            // Admin wallet summary
+            Route::get('/', [AdminWalletController::class, 'index']);
+            // All wallet transactions (admin + merchant)
+            Route::get('/transactions', [AdminWalletController::class, 'transactions']);
+            // Adjust any wallet (credit / debit)
+            Route::post('/adjust', [AdminWalletController::class, 'adjust']);
+            // All merchant wallets list
+            Route::get('/merchants', [AdminWalletController::class, 'getMerchantWallets']);
+            // Single merchant wallet detail
+            Route::get('/merchants/{merchantId}', [AdminWalletController::class, 'getMerchantWallet']);
+            // Freeze / unfreeze merchant wallet
+            Route::post('/merchants/{merchantId}/freeze', [AdminWalletController::class, 'freezeMerchantWallet']);
+            Route::post('/merchants/{merchantId}/unfreeze', [AdminWalletController::class, 'unfreezeMerchantWallet']);
+            // Wallet global settings
+            Route::get('/settings', [AdminWalletController::class, 'getSettings']);
+            Route::put('/settings', [AdminWalletController::class, 'updateSettings']);
+        });
+
+        // ─── Withdrawals Management ──────────────────────────────────────────────────
+        Route::prefix('withdrawals')->group(function () {
+            Route::get('/', [AdminWalletController::class, 'getWithdrawals']);
+            Route::get('/{id}', [AdminWalletController::class, 'getWithdrawal']);
+            Route::post('/{id}/approve', [AdminWalletController::class, 'approveWithdrawal']);
+            Route::post('/{id}/reject', [AdminWalletController::class, 'rejectWithdrawal']);
+        });
+
         // Ads Management
         Route::prefix('ads')->group(function () {
             Route::get('/report-stats', [AdminController::class, 'getAdsReportStats']);
