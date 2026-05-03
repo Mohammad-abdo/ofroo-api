@@ -19,11 +19,15 @@ class CategoryController extends Controller
     {
         $user = $request->user();
         $language = $request->get('language', $user ? $user->language : null) ?? 'ar';
+        $isMobile = $request->is('api/mobile/*');
 
-        $categories = Category::whereNull('parent_id')
-            ->select('id', 'name_ar', 'name_en', 'order_index', 'is_active')
-            ->orderBy('order_index')
-            ->get();
+        $query = Category::query()
+            ->whereNull('parent_id')
+            ->select('id', 'name_ar', 'name_en', 'order_index', 'is_active');
+        if ($isMobile) {
+            $query->where('is_active', true);
+        }
+        $categories = $query->orderBy('order_index')->get();
 
         $data = $categories->map(function ($category) use ($language) {
             return [
@@ -46,10 +50,15 @@ class CategoryController extends Controller
         $user = $request->user();
         $language = $request->get('language', $user ? $user->language : null) ?? 'ar';
         $isMobile = $request->is('api/mobile/*');
-        $cacheKey = 'categories_with_offers_'.$language.'_'.($isMobile ? 'mobile' : 'web');
+        // Bump mobile cache segment so inactive categories are excluded after deploy.
+        $cacheKey = 'categories_with_offers_'.$language.'_'.($isMobile ? 'mobile_active_cat' : 'web');
 
         $data = Cache::remember($cacheKey, 3600, function () use ($language, $request, $isMobile) {
-            $categories = Category::whereNull('parent_id')
+            $root = Category::query()->whereNull('parent_id');
+            if ($isMobile) {
+                $root->where('is_active', true);
+            }
+            $categories = $root
                 ->with(['offers' => function ($q) use ($isMobile) {
                     if ($isMobile) {
                         $q->mobilePubliclyAvailable();
@@ -93,7 +102,7 @@ class CategoryController extends Controller
         $language = $request->get('language', $user ? $user->language : null) ?? 'ar';
 
         $isMobile = $request->is('api/mobile/*');
-        $category = Category::with([
+        $categoryQuery = Category::query()->with([
             'offers' => function ($q) use ($isMobile) {
                 if ($isMobile) {
                     $q->mobilePubliclyAvailable();
@@ -103,7 +112,11 @@ class CategoryController extends Controller
                 $q->whereNotNull('category_id')
                     ->with(['merchant', 'category', 'branches', 'coupons']);
             },
-        ])->findOrFail($id);
+        ]);
+        if ($isMobile) {
+            $categoryQuery->where('is_active', true);
+        }
+        $category = $categoryQuery->findOrFail($id);
 
         $offersForCategory = $category->offers->where('category_id', $category->id)->values();
         $children = $offersForCategory->map(function ($offer) use ($request) {
