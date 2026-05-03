@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Common;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\OfferResource;
 use App\Models\Mall;
 use App\Models\Merchant;
 use App\Support\ApiMediaUrl;
@@ -33,9 +34,76 @@ class MallController extends Controller
 
         $language = $request->get('language', 'ar');
 
+        $data = $this->formatMallForMobileApi($mall, $language);
+        $data['merchants'] = $this->merchantsWithMallOffersForMobile($mall, $language, $request);
+
         return response()->json([
-            'data' => $this->formatMallForMobileApi($mall, $language),
+            'data' => $data,
         ]);
+    }
+
+    /**
+     * Merchants tied to this mall (same rules as GET …/malls/{id}/merchants) with each merchant’s
+     * offers where offer.mall_id matches this mall only (mobile-public offers).
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function merchantsWithMallOffersForMobile(Mall $mall, string $language, Request $request): array
+    {
+        $mallId = (int) $mall->id;
+
+        $merchants = Merchant::query()
+            ->select([
+                'id',
+                'company_name',
+                'company_name_ar',
+                'company_name_en',
+                'logo_url',
+                'category_id',
+                'mall_id',
+            ])
+            ->with([
+                'category:id,name_ar,name_en',
+                'offers' => function ($q) use ($mallId) {
+                    $q->where('mall_id', $mallId)
+                        ->mobilePubliclyAvailable()
+                        ->orderBy('id')
+                        ->with(['merchant', 'category', 'mall', 'branches', 'coupons']);
+                },
+            ])
+            ->where('approved', true)
+            ->where(function ($q) {
+                $q->whereNull('is_blocked')->orWhere('is_blocked', false);
+            })
+            ->associatedWithMall($mallId)
+            ->orderBy('company_name_ar')
+            ->orderBy('id')
+            ->get();
+
+        return $merchants->map(function (Merchant $merchant) use ($language, $request) {
+            $name = $language === 'ar'
+                ? ($merchant->company_name_ar ?? $merchant->company_name_en ?? $merchant->company_name ?? '')
+                : ($merchant->company_name_en ?? $merchant->company_name_ar ?? $merchant->company_name ?? '');
+
+            $cat = $merchant->category;
+            $categoryName = $cat
+                ? ($language === 'ar' ? ($cat->name_ar ?? $cat->name_en) : ($cat->name_en ?? $cat->name_ar))
+                : null;
+
+            $offers = $merchant->offers
+                ->map(fn ($offer) => (new OfferResource($offer))->toArray($request))
+                ->values()
+                ->all();
+
+            return [
+                'id' => $merchant->id,
+                'name' => $name,
+                'logo_url' => ApiMediaUrl::publicAbsolute(is_string($merchant->logo_url) ? $merchant->logo_url : ''),
+                'category_id' => $merchant->category_id,
+                'category_name' => $categoryName,
+                'offers' => $offers,
+            ];
+        })->values()->all();
     }
 
     /**

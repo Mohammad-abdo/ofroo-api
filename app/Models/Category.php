@@ -21,6 +21,13 @@ class Category extends Model
 
     protected $appends = ['image_url'];
 
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+        ];
+    }
+
     /**
      * Placeholder image when category has no image (usable in API).
      */

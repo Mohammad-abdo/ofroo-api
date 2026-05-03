@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Common\CategoryController as PublicCategoryController;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Support\ImageUploadRules;
@@ -27,6 +28,8 @@ class CategoryController extends Controller
             Category::where('id', $categoryData['id'])
                 ->update(['order_index' => $categoryData['order_index']]);
         }
+
+        PublicCategoryController::forgetPublicCategoriesListCache();
 
         return response()->json([
             'message' => 'Category order updated successfully',
@@ -114,6 +117,8 @@ class CategoryController extends Controller
 
         $category = Category::create($data);
 
+        PublicCategoryController::forgetPublicCategoriesListCache();
+
         return response()->json([
             'message' => 'Category created successfully',
             'data' => $category,
@@ -180,6 +185,8 @@ class CategoryController extends Controller
 
         $category->update($update);
 
+        PublicCategoryController::forgetPublicCategoriesListCache();
+
         return response()->json([
             'message' => 'Category updated successfully',
             'data' => $category->fresh(),
@@ -206,6 +213,8 @@ class CategoryController extends Controller
         }
 
         $category->delete();
+
+        PublicCategoryController::forgetPublicCategoriesListCache();
 
         return response()->json([
             'message' => 'Category deleted successfully',
