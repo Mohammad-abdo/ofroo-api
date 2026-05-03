@@ -98,7 +98,7 @@ Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/{id}', [CategoryController::class, 'show']);
 
 // ================================
-// 3.1 المولات (Malls) — عام: قائمة مولات + تجار داخل مول (فلتر category_id)
+// 3.1 كيان المولات (جدول malls) منفصل عن فئات العروض/التجار — التجار بالمول عبر mall_id/الفرع؛ category_id = نشاط التاجر فقط.
 // ================================
 Route::get('/malls/details/{id}', [MallPublicController::class, 'mobileMallDetails'])->whereNumber('id');
 Route::get('/malls/{mallId}/merchants', [MallPublicController::class, 'merchants'])->where('mallId', '[0-9]+');

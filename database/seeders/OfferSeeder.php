@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\Branch;
 use App\Models\Category;
-use App\Models\Mall;
 use App\Models\Merchant;
 use App\Models\Offer;
 use Carbon\Carbon;
@@ -15,13 +14,13 @@ use Illuminate\Support\Facades\Schema;
 class OfferSeeder extends Seeder
 {
     /**
-     * عناوين العروض حسب التصنيف (كل عرض يتبع تصنيفه منطقياً).
-     * key = order_index من CategorySeeder (1=مولات, 2=مطاعم, ...).
+     * عناوين العروض حسب تصنيف العرض (فئات الجذر في CategorySeeder) — منفصل عن جدول «المولات» malls.
+     * key = order_index من CategorySeeder (1=فئة عروض «مولات» الاسم، 2=مطاعم, ...).
      */
     private function getTitlesByCategory(): array
     {
         return [
-            1 => [ // مولات Malls
+            1 => [ // order_index 1: فئة name_ar «مولات» (تصنيف عروض) — ليس ربطاً بسجل Mall
                 ['ar' => 'خصم 50% على المشتريات من المول', 'en' => '50% Off Mall Purchases'],
                 ['ar' => 'عرض المول: خصم 30% على المتاجر المشاركة', 'en' => 'Mall Offer: 30% Off Participating Stores'],
                 ['ar' => 'شراء اثنين واحصل على واحد مجاناً من المتجر', 'en' => 'Buy Two Get One Free at Store'],
@@ -177,17 +176,9 @@ class OfferSeeder extends Seeder
                     unset($offerAttrs['start_date'], $offerAttrs['end_date']);
                 }
 
+                // mall_id للعرض يأتي فقط من تاجر/فرع مرتبط بمول فعلي — لا نستنتج مولاً من فئة التاجر أو فئة العرض.
                 if (Schema::hasColumn('offers', 'mall_id')) {
                     $resolvedMallId = $merchant->mall_id ?: ($branch?->mall_id ?? null);
-                    if (! $resolvedMallId && Schema::hasColumn('merchants', 'category_id')) {
-                        $mallCategory = $categories->firstWhere('name_ar', 'مولات');
-                        if ($mallCategory && (int) $merchant->category_id === (int) $mallCategory->id) {
-                            $resolvedMallId = Mall::query()
-                                ->where('is_active', true)
-                                ->inRandomOrder()
-                                ->value('id');
-                        }
-                    }
                     if ($resolvedMallId) {
                         $offerAttrs['mall_id'] = (int) $resolvedMallId;
                     }

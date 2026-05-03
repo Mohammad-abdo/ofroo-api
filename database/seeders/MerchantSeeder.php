@@ -12,6 +12,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Faker\Factory as Faker;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 
@@ -61,8 +62,10 @@ class MerchantSeeder extends Seeder
                 'address_en' => 'Nasr City, Cairo, Egypt',
                 'lat' => 30.0626,
                 'lng' => 31.3219,
-                'category_name_ar' => 'مولات',
-                'mall_name_en' => 'Genena Mall',
+                // فئة تجارية منفصلة عن كيان «المول» في جدول malls — الربط بالمول يكون عبر mall_name_en فقط.
+                'category_name_ar' => 'أزياء',
+                // Match MallSeeder order_index 0 so list/detail for the first mall is never empty.
+                'mall_name_en' => 'Citystars Heliopolis',
             ],
             [
                 'name' => 'Koshary Abou Tarek',
@@ -90,7 +93,7 @@ class MerchantSeeder extends Seeder
                 'address_en' => '6th October City, Giza, Egypt',
                 'lat' => 29.9697,
                 'lng' => 30.9564,
-                'category_name_ar' => 'مولات',
+                'category_name_ar' => 'أزياء',
                 'mall_name_en' => 'Mall of Arabia',
             ],
             [
@@ -105,7 +108,7 @@ class MerchantSeeder extends Seeder
                 'address_en' => 'New Cairo, Egypt',
                 'lat' => 30.0131,
                 'lng' => 31.6850,
-                'category_name_ar' => 'مولات',
+                'category_name_ar' => 'إلكترونيات',
                 'mall_name_en' => 'Cairo Festival City Mall',
             ],
             [
@@ -328,23 +331,51 @@ class MerchantSeeder extends Seeder
             Merchant::whereNull('category_id')->update(['category_id' => $defaultCategoryId]);
         }
 
-        if ($hasMerchantMallId && $mallsByNameEn->isNotEmpty() && $categoryByNameAr->has('مولات')) {
-            $mallCategoryId = $categoryByNameAr->get('مولات')->id;
-            $mallIds = Mall::query()->pluck('id')->all();
-            if ($mallIds !== []) {
-                Merchant::query()
-                    ->where('category_id', $mallCategoryId)
-                    ->whereNull('mall_id')
-                    ->orderBy('id')
-                    ->limit(6)
-                    ->get()
-                    ->each(function (Merchant $m) use ($mallIds, $hasBranchMallId) {
-                        $mid = $mallIds[array_rand($mallIds)];
-                        $m->update(['mall_id' => $mid]);
-                        if ($hasBranchMallId) {
-                            Branch::where('merchant_id', $m->id)->update(['mall_id' => $mid]);
-                        }
-                    });
+        // لا نربط فئة التاجر «مولات» بجدول malls — المول منفصل؛ mall_id يُضبط فقط من تعريف التاجر/الفرع أعلاه أو syncFoundationMerchantMallIds.
+
+        // firstOrCreate ignores $attributes when the row already exists — re-seed would leave stale mall_id.
+        $this->syncFoundationMerchantMallIds($mallsByNameEn, $hasMerchantMallId, $hasBranchMallId);
+    }
+
+    /**
+     * Force mall_id (and branch mall_id) for fixed demo merchants by email.
+     *
+     * @param  Collection<string, Mall>  $mallsByNameEn
+     */
+    private function syncFoundationMerchantMallIds($mallsByNameEn, bool $hasMerchantMallId, bool $hasBranchMallId): void
+    {
+        if (! $hasMerchantMallId || $mallsByNameEn->isEmpty()) {
+            return;
+        }
+
+        $emailToMallNameEn = [
+            'merchant1@ofroo.com' => 'Citystars Heliopolis',
+            'merchant3@ofroo.com' => 'Mall of Arabia',
+            'merchant4@ofroo.com' => 'Cairo Festival City Mall',
+        ];
+
+        foreach ($emailToMallNameEn as $email => $nameEn) {
+            $key = strtolower(trim($nameEn));
+            if (! $mallsByNameEn->has($key)) {
+                $this->command?->warn("syncFoundationMerchantMallIds: mall name_en not found: {$nameEn}");
+
+                continue;
+            }
+
+            $mallId = (int) $mallsByNameEn->get($key)->id;
+            $user = User::query()->where('email', $email)->first();
+            if (! $user) {
+                continue;
+            }
+
+            $merchant = Merchant::query()->where('user_id', $user->id)->first();
+            if (! $merchant) {
+                continue;
+            }
+
+            $merchant->update(['mall_id' => $mallId]);
+            if ($hasBranchMallId) {
+                Branch::where('merchant_id', $merchant->id)->update(['mall_id' => $mallId]);
             }
         }
     }

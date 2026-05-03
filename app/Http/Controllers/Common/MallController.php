@@ -11,9 +11,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Public API: المولات للمستخدم (بدون مصادقة) — قائمة مولات + تجار داخل مول.
+ * Public API: كيان المولات (جدول malls) — قائمة مولات + تجار داخل مول.
  *
- * ربط التاجر بالمول: صف التاجر merchants.mall_id أو وجود فرع branches.mall_id لهذا المول.
+ * ربط التاجر بالمول: merchants.mall_id أو فرع branches.mall_id فقط — لا يُستنتج من فئة العرض/التاجر (مثل name_ar «مولات»).
  */
 class MallController extends Controller
 {
