@@ -56,6 +56,13 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('coupons');
+        // Child tables (e.g. coupon_entitlements) may still reference coupons when
+        // rolling back in batch order — allow drop on MySQL.
+        Schema::disableForeignKeyConstraints();
+        try {
+            Schema::dropIfExists('coupons');
+        } finally {
+            Schema::enableForeignKeyConstraints();
+        }
     }
 };
