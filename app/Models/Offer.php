@@ -102,12 +102,17 @@ class Offer extends Model
 
     /**
      * Scope a query to only include active offers.
+     * Null start_date / end_date means no bound on that side (SQL would otherwise drop rows).
      */
     public function scopeActive($query)
     {
         return $query->where('status', 'active')
-            ->where('start_date', '<=', now())
-            ->where('end_date', '>=', now());
+            ->where(function (Builder $q) {
+                $q->whereNull('start_date')->orWhere('start_date', '<=', now());
+            })
+            ->where(function (Builder $q) {
+                $q->whereNull('end_date')->orWhere('end_date', '>=', now());
+            });
     }
 
     /**

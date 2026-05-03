@@ -100,6 +100,7 @@ Route::get('/categories/{id}', [CategoryController::class, 'show']);
 // ================================
 // 3.1 كيان المولات (جدول malls) منفصل عن فئات العروض/التجار — التجار بالمول عبر mall_id/الفرع؛ category_id = نشاط التاجر فقط.
 // ================================
+// تفاصيل مول + تجار وعروضهم — اختياري: ?category_id= أو ?merchant_category_id= و ?offer_category_id=
 Route::get('/malls/details/{id}', [MallPublicController::class, 'mobileMallDetails'])->whereNumber('id');
 Route::get('/malls/{mallId}/merchants', [MallPublicController::class, 'merchants'])->where('mallId', '[0-9]+');
 Route::get('/malls', [MallPublicController::class, 'index']);

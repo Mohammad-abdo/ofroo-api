@@ -103,7 +103,7 @@ Route::prefix('auth')->group(function () {
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/{id}', [CategoryController::class, 'show']);
 
-// Public malls (قائمة + تفاصيل مول + تجار داخل مول)
+// Public malls — تفاصيل مول: ?category_id= أو ?merchant_category_id= و ?offer_category_id=
 Route::get('/malls/details/{id}', [MallPublicController::class, 'mobileMallDetails'])->whereNumber('id');
 Route::get('/malls/{mallId}/merchants', [MallPublicController::class, 'merchants'])->where('mallId', '[0-9]+');
 Route::get('/malls', [MallPublicController::class, 'index']);

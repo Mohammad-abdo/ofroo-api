@@ -13,13 +13,18 @@ use Illuminate\Http\Request;
 /**
  * Public API: كيان المولات (جدول malls) — قائمة مولات + تجار داخل مول.
  *
- * ربط التاجر بالمول: merchants.mall_id أو فرع branches.mall_id فقط — لا يُستنتج من فئة العرض/التاجر (مثل name_ar «مولات»).
+ * ربط التاجر بالمول: merchants.mall_id أو فرع branches.mall_id — فئة التاجر (مثل «مولات») تصنيف نشاط وليست جدول malls.
  */
 class MallController extends Controller
 {
     /**
      * Single active mall for mobile / public detail screen.
      * GET /api/mobile/malls/details/{id}  و  GET /api/malls/details/{id}
+     *
+     * Query (اختياري):
+     * - category_id: فلترة التجار بـ merchants.category_id + العروض بـ offers.category_id (نفس المعرف).
+     * - merchant_category_id: فلترة التجار فقط.
+     * - offer_category_id: فلترة العروض فقط (حسب offers.category_id).
      */
     public function mobileMallDetails(Request $request, string $id): JsonResponse
     {
@@ -43,14 +48,47 @@ class MallController extends Controller
     }
 
     /**
+     * Decode optional category filters for mall details (merchants + nested offers).
+     *
+     * @return array{merchant_category_id: ?int, offer_category_id: ?int}
+     */
+    protected function mallDetailsCategoryFilterIds(Request $request): array
+    {
+        $syncCategoryId = $request->filled('category_id') && ctype_digit((string) $request->query('category_id'));
+
+        $merchantCategoryId = null;
+        if ($request->filled('merchant_category_id') && ctype_digit((string) $request->query('merchant_category_id'))) {
+            $merchantCategoryId = (int) $request->query('merchant_category_id');
+        } elseif ($syncCategoryId) {
+            $merchantCategoryId = (int) $request->query('category_id');
+        }
+
+        $offerCategoryId = null;
+        if ($request->filled('offer_category_id') && ctype_digit((string) $request->query('offer_category_id'))) {
+            $offerCategoryId = (int) $request->query('offer_category_id');
+        } elseif ($syncCategoryId) {
+            $offerCategoryId = (int) $request->query('category_id');
+        }
+
+        return [
+            'merchant_category_id' => $merchantCategoryId,
+            'offer_category_id' => $offerCategoryId,
+        ];
+    }
+
+    /**
      * Merchants tied to this mall (same rules as GET …/malls/{id}/merchants) with each merchant’s
-     * offers where offer.mall_id matches this mall only (mobile-public offers).
+     * mobile-public offers for this screen: tagged for this mall (offer.mall_id) or not pinned to a mall (null),
+     * since the merchant is already scoped to this mall.
      *
      * @return list<array<string, mixed>>
      */
     protected function merchantsWithMallOffersForMobile(Mall $mall, string $language, Request $request): array
     {
         $mallId = (int) $mall->id;
+        $filters = $this->mallDetailsCategoryFilterIds($request);
+        $merchantCategoryId = $filters['merchant_category_id'];
+        $offerCategoryId = $filters['offer_category_id'];
 
         $merchants = Merchant::query()
             ->select([
@@ -64,8 +102,11 @@ class MallController extends Controller
             ])
             ->with([
                 'category:id,name_ar,name_en',
-                'offers' => function ($q) use ($mallId) {
-                    $q->where('mall_id', $mallId)
+                'offers' => function ($q) use ($mallId, $offerCategoryId) {
+                    $q->where(function ($w) use ($mallId) {
+                        $w->where('mall_id', $mallId)->orWhereNull('mall_id');
+                    })
+                        ->when($offerCategoryId !== null, fn ($q2) => $q2->where('category_id', $offerCategoryId))
                         ->mobilePubliclyAvailable()
                         ->orderBy('id')
                         ->with(['merchant', 'category', 'mall', 'branches', 'coupons']);
@@ -76,6 +117,7 @@ class MallController extends Controller
                 $q->whereNull('is_blocked')->orWhere('is_blocked', false);
             })
             ->associatedWithMall($mallId)
+            ->when($merchantCategoryId !== null, fn ($q) => $q->where('category_id', $merchantCategoryId))
             ->orderBy('company_name_ar')
             ->orderBy('id')
             ->get();
