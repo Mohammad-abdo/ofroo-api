@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Mall extends Model
@@ -18,6 +19,7 @@ class Mall extends Model
         'address_ar',
         'address_en',
         'city',
+        'city_id',
         'country',
         'latitude',
         'longitude',
@@ -42,6 +44,11 @@ class Mall extends Model
         ];
     }
 
+    public function cityModel(): BelongsTo
+    {
+        return $this->belongsTo(City::class, 'city_id');
+    }
+
     /**
      * Get the branches in this mall.
      */
@@ -58,4 +65,3 @@ class Mall extends Model
         return $this->hasMany(Offer::class);
     }
 }
-

@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
-use App\Models\User;
 use App\Models\LoyaltyPoint;
 use App\Models\LoyaltyTransaction;
 use App\Models\Order;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 class LoyaltyService
@@ -38,6 +38,7 @@ class LoyaltyService
         } elseif ($totalPoints >= 1000) {
             return 'silver';
         }
+
         return 'bronze';
     }
 
@@ -49,7 +50,7 @@ class LoyaltyService
         $user = $order->user;
         $loyaltyAccount = $this->getOrCreateLoyaltyAccount($user);
 
-        // Calculate points (1 point per 1 KWD spent)
+        // Calculate points (1 point per 1 EGP spent — adjust if currency changes)
         $points = (int) floor($order->total_amount);
         $expiresAt = now()->addYear(); // Points expire after 1 year
 
@@ -84,7 +85,7 @@ class LoyaltyService
     /**
      * Redeem points
      */
-    public function redeemPoints(User $user, int $points, string $description = null): bool
+    public function redeemPoints(User $user, int $points, ?string $description = null): bool
     {
         $loyaltyAccount = $this->getOrCreateLoyaltyAccount($user);
 
@@ -101,13 +102,15 @@ class LoyaltyService
                 'user_id' => $user->id,
                 'transaction_type' => 'redeemed',
                 'points' => -$points,
-                'description' => $description ?? "Points redeemed",
+                'description' => $description ?? 'Points redeemed',
             ]);
 
             DB::commit();
+
             return true;
         } catch (\Exception $e) {
             DB::rollBack();
+
             return false;
         }
     }
@@ -117,7 +120,7 @@ class LoyaltyService
      */
     public function getTierBenefits(string $tier): array
     {
-        return match($tier) {
+        return match ($tier) {
             'platinum' => [
                 'discount_percent' => 15,
                 'free_shipping' => true,
@@ -141,5 +144,3 @@ class LoyaltyService
         };
     }
 }
-
-

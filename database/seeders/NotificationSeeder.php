@@ -4,8 +4,9 @@ namespace Database\Seeders;
 
 use App\Models\AdminNotification;
 use App\Models\User;
-use Illuminate\Database\Seeder;
+use Carbon\Carbon;
 use Faker\Factory as Faker;
+use Illuminate\Database\Seeder;
 
 class NotificationSeeder extends Seeder
 {
@@ -53,28 +54,33 @@ class NotificationSeeder extends Seeder
 
             try {
                 AdminNotification::create([
-                    'title'              => $notif['ar'],
-                    'title_ar'           => $notif['ar'],
-                    'title_en'           => $notif['en'],
-                    'message'            => $faker->randomElement($messagesAr),
-                    'message_ar'         => $faker->randomElement($messagesAr),
-                    'message_en'         => $faker->randomElement($messagesEn),
-                    'type'               => $notif['type'],
-                    'target_audience'    => $faker->randomElement($audiences),
-                    'target_user_ids'    => null,
+                    'title' => $notif['ar'],
+                    'title_ar' => $notif['ar'],
+                    'title_en' => $notif['en'],
+                    'message' => $faker->randomElement($messagesAr),
+                    'message_ar' => $faker->randomElement($messagesAr),
+                    'message_en' => $faker->randomElement($messagesEn),
+                    'type' => $notif['type'],
+                    'target_audience' => $faker->randomElement($audiences),
+                    'target_user_ids' => null,
                     'target_merchant_ids' => null,
-                    'action_url'         => $faker->optional(0.3)->url(),
-                    'action_text'        => $faker->optional(0.3)->randomElement(['عرض', 'مزيد', 'فتح', 'View', 'More', 'Open']),
-                    'image_url'          => $faker->optional(0.2)->imageUrl(400, 200),
-                    'is_sent'            => $isSent,
-                    'scheduled_at'       => !$isSent ? $faker->dateTimeBetween('now', '+30 days') : null,
-                    'sent_at'            => $isSent ? $faker->dateTimeBetween('-3 months', 'now') : null,
-                    'created_by'         => !empty($admins) ? $faker->randomElement($admins) : null,
-                    'created_at'         => $faker->dateTimeBetween('-6 months', 'now'),
+                    'action_url' => $faker->optional(0.3)->url(),
+                    'action_text' => $faker->optional(0.3)->randomElement(['عرض', 'مزيد', 'فتح', 'View', 'More', 'Open']),
+                    'image_url' => $faker->optional(0.2)->imageUrl(400, 200),
+                    'is_sent' => $isSent,
+                    'scheduled_at' => ! $isSent
+                        ? Carbon::createFromInterface($faker->dateTimeBetween('now', '+30 days'))->utc()
+                        : null,
+                    'sent_at' => $isSent
+                        ? Carbon::createFromInterface($faker->dateTimeBetween('-3 months', 'now'))->utc()
+                        : null,
+                    'created_by' => ! empty($admins) ? $faker->randomElement($admins) : null,
+                    'created_at' => Carbon::createFromInterface($faker->dateTimeBetween('-6 months', 'now'))->utc(),
                 ]);
-            } catch (\Throwable) {}
+            } catch (\Throwable) {
+            }
         }
 
-        $this->command->info('Notifications seeded (' . AdminNotification::count() . ' total).');
+        $this->command->info('Notifications seeded ('.AdminNotification::count().' total).');
     }
 }

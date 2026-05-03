@@ -33,7 +33,7 @@ final class ApiTokenService
     }
 
     /**
-     * @return array{access_token: string, refresh_token: string, expires_in: int, refresh_expires_at: string}
+     * @return array{access_token: string, refresh_token: string, expires_in: int, access_expires_at: string, refresh_expires_at: string}
      */
     public static function issuePair(User $user): array
     {
@@ -47,6 +47,7 @@ final class ApiTokenService
             'access_token' => $access->plainTextToken,
             'refresh_token' => $refresh->plainTextToken,
             'expires_in' => self::accessTtlMinutes() * 60,
+            'access_expires_at' => $accessExpires->toIso8601String(),
             'refresh_expires_at' => $refreshExpires->toIso8601String(),
         ];
     }
@@ -63,6 +64,7 @@ final class ApiTokenService
             'token' => $pair['access_token'],
             'refresh_token' => $pair['refresh_token'],
             'expires_in' => $pair['expires_in'],
+            'access_expires_at' => $pair['access_expires_at'],
             'token_type' => 'Bearer',
             'refresh_expires_at' => $pair['refresh_expires_at'],
         ]);

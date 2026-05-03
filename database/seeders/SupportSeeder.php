@@ -5,9 +5,9 @@ namespace Database\Seeders;
 use App\Models\Merchant;
 use App\Models\SupportTicket;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
+use Carbon\Carbon;
 use Faker\Factory as Faker;
+use Illuminate\Database\Seeder;
 
 class SupportSeeder extends Seeder
 {
@@ -44,7 +44,7 @@ class SupportSeeder extends Seeder
             $assignedTo = $faker->optional(0.5) ? $admins->random() : null;
             $category = $faker->randomElement(array_keys($categories));
 
-            $ticketNumber = 'TKT-' . str_pad($start + $i, 6, '0', STR_PAD_LEFT);
+            $ticketNumber = 'TKT-'.str_pad($start + $i, 6, '0', STR_PAD_LEFT);
 
             SupportTicket::create([
                 'ticket_number' => $ticketNumber,
@@ -61,8 +61,10 @@ class SupportSeeder extends Seeder
                 'metadata' => [
                     'source' => $faker->randomElement(['web', 'mobile', 'email']),
                 ],
-                'created_at' => $faker->dateTimeBetween('-3 months', 'now'),
-                'resolved_at' => $faker->optional(0.4)->dateTimeBetween('-2 months', 'now'),
+                'created_at' => Carbon::createFromInterface($faker->dateTimeBetween('-3 months', 'now'))->utc(),
+                'resolved_at' => ($dt = $faker->optional(0.4)->dateTimeBetween('-2 months', 'now'))
+                    ? Carbon::createFromInterface($dt)->utc()
+                    : null,
             ]);
         }
     }

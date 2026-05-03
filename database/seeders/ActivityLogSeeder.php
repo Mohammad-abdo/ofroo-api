@@ -4,8 +4,9 @@ namespace Database\Seeders;
 
 use App\Models\ActivityLog;
 use App\Models\User;
-use Illuminate\Database\Seeder;
+use Carbon\Carbon;
 use Faker\Factory as Faker;
+use Illuminate\Database\Seeder;
 
 class ActivityLogSeeder extends Seeder
 {
@@ -80,32 +81,33 @@ class ActivityLogSeeder extends Seeder
 
             try {
                 ActivityLog::create([
-                    'user_id'     => $user?->id,
-                    'actor_role'  => $user?->role?->name ?? ($user ? 'user' : null),
-                    'action'      => $action,
-                    'model_type'  => $modelType,
-                    'model_id'    => $modelType ? $faker->numberBetween(1, 500) : null,
+                    'user_id' => $user?->id,
+                    'actor_role' => $user?->role?->name ?? ($user ? 'user' : null),
+                    'action' => $action,
+                    'model_type' => $modelType,
+                    'model_id' => $modelType ? $faker->numberBetween(1, 500) : null,
                     'target_type' => $faker->optional(0.3)->randomElement(['App\\Models\\Merchant', 'App\\Models\\User']),
-                    'target_id'   => $faker->optional(0.3)->numberBetween(1, 100),
+                    'target_id' => $faker->optional(0.3)->numberBetween(1, 100),
                     'description' => $faker->sentence(),
-                    'ip_address'  => $faker->ipv4(),
-                    'user_agent'  => $faker->userAgent(),
-                    'old_values'  => $faker->optional(0.25)->randomElement([
+                    'ip_address' => $faker->ipv4(),
+                    'user_agent' => $faker->userAgent(),
+                    'old_values' => $faker->optional(0.25)->randomElement([
                         ['status' => 'pending'], ['status' => 'active'], ['balance' => 500],
                     ]),
-                    'new_values'  => $faker->optional(0.25)->randomElement([
+                    'new_values' => $faker->optional(0.25)->randomElement([
                         ['status' => 'active'], ['status' => 'completed'], ['balance' => 1500],
                     ]),
-                    'metadata'    => [
-                        'key'   => $faker->word(),
+                    'metadata' => [
+                        'key' => $faker->word(),
                         'value' => $faker->word(),
                         'source' => $faker->randomElement(['web', 'api', 'system', 'cron']),
                     ],
-                    'created_at'  => $faker->dateTimeBetween('-6 months', 'now'),
+                    'created_at' => Carbon::createFromInterface($faker->dateTimeBetween('-6 months', 'now'))->utc(),
                 ]);
-            } catch (\Throwable) {}
+            } catch (\Throwable) {
+            }
         }
 
-        $this->command->info('Activity logs seeded (' . ActivityLog::count() . ' total).');
+        $this->command->info('Activity logs seeded ('.ActivityLog::count().' total).');
     }
 }

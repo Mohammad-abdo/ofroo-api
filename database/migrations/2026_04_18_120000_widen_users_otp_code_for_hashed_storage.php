@@ -15,12 +15,22 @@ return new class extends Migration
             return;
         }
 
+        // MySQL/MariaDB only — SQLite stores all string columns as TEXT and
+        // does not need this widening (the test suite uses sqlite :memory:).
+        if (! in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
+            return;
+        }
+
         DB::statement('ALTER TABLE `users` MODIFY `otp_code` VARCHAR(255) NULL COMMENT \'Hashed OTP for verification\'');
     }
 
     public function down(): void
     {
         if (! Schema::hasColumn('users', 'otp_code')) {
+            return;
+        }
+
+        if (! in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
             return;
         }
 

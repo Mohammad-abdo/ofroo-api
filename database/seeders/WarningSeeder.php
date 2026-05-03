@@ -5,8 +5,9 @@ namespace Database\Seeders;
 use App\Models\Merchant;
 use App\Models\MerchantWarning;
 use App\Models\User;
-use Illuminate\Database\Seeder;
+use Carbon\Carbon;
 use Faker\Factory as Faker;
+use Illuminate\Database\Seeder;
 
 class WarningSeeder extends Seeder
 {
@@ -18,6 +19,7 @@ class WarningSeeder extends Seeder
 
         if ($merchants->isEmpty() || empty($admins)) {
             $this->command->warn('Merchants or admin users missing.');
+
             return;
         }
 
@@ -36,28 +38,31 @@ class WarningSeeder extends Seeder
             $count = $faker->numberBetween(0, 4);
             for ($i = 0; $i < $count; $i++) {
                 $warnData = $faker->randomElement($warningTypes);
-                $issuedAt = $faker->dateTimeBetween('-6 months', 'now');
+                $issuedAt = Carbon::createFromInterface($faker->dateTimeBetween('-6 months', 'now'))->utc();
                 $active = $faker->boolean(60);
 
                 try {
                     MerchantWarning::create([
-                        'merchant_id'  => $merchant->id,
-                        'admin_id'     => $faker->randomElement($admins),
+                        'merchant_id' => $merchant->id,
+                        'admin_id' => $faker->randomElement($admins),
                         'warning_type' => $warnData['type'],
-                        'message'      => $warnData['msg_ar'] . ' — ' . $warnData['msg_en'],
-                        'issued_at'    => $issuedAt,
-                        'expires_at'   => $faker->optional(0.5)->dateTimeBetween('now', '+6 months'),
-                        'active'       => $active,
-                        'metadata'     => [
+                        'message' => $warnData['msg_ar'].' — '.$warnData['msg_en'],
+                        'issued_at' => $issuedAt,
+                        'expires_at' => ($ex = $faker->optional(0.5)->dateTimeBetween('now', '+6 months'))
+                            ? Carbon::createFromInterface($ex)->utc()
+                            : null,
+                        'active' => $active,
+                        'metadata' => [
                             'severity' => $faker->randomElement(['low', 'medium', 'high', 'critical']),
-                            'note'     => $faker->optional(0.3)->sentence(),
+                            'note' => $faker->optional(0.3)->sentence(),
                         ],
-                        'created_at'   => $issuedAt,
+                        'created_at' => $issuedAt,
                     ]);
-                } catch (\Throwable) {}
+                } catch (\Throwable) {
+                }
             }
         }
 
-        $this->command->info('Warnings seeded (' . MerchantWarning::count() . ' total).');
+        $this->command->info('Warnings seeded ('.MerchantWarning::count().' total).');
     }
 }

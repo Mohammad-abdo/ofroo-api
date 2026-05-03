@@ -10,7 +10,7 @@ class PhoneNormalizerTest extends TestCase
     public function test_strips_non_digits(): void
     {
         $this->assertSame('201234567890', PhoneNormalizer::digitsOnly('+20 123 456 7890'));
-        $this->assertSame('96512345678', PhoneNormalizer::digitsOnly('+965 1234 5678'));
+        $this->assertSame('201122334455', PhoneNormalizer::digitsOnly('+20 11 22 33 44 55'));
     }
 
     public function test_egypt_local_to_international_for_sms_gateway(): void

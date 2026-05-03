@@ -1,5 +1,8 @@
 <?php
 
+use Illuminate\Support\ServiceProvider;
+use Illuminate\View\ViewServiceProvider;
+
 return [
 
     /*
@@ -73,18 +76,18 @@ return [
     |--------------------------------------------------------------------------
     | Admin image uploads (kilobytes). Laravel file rule uses KB.
     | Must be ≤ PHP upload_max_filesize and post_max_size (e.g. api/php/local.ini).
-    | Default 131072 KB = 128 MB. Override with MAX_ADMIN_IMAGE_UPLOAD_KB in .env.
+    | Default 262144 KB = 256 MB. Override with MAX_ADMIN_IMAGE_UPLOAD_KB in .env.
     |--------------------------------------------------------------------------
     */
-    'max_admin_image_upload_kb' => (int) env('MAX_ADMIN_IMAGE_UPLOAD_KB', 131072),
+    'max_admin_image_upload_kb' => (int) env('MAX_ADMIN_IMAGE_UPLOAD_KB', 262144),
 
     /*
     |--------------------------------------------------------------------------
     | Mobile user avatar uploads (kilobytes). Laravel file rule uses KB.
-    | Default matches admin (128 MB). Must be ≤ PHP upload_max_filesize / post_max_size.
+    | Default matches admin (256 MB). Must be ≤ PHP upload_max_filesize / post_max_size.
     |--------------------------------------------------------------------------
     */
-    'max_user_avatar_upload_kb' => (int) env('MAX_USER_AVATAR_UPLOAD_KB', 131072),
+    'max_user_avatar_upload_kb' => (int) env('MAX_USER_AVATAR_UPLOAD_KB', 262144),
 
     /*
     |--------------------------------------------------------------------------
@@ -157,14 +160,14 @@ return [
     |--------------------------------------------------------------------------
     */
     'providers' => array_merge(
-        [\Illuminate\View\ViewServiceProvider::class],
+        [ViewServiceProvider::class],
         array_values(array_filter(
-            \Illuminate\Support\ServiceProvider::defaultProviders()->toArray(),
+            ServiceProvider::defaultProviders()->toArray(),
             function ($p) {
-                return $p !== \Illuminate\View\ViewServiceProvider::class;
+                return $p !== ViewServiceProvider::class;
             }
         )),
-        require __DIR__ . '/../bootstrap/providers.php'
+        require __DIR__.'/../bootstrap/providers.php'
     ),
 
 ];

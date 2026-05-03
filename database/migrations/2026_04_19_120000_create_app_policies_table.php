@@ -15,6 +15,7 @@ return new class extends Migration
         if (! Schema::hasTable('app_policies')) {
             Schema::create('app_policies', function (Blueprint $table) {
                 $table->id();
+                $table->string('type', 32)->default('privacy')->index();
                 $table->string('title_ar')->nullable();
                 $table->string('title_en')->nullable();
                 $table->text('description_ar')->nullable();

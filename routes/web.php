@@ -61,3 +61,4 @@ Route::get('/storage/{path}', function ($path) {
         'Content-Disposition' => 'inline; filename="' . basename($filePath) . '"',
     ]);
 })->where('path', '.*');
+

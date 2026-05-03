@@ -4,11 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Schema;
 
 class Offer extends Model
 {
@@ -32,6 +32,11 @@ class Offer extends Model
         'status', // active, expired, disabled
         'terms_conditions_ar',
         'terms_conditions_en',
+        // Internal-only reservation accounting. coupons_remaining stays the
+        // primary, mobile-facing source of truth — these two fields MUST NOT
+        // be exposed in mobile API responses.
+        'reserved_quantity',
+        'used_quantity',
     ];
 
     protected function casts(): array
@@ -196,8 +201,103 @@ class Offer extends Model
     }
 
     /**
+     * Reserve inventory at checkout.
+     *
+     * Inventory contract (mobile compatibility):
+     *   - coupons_remaining -= qty   (primary, mobile-facing source of truth)
+     *   - reserved_quantity += qty   (internal tracking)
+     *   - used_quantity is NOT touched here
+     *
+     * Atomic: a single SQL UPDATE so concurrent checkouts can't desynchronise
+     * the two columns. Caller should still wrap the surrounding business logic
+     * in a DB transaction with row-level locks for cross-row safety.
+     */
+    public function reserve(int $quantity): void
+    {
+        if ($quantity <= 0) {
+            return;
+        }
+
+        $qty = (int) $quantity;
+
+        \DB::table('offers')
+            ->where('id', $this->id)
+            ->update([
+                'coupons_remaining' => \DB::raw("CASE WHEN coupons_remaining > {$qty} THEN coupons_remaining - {$qty} ELSE 0 END"),
+                'reserved_quantity' => \DB::raw("reserved_quantity + {$qty}"),
+                'updated_at' => now(),
+            ]);
+
+        // Refresh in-memory state so subsequent reads on this instance are accurate.
+        $this->refresh();
+    }
+
+    /**
+     * Release a reservation back to the pool (expiry or cancel).
+     *
+     * Inventory contract:
+     *   - coupons_remaining += qty
+     *   - reserved_quantity -= qty (clamped at 0 for safety)
+     *   - used_quantity is NOT touched
+     */
+    public function releaseReservation(int $quantity): void
+    {
+        if ($quantity <= 0) {
+            return;
+        }
+
+        $qty = (int) $quantity;
+
+        \DB::table('offers')
+            ->where('id', $this->id)
+            ->update([
+                'coupons_remaining' => \DB::raw("coupons_remaining + {$qty}"),
+                'reserved_quantity' => \DB::raw("CASE WHEN reserved_quantity > {$qty} THEN reserved_quantity - {$qty} ELSE 0 END"),
+                'updated_at' => now(),
+            ]);
+
+        $this->refresh();
+    }
+
+    /**
+     * Convert a reservation to "used" at QR activation.
+     *
+     * Inventory contract:
+     *   - reserved_quantity -= qty (clamped at 0 for safety)
+     *   - used_quantity     += qty
+     *   - coupons_remaining is NOT touched (already decremented at checkout
+     *     and stays decremented; this is the rule that keeps mobile compatible).
+     */
+    public function consumeReserved(int $quantity): void
+    {
+        if ($quantity <= 0) {
+            return;
+        }
+
+        $qty = (int) $quantity;
+
+        \DB::table('offers')
+            ->where('id', $this->id)
+            ->update([
+                'reserved_quantity' => \DB::raw("CASE WHEN reserved_quantity > {$qty} THEN reserved_quantity - {$qty} ELSE 0 END"),
+                'used_quantity' => \DB::raw("used_quantity + {$qty}"),
+                'updated_at' => now(),
+            ]);
+
+        $this->refresh();
+    }
+
+    /**
      * Consume (increment times_used) on this offer's coupons by the given quantity.
-     * Used at checkout when order is placed.
+     *
+     * @deprecated since 2026-05 reservation refactor — DO NOT call from checkout,
+     *             QR activation, or any live financial path. Use {@see reserve()},
+     *             {@see consumeReserved()}, and {@see releaseReservation()} instead.
+     *
+     * Calling this method always throws in production to prevent accidental double
+     * inventory mutation. The body is retained below as a reference for manual
+     * repair scripts only; set env ALLOW_LEGACY_CONSUME_COUPONS=true (never in prod)
+     * to execute it.
      */
     public function consumeCoupons(int $quantity): void
     {
@@ -205,10 +305,23 @@ class Offer extends Model
             return;
         }
 
+        $allowLegacy = filter_var(
+            env('ALLOW_LEGACY_CONSUME_COUPONS', false),
+            FILTER_VALIDATE_BOOLEAN
+        );
+
+        if (! $allowLegacy) {
+            throw new \LogicException(
+                'Offer::consumeCoupons() is deprecated and must not be used in checkout or activation flows. '.
+                'Use reserve(), releaseReservation(), and consumeReserved() instead.'
+            );
+        }
+
         if (! \Schema::hasColumn('coupons', 'usage_limit') || ! \Schema::hasColumn('coupons', 'times_used')) {
             if (\Schema::hasColumn('offers', 'coupons_remaining')) {
                 $this->decrement('coupons_remaining', $quantity);
             }
+
             return;
         }
 
@@ -234,7 +347,6 @@ class Offer extends Model
             $remaining -= $take;
         }
 
-        // Backward compatibility: also decrement offer.coupons_remaining if column exists
         if (\Schema::hasColumn('offers', 'coupons_remaining')) {
             $this->decrement('coupons_remaining', $quantity);
         }

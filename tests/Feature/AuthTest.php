@@ -23,7 +23,7 @@ class AuthTest extends TestCase
         $response = $this->postJson('/api/auth/register', [
             'name' => 'Test User',
             'email' => 'test@example.com',
-            'phone' => '+96512345678',
+            'phone' => '+201012345678',
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'language' => 'ar',
@@ -52,7 +52,7 @@ class AuthTest extends TestCase
         $user = User::create([
             'name' => 'Test User',
             'email' => 'test@example.com',
-            'phone' => '+96512345678',
+            'phone' => '+201012345678',
             'password' => Hash::make('password123'),
             'role_id' => $role->id,
         ]);
@@ -70,4 +70,3 @@ class AuthTest extends TestCase
             ]);
     }
 }
-

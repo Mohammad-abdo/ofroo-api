@@ -21,6 +21,20 @@ return new class extends Migration
 
             $table->index('governorate_id');
         });
+
+        if (Schema::hasTable('malls') && ! Schema::hasColumn('malls', 'city_id')) {
+            Schema::table('malls', function (Blueprint $table) {
+                $table->unsignedBigInteger('city_id')->nullable()->after('city');
+                $table->foreign('city_id')->references('id')->on('cities')->onDelete('set null');
+            });
+        }
+
+        if (Schema::hasTable('merchants') && ! Schema::hasColumn('merchants', 'city_id')) {
+            Schema::table('merchants', function (Blueprint $table) {
+                $table->unsignedBigInteger('city_id')->nullable()->after('city');
+                $table->foreign('city_id')->references('id')->on('cities')->onDelete('set null');
+            });
+        }
     }
 
     /**
@@ -28,6 +42,20 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (Schema::hasTable('malls') && Schema::hasColumn('malls', 'city_id')) {
+            Schema::table('malls', function (Blueprint $table) {
+                $table->dropForeign(['city_id']);
+                $table->dropColumn('city_id');
+            });
+        }
+
+        if (Schema::hasTable('merchants') && Schema::hasColumn('merchants', 'city_id')) {
+            Schema::table('merchants', function (Blueprint $table) {
+                $table->dropForeign(['city_id']);
+                $table->dropColumn('city_id');
+            });
+        }
+
         Schema::dropIfExists('cities');
     }
 };

@@ -9,11 +9,11 @@ use App\Models\Mall;
 use App\Models\Merchant;
 use App\Models\Role;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Carbon\Carbon;
+use Faker\Factory as Faker;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
-use Faker\Factory as Faker;
 
 class MerchantSeeder extends Seeder
 {
@@ -28,6 +28,7 @@ class MerchantSeeder extends Seeder
 
         if ($governorates->isEmpty()) {
             $this->command->warn('No governorates found. Run GovernorateSeeder first.');
+
             return;
         }
 
@@ -59,7 +60,6 @@ class MerchantSeeder extends Seeder
                 'lat' => 30.0626,
                 'lng' => 31.3219,
                 'category_name_ar' => 'مولات',
-                // Matches MallSeeder (Nasr City)
                 'mall_name_en' => 'Genena Mall',
             ],
             [
@@ -123,8 +123,8 @@ class MerchantSeeder extends Seeder
         ];
 
         foreach ($merchants as $index => $merchantData) {
-            $email = 'merchant' . ($index + 1) . '@ofroo.com';
-            $phoneNumber = '+20' . $faker->unique()->numerify('##########');
+            $email = 'merchant'.($index + 1).'@ofroo.com';
+            $phoneNumber = '+20'.$faker->unique()->numerify('##########');
             $gov = $governorates->random();
             $city = $gov->cities->random();
 
@@ -168,7 +168,7 @@ class MerchantSeeder extends Seeder
                 'address_ar' => $merchantData['address_ar'],
                 'address_en' => $merchantData['address_en'],
                 'phone' => $phoneNumber,
-                'whatsapp_link' => 'https://wa.me/' . str_replace('+', '', $phoneNumber),
+                'whatsapp_link' => 'https://wa.me/'.str_replace('+', '', $phoneNumber),
                 'city' => $city->name_ar,
                 'country' => 'مصر',
                 'approved' => true,
@@ -179,6 +179,8 @@ class MerchantSeeder extends Seeder
             if ($mallId) {
                 $merchantAttrs['mall_id'] = $mallId;
             }
+
+            $merchantAttrs = $this->filterMerchantAttributes($merchantAttrs);
 
             $merchant = Merchant::firstOrCreate(
                 ['user_id' => $merchantUser->id],
@@ -200,6 +202,7 @@ class MerchantSeeder extends Seeder
                 if ($hasBranchMallId && $mallId) {
                     Branch::where('merchant_id', $merchant->id)->update(['mall_id' => $mallId]);
                 }
+
                 continue;
             }
 
@@ -214,7 +217,7 @@ class MerchantSeeder extends Seeder
                 'address_ar' => $merchantData['address_ar'],
                 'address_en' => $merchantData['address_en'],
                 'is_active' => true,
-                'google_place_id' => 'ChIJ' . $faker->bothify('????????????????'),
+                'google_place_id' => 'ChIJ'.$faker->bothify('????????????????'),
                 'opening_hours' => [
                     'monday' => '10:00-22:00',
                     'tuesday' => '10:00-22:00',
@@ -231,10 +234,9 @@ class MerchantSeeder extends Seeder
             Branch::create($branchPayload);
         }
 
-        // Create 20 more random merchants
         for ($i = 6; $i <= 25; $i++) {
             $email = "merchant{$i}@example.com";
-            $phoneNumber = '+20' . $faker->unique()->numerify('##########');
+            $phoneNumber = '+20'.$faker->unique()->numerify('##########');
             $gov = $governorates->random();
             $city = $gov->cities->random();
 
@@ -246,7 +248,9 @@ class MerchantSeeder extends Seeder
                     'password' => Hash::make('password'),
                     'language' => 'ar',
                     'role_id' => $merchantRole->id,
-                    'email_verified_at' => $faker->optional(0.9)->dateTimeBetween('-6 months', 'now'),
+                    'email_verified_at' => ($ev = $faker->optional(0.9)->dateTimeBetween('-6 months', 'now'))
+                        ? Carbon::createFromInterface($ev)->utc()
+                        : null,
                     'country' => 'مصر',
                     'gender' => $faker->randomElement($genders),
                     'city_id' => $city->id,
@@ -260,7 +264,7 @@ class MerchantSeeder extends Seeder
 
             $randomMerchantAttrs = [
                 'company_name' => $faker->company(),
-                'company_name_ar' => $faker->company() . ' (عربي)',
+                'company_name_ar' => $faker->company().' (عربي)',
                 'company_name_en' => $faker->company(),
                 'description' => $faker->text(200),
                 'description_ar' => $faker->realText(200),
@@ -269,7 +273,7 @@ class MerchantSeeder extends Seeder
                 'address_ar' => $faker->address(),
                 'address_en' => $faker->address(),
                 'phone' => $phoneNumber,
-                'whatsapp_link' => 'https://wa.me/' . str_replace('+', '', $phoneNumber),
+                'whatsapp_link' => 'https://wa.me/'.str_replace('+', '', $phoneNumber),
                 'city' => $city->name_ar,
                 'country' => 'مصر',
                 'approved' => $faker->boolean(80),
@@ -277,6 +281,8 @@ class MerchantSeeder extends Seeder
             if (Schema::hasColumn('merchants', 'category_id') && $randomCategoryId) {
                 $randomMerchantAttrs['category_id'] = $randomCategoryId;
             }
+
+            $randomMerchantAttrs = $this->filterMerchantAttributes($randomMerchantAttrs);
 
             $merchant = Merchant::firstOrCreate(
                 ['user_id' => $merchantUser->id],
@@ -287,29 +293,30 @@ class MerchantSeeder extends Seeder
                 $merchant->update(['category_id' => $randomCategoryId]);
             }
 
-            if (!$merchant->wasRecentlyCreated) {
+            if (! $merchant->wasRecentlyCreated) {
                 continue;
             }
+
             Branch::create([
                 'merchant_id' => $merchant->id,
-                'name' => $merchant->company_name,
-                'name_ar' => $merchant->company_name_ar,
-                'name_en' => $merchant->company_name_en,
+                'name' => $merchant->company_name ?? $merchant->company_name_en ?? $merchant->company_name_ar ?? $faker->company(),
+                'name_ar' => $merchant->company_name_ar ?? $merchant->company_name ?? $merchant->company_name_en,
+                'name_en' => $merchant->company_name_en ?? $merchant->company_name ?? $merchant->company_name_ar,
                 'lat' => $faker->latitude(30.0, 31.5),
                 'lng' => $faker->longitude(29.0, 32.5),
                 'address' => $faker->address(),
                 'address_ar' => $faker->address(),
                 'address_en' => $faker->address(),
                 'is_active' => true,
-                'google_place_id' => 'ChIJ' . $faker->bothify('????????????????'),
+                'google_place_id' => 'ChIJ'.$faker->bothify('????????????????'),
                 'opening_hours' => [
-                    'monday' => $faker->time('H:i') . '-' . $faker->time('H:i'),
-                    'tuesday' => $faker->time('H:i') . '-' . $faker->time('H:i'),
-                    'wednesday' => $faker->time('H:i') . '-' . $faker->time('H:i'),
-                    'thursday' => $faker->time('H:i') . '-' . $faker->time('H:i'),
-                    'friday' => $faker->time('H:i') . '-' . $faker->time('H:i'),
-                    'saturday' => $faker->time('H:i') . '-' . $faker->time('H:i'),
-                    'sunday' => $faker->time('H:i') . '-' . $faker->time('H:i'),
+                    'monday' => $faker->time('H:i').'-'.$faker->time('H:i'),
+                    'tuesday' => $faker->time('H:i').'-'.$faker->time('H:i'),
+                    'wednesday' => $faker->time('H:i').'-'.$faker->time('H:i'),
+                    'thursday' => $faker->time('H:i').'-'.$faker->time('H:i'),
+                    'friday' => $faker->time('H:i').'-'.$faker->time('H:i'),
+                    'saturday' => $faker->time('H:i').'-'.$faker->time('H:i'),
+                    'sunday' => $faker->time('H:i').'-'.$faker->time('H:i'),
                 ],
             ]);
         }
@@ -318,7 +325,6 @@ class MerchantSeeder extends Seeder
             Merchant::whereNull('category_id')->update(['category_id' => $defaultCategoryId]);
         }
 
-        // Attach a few more mall-category merchants to seeded malls (if any remain unlinked).
         if ($hasMerchantMallId && $mallsByNameEn->isNotEmpty() && $categoryByNameAr->has('مولات')) {
             $mallCategoryId = $categoryByNameAr->get('مولات')->id;
             $mallIds = Mall::query()->pluck('id')->all();
@@ -338,5 +344,16 @@ class MerchantSeeder extends Seeder
                     });
             }
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $attrs
+     * @return array<string, mixed>
+     */
+    private function filterMerchantAttributes(array $attrs): array
+    {
+        $cols = array_flip(Schema::getColumnListing('merchants'));
+
+        return array_intersect_key($attrs, $cols);
     }
 }

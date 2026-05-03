@@ -10,10 +10,8 @@ class Withdrawal extends Model
     protected $fillable = [
         'merchant_id',
         'amount',
-        'method',
         'withdrawal_method',
         'account_details',
-        'bank_account_details',
         'status',
         'requested_at',
         'processed_by_admin_id',
@@ -30,7 +28,6 @@ class Withdrawal extends Model
         return [
             'amount' => 'decimal:2',
             'account_details' => 'array',
-            'bank_account_details' => 'array',
             'requested_at' => 'datetime',
             'processed_at' => 'datetime',
             'approved_at' => 'datetime',

@@ -1,35 +1,29 @@
 <?php
 
-use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\AdController;
 use App\Http\Controllers\Api\AppContentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CategoryController;
-use App\Http\Controllers\Api\LocationController;
-use App\Http\Controllers\Api\FinancialController;
-use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\CouponController;
 use App\Http\Controllers\Api\CouponEntitlementController;
-use App\Http\Controllers\Api\MerchantProfileController;
-use App\Http\Controllers\Api\OfferController;
-use App\Http\Controllers\Api\OrderController;
-use App\Http\Controllers\Api\PermissionController;
-use App\Http\Controllers\Api\ReportController;
-use App\Http\Controllers\Api\SupportTicketController;
-use App\Http\Controllers\Api\LoyaltyController;
-use App\Http\Controllers\Api\QrActivationController;
+use App\Http\Controllers\Api\FinancialController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\LocationController;
+use App\Http\Controllers\Api\LoyaltyController;
+use App\Http\Controllers\Api\MallPublicController;
+use App\Http\Controllers\Api\MerchantApplicationController;
+use App\Http\Controllers\Api\MerchantController;
+use App\Http\Controllers\Api\MerchantProfileController;
 use App\Http\Controllers\Api\MerchantStaffController;
-use App\Http\Controllers\Api\AdminWalletController;
-use App\Http\Controllers\Api\WalletTransactionController;
 use App\Http\Controllers\Api\MerchantVerificationController;
 use App\Http\Controllers\Api\MerchantWarningController;
-use App\Http\Controllers\Api\ReviewModerationController;
-use App\Http\Controllers\Api\RegulatoryCheckController;
-use App\Http\Controllers\Api\FinancialReportsCacheController;
+use App\Http\Controllers\Api\OfferController;
+use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\QrActivationController;
+use App\Http\Controllers\Api\SupportTicketController;
 use App\Http\Controllers\Api\UserController;
-use App\Http\Controllers\Api\AdController;
-use App\Http\Controllers\Api\MerchantApplicationController;
+use App\Http\Controllers\Api\WalletTransactionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -38,7 +32,7 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 |
 | Here is where you can register Mobile API routes for your application.
-| These routes are loaded by the RouteServiceProvider under the "mobile" 
+| These routes are loaded by the RouteServiceProvider under the "mobile"
 | middleware group and all have the "/api/mobile" prefix.
 |
 */
@@ -74,18 +68,18 @@ Route::get('/', function () {
 Route::prefix('auth')->group(function () {
     // تسجيل مستخدم عادي (يدعم city_id و governorate_id من اند بوينت المحافظات/المدن)
     Route::post('/register', [AuthController::class, 'registerMobile'])->middleware('throttle:5,1');
-    
+
     // تسجيل الدخول
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
     Route::post('/refresh', [AuthController::class, 'refreshToken'])->middleware('throttle:30,1');
-    
+
     // تسجيل تاجر جديد
     Route::post('/register-merchant', [AuthController::class, 'registerMerchant'])->middleware('throttle:3,1');
-    
+
     // طلب OTP
     Route::post('/otp/request', [AuthController::class, 'requestOtp'])->middleware('throttle:3,1');
-    
+
     // التحقق من OTP (phone أو email + otp)
     Route::post('/otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:5,1');
 });
@@ -102,6 +96,13 @@ Route::get('/cities', [LocationController::class, 'cities']);
 Route::get('/category-name', [CategoryController::class, 'categoryName']);
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/{id}', [CategoryController::class, 'show']);
+
+// ================================
+// 3.1 المولات (Malls) — عام: قائمة مولات + تجار داخل مول (فلتر category_id)
+// ================================
+Route::get('/malls/details/{id}', [MallPublicController::class, 'mobileMallDetails'])->whereNumber('id');
+Route::get('/malls/{mallId}/merchants', [MallPublicController::class, 'merchants'])->where('mallId', '[0-9]+');
+Route::get('/malls', [MallPublicController::class, 'index']);
 
 // ================================
 // 4. العروض (Offers) - Public Routes
@@ -129,11 +130,11 @@ Route::get('/ads/{id}', [AdController::class, 'show'])->where('id', '[0-9]+');
 // Each endpoint returns only active ads of that type, ordered by order_index.
 // All support: ?position= ?merchant_id= ?category_id= ?per_page=
 // ================================
-Route::get('/banners',          [AdController::class, 'banners']);   // ad_type=banner
-Route::get('/ads/popup',        [AdController::class, 'popups']);    // ad_type=popup
-Route::get('/ads/video',        [AdController::class, 'videos']);    // ad_type=video
-Route::get('/ads/sidebar',      [AdController::class, 'sidebars']); // ad_type=sidebar
-Route::get('/ads/inline',       [AdController::class, 'inline']);   // ad_type=inline
+Route::get('/banners', [AdController::class, 'banners']);   // ad_type=banner
+Route::get('/ads/popup', [AdController::class, 'popups']);    // ad_type=popup
+Route::get('/ads/video', [AdController::class, 'videos']);    // ad_type=video
+Route::get('/ads/sidebar', [AdController::class, 'sidebars']); // ad_type=sidebar
+Route::get('/ads/inline', [AdController::class, 'inline']);   // ad_type=inline
 
 // ================================
 // 4.3 مشاركة عرض + معلومات عامة (Public)
@@ -156,7 +157,7 @@ Route::get('/app/legal-pages', [AppContentController::class, 'legalPages']);
 // Cart, Orders, Payment (checkout), Profile, Wallet, Coupons, Reviews, Support, Loyalty
 // ================================
 Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
-    
+
     // ================================
     // 2. المصادقة - Protected
     // ================================
@@ -167,7 +168,7 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
     // يتيح للمستخدم معرفة ما إذا كان طلبه مقبولاً أو مرفوضاً أو قيد المراجعة
     // ================================
     Route::get('/merchant/application/status', [MerchantApplicationController::class, 'status']);
-    
+
     // ================================
     // 4. العروض - Protected (بحث، واتساب، مفضلة)
     // ================================
@@ -175,7 +176,7 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
     Route::get('/search', [OfferController::class, 'searchMobile']);
     Route::get('/offers/{id}/whatsapp', [OfferController::class, 'whatsappContact']);
     Route::post('/offers/{offer}/favorite', [OfferController::class, 'toggleFavorite']);
-    
+
     // ================================
     // 5. السلة (Cart) - تتطلب تسجيل الدخول (auth:sanctum)
     // ================================
@@ -186,7 +187,7 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
         Route::delete('/{id}', [CartController::class, 'remove']);
         Route::delete('/', [CartController::class, 'clear']);
     });
-    
+
     // ================================
     // 6. الطلبات والدفع (Orders & Payment) - تتطلب مصادقة
     // ================================
@@ -202,7 +203,7 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
 
     // Alias: POST /api/mobile/checkout/coupons for the new coupons-checkout flow.
     Route::post('/checkout/coupons', [OrderController::class, 'checkoutCoupons']);
-    
+
     // ================================
     // 7. المحفظة والكوبونات (Wallet & Coupons) - تتطلب مصادقة
     // ================================
@@ -212,12 +213,12 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
         Route::post('/entitlements/{entitlementId}/share', [CouponEntitlementController::class, 'share'])
             ->whereNumber('entitlementId');
     });
-    
+
     // ================================
     // 8. التقييمات (Reviews) - تتطلب مصادقة
     // ================================
     Route::post('/reviews', [OrderController::class, 'createReview']);
-    
+
     // ================================
     // 9. الدعم الفني (Support) - تتطلب مصادقة
     // ================================
@@ -226,7 +227,7 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
         Route::get('/tickets', [SupportTicketController::class, 'index']);
         Route::get('/tickets/{id}', [SupportTicketController::class, 'show']);
     });
-    
+
     // ================================
     // 10. الولاء (Loyalty) - تتطلب مصادقة
     // ================================
@@ -235,7 +236,7 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
         Route::get('/transactions', [LoyaltyController::class, 'transactions']);
         Route::post('/redeem', [LoyaltyController::class, 'redeem']);
     });
-    
+
     // ================================
     // 11. المستخدم (User Profile, Settings, Coupons) - تتطلب مصادقة
     // ================================
@@ -245,37 +246,37 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
         Route::put('/profile', [UserController::class, 'updateProfile']);
         Route::put('/password', [UserController::class, 'changePassword']);
         Route::put('/phone', [UserController::class, 'updatePhone']);
-        
+
         // Avatar Management
         Route::post('/avatar', [UserController::class, 'uploadAvatar']);
         Route::delete('/avatar', [UserController::class, 'deleteAvatar']);
-        
+
         // Notifications
         Route::get('/notifications', [UserController::class, 'getNotifications']);
         Route::post('/notifications/{id}/read', [UserController::class, 'markNotificationAsRead']);
         Route::post('/notifications/mark-all-read', [UserController::class, 'markAllNotificationsAsRead']);
         Route::delete('/notifications/{id}', [UserController::class, 'deleteNotification']);
-        
+
         // Statistics
         Route::get('/stats', [UserController::class, 'getStats']);
-        
+
         // المحفوظات (Favorites)
         Route::get('/favorites', [UserController::class, 'getFavorites']);
-        
+
         // التقييمات (Reviews - قائمة تقييمات المستخدم)
         Route::get('/reviews', [UserController::class, 'getReviews']);
-        
+
         // Settings
         Route::get('/settings', [UserController::class, 'getSettings']);
         Route::put('/settings', [UserController::class, 'updateSettings']);
-        
+
         // Orders History
         Route::get('/orders', [UserController::class, 'getOrdersHistory']);
-        
+
         // Account Management
         Route::delete('/account', [UserController::class, 'deleteAccount']);
     });
-    
+
     // ================================
     // 12. التاجر (Merchant) - تتطلب middleware 'merchant'
     // ================================
@@ -293,16 +294,16 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
             Route::post('/', [MerchantController::class, 'createOffer']);
             Route::put('/{id}', [MerchantController::class, 'updateOffer']);
             Route::delete('/{id}', [MerchantController::class, 'deleteOffer']);
-            
+
             // إضافة كوبونات للعرض (منقول من الأدمن)
             Route::post('/{offerId}/coupons', [MerchantController::class, 'storeOfferCoupon']);
         });
-        
+
         // ===== الطلبات (Merchant Orders) =====
         Route::prefix('orders')->group(function () {
             Route::get('/', [MerchantController::class, 'orders']);
         });
-        
+
         // ===== المواقع والفروع (Locations) =====
         Route::prefix('locations')->group(function () {
             Route::get('/', [MerchantController::class, 'storeLocations']);
@@ -311,7 +312,7 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
             Route::put('/{id}', [MerchantController::class, 'updateStoreLocation']);
             Route::delete('/{id}', [MerchantController::class, 'deleteStoreLocation']);
         });
-        
+
         // ===== الإحصائيات =====
         Route::get('/statistics', [MerchantController::class, 'statistics']);
         Route::get('/me/activations', [MerchantController::class, 'myActivationHistory']);
@@ -320,7 +321,7 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
         Route::get('/profile', [MerchantController::class, 'getProfile']);
         Route::put('/profile', [MerchantController::class, 'updateProfile']);
         Route::post('/profile/logo', [MerchantController::class, 'uploadLogo']);
-        
+
         // ===== الكوبونات (Coupons Management) - توحيد مع منطق الأدمن =====
         Route::prefix('coupons')->group(function () {
             Route::get('/', [MerchantController::class, 'getCoupons']);
@@ -333,23 +334,24 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
             Route::put('/{id}', [MerchantController::class, 'updateCoupon']);
             Route::post('/{id}', [MerchantController::class, 'updateCoupon']); // FormData with _method=PUT
             Route::delete('/{id}', [MerchantController::class, 'deleteCoupon']);
-            Route::post('/{id}/activate', [MerchantController::class, 'activateCoupon']);
             Route::post('/{id}/deactivate', [MerchantController::class, 'deactivateCoupon']); // منقول من الأدمن
         });
-        
+
+        Route::post('/entitlements/{id}/activate', [MerchantController::class, 'activateCoupon']);
+
         // ===== Mall Coupons Management =====
         Route::get('/mall-coupons', [MerchantController::class, 'getMallCoupons']);
-        
+
         // ===== Coupon Activations =====
         Route::get('/coupon-activations', [MerchantController::class, 'getCouponActivations']);
-        
+
         // ===== العمولات (Commissions Management) =====
         Route::prefix('commissions')->group(function () {
             Route::get('/', [MerchantController::class, 'getCommissions']);
             Route::get('/transactions', [MerchantController::class, 'getCommissionTransactions']);
             Route::get('/rates', [MerchantController::class, 'getCommissionRates']);
         });
-        
+
         // ===== الإعلانات (Ads Management) =====
         Route::prefix('ads')->group(function () {
             Route::get('/', [MerchantController::class, 'getAds']);
@@ -359,21 +361,21 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
             Route::delete('/{id}', [MerchantController::class, 'deleteAd']);
             Route::get('/{id}/status', [MerchantController::class, 'getAdStatus']);
         });
-        
+
         // ===== QR Activation =====
         Route::prefix('qr')->group(function () {
             Route::post('/scan', [QrActivationController::class, 'scanAndActivate']);
             Route::post('/validate', [QrActivationController::class, 'validateQr']);
             Route::get('/scanner', [QrActivationController::class, 'scannerPage']);
         });
-        
+
         // ===== الفواتير (Invoices) =====
         Route::prefix('invoices')->group(function () {
             Route::get('/', [InvoiceController::class, 'index']);
             Route::get('/{id}', [InvoiceController::class, 'show']);
             Route::get('/{id}/download', [InvoiceController::class, 'downloadPdf']);
         });
-        
+
         // ===== الموظفون (Staff Management) =====
         Route::prefix('staff')->group(function () {
             Route::get('/', [MerchantStaffController::class, 'index']);
@@ -381,11 +383,11 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
             Route::put('/{id}', [MerchantStaffController::class, 'update']);
             Route::delete('/{id}', [MerchantStaffController::class, 'delete']);
         });
-        
+
         // ===== PIN/Biometric Login =====
         Route::post('/login-pin', [AuthController::class, 'loginWithPin']);
         Route::post('/setup-pin', [MerchantController::class, 'setupPin']);
-        
+
         // ===== المالية (Financial routes) =====
         Route::prefix('financial')->group(function () {
             Route::get('/wallet', [FinancialController::class, 'getWallet']);
@@ -397,20 +399,20 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
             Route::get('/withdrawals', [FinancialController::class, 'getWithdrawals']);
             Route::get('/sales', [FinancialController::class, 'getSalesTracking']);
         });
-        
+
         // ===== محfظة المعاملات (Wallet Transactions) =====
         Route::prefix('wallet')->group(function () {
             Route::get('/transactions', [WalletTransactionController::class, 'index']);
             Route::get('/transactions/export', [WalletTransactionController::class, 'export']);
         });
-        
+
         // ===== التحقق (Merchant Verification) =====
         Route::get('/verification', [MerchantVerificationController::class, 'show']);
         Route::post('/verification/upload', [MerchantVerificationController::class, 'uploadDocuments']);
-        
+
         // ===== التحذيرات (Merchant Warnings) =====
         Route::get('/warnings', [MerchantWarningController::class, 'index']);
-        
+
         // ===== إشعارات التاجر (Notifications Management) =====
         Route::prefix('notifications')->group(function () {
             Route::get('/', [MerchantController::class, 'getNotifications']);

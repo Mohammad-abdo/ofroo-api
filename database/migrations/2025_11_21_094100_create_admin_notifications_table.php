@@ -29,13 +29,15 @@ return new class extends Migration
             $table->boolean('is_sent')->default(false)->comment('Whether notification has been sent');
             $table->dateTime('scheduled_at')->nullable()->comment('Scheduled send time');
             $table->dateTime('sent_at')->nullable()->comment('Actual send time');
+            $table->timestamp('read_at')->nullable()->comment('When broadcast row was marked read in admin UI');
             $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('set null')->comment('Admin who created the notification');
             $table->timestamps();
-            
+
             $table->index('type');
             $table->index('target_audience');
             $table->index('is_sent');
             $table->index('scheduled_at');
+            $table->index('read_at');
             $table->index('created_by');
         });
     }
@@ -48,4 +50,3 @@ return new class extends Migration
         Schema::dropIfExists('admin_notifications');
     }
 };
-

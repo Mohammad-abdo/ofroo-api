@@ -28,13 +28,14 @@ return new class extends Migration
             $table->json('metadata')->nullable()->comment('Additional transaction data');
             $table->string('status', 50)->default('completed')->comment('Transaction status');
             $table->timestamps();
-            
+
             $table->index('merchant_id');
             $table->index('order_id');
             $table->index('transaction_type');
             $table->index('transaction_flow');
             $table->index('created_at');
             $table->index(['merchant_id', 'created_at']);
+            $table->index(['transaction_type', 'transaction_flow'], 'financial_transactions_type_flow_index');
         });
     }
 

@@ -1,36 +1,60 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\ActivityLogController as AdminPanelActivityLogController;
+use App\Http\Controllers\Api\Admin\AdController as AdminPanelAdController;
+use App\Http\Controllers\Api\Admin\AdminNotificationController as AdminPanelNotificationController;
+use App\Http\Controllers\Api\Admin\CategoryController as AdminPanelCategoryController;
+use App\Http\Controllers\Api\Admin\CouponController as AdminPanelCouponController;
+use App\Http\Controllers\Api\Admin\FinancialTransactionController as AdminPanelFinancialTransactionController;
+use App\Http\Controllers\Api\Admin\LocationController as AdminPanelLocationController;
+use App\Http\Controllers\Api\Admin\MallController as AdminPanelMallController;
+use App\Http\Controllers\Api\Admin\MerchantController as AdminPanelMerchantController;
+use App\Http\Controllers\Api\Admin\MerchantInvoiceController as AdminPanelMerchantInvoiceController;
+use App\Http\Controllers\Api\Admin\OfferController as AdminPanelOfferController;
+use App\Http\Controllers\Api\Admin\OrderController as AdminPanelOrderController;
+use App\Http\Controllers\Api\Admin\PaymentController as AdminPanelPaymentController;
+use App\Http\Controllers\Api\Admin\PaymentGatewayController as AdminPanelPaymentGatewayController;
+use App\Http\Controllers\Api\Admin\ReportController as AdminPanelReportController;
+use App\Http\Controllers\Api\Admin\SettingsController as AdminPanelSettingsController;
+use App\Http\Controllers\Api\Admin\StaffController as AdminPanelStaffController;
+use App\Http\Controllers\Api\Admin\TaxSettingController as AdminPanelTaxSettingController;
+use App\Http\Controllers\Api\Admin\UserController as AdminPanelUserController;
+use App\Http\Controllers\Api\Admin\WarningController as AdminPanelWarningController;
+use App\Http\Controllers\Api\Admin\WithdrawalController as AdminPanelWithdrawalController;
 use App\Http\Controllers\Api\AdminAppPolicyController;
-use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\AdminWalletController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\CommissionController;
+use App\Http\Controllers\Api\CouponController;
+use App\Http\Controllers\Api\CouponEntitlementController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DocumentationController;
 use App\Http\Controllers\Api\FinancialController;
+use App\Http\Controllers\Api\FinancialReportsCacheController;
+use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\LoyaltyController;
+use App\Http\Controllers\Api\MallPublicController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\MerchantProfileController;
-use App\Http\Controllers\Api\CouponController;
+use App\Http\Controllers\Api\MerchantStaffController;
+use App\Http\Controllers\Api\MerchantVerificationController;
+use App\Http\Controllers\Api\MerchantWarningController;
 use App\Http\Controllers\Api\OfferController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PermissionController;
-use App\Http\Controllers\Api\ReportController;
-use App\Http\Controllers\Api\SupportTicketController;
-use App\Http\Controllers\Api\LoyaltyController;
 use App\Http\Controllers\Api\QrActivationController;
-use App\Http\Controllers\Api\InvoiceController;
-use App\Http\Controllers\Api\MerchantStaffController;
-use App\Http\Controllers\Api\AdminWalletController;
-use App\Http\Controllers\Api\WalletTransactionController;
-use App\Http\Controllers\Api\MerchantVerificationController;
-use App\Http\Controllers\Api\MerchantWarningController;
-use App\Http\Controllers\Api\ReviewModerationController;
 use App\Http\Controllers\Api\RegulatoryCheckController;
-use App\Http\Controllers\Api\FinancialReportsCacheController;
+use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\ReviewModerationController;
+use App\Http\Controllers\Api\SupportTicketController;
 use App\Http\Controllers\Api\UserController;
-use App\Http\Controllers\Api\DashboardController;
-use App\Http\Controllers\Api\CouponEntitlementController;
-use App\Http\Controllers\Api\CommissionController;
 use App\Http\Controllers\Api\WalletManagementController;
+use App\Http\Controllers\Api\WalletTransactionController;
+use App\Models\AdminNotification;
+use App\Models\Merchant;
+use App\Models\Setting;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -65,7 +89,6 @@ Route::get('/docs', [DocumentationController::class, 'apiDocs']);
 Route::get('/docs/postman', [DocumentationController::class, 'postmanCollection']);
 Route::get('/docs/openapi.yaml', [DocumentationController::class, 'openapiYaml']);
 
-
 // Public routes
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
@@ -79,6 +102,11 @@ Route::prefix('auth')->group(function () {
 // Public categories
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/{id}', [CategoryController::class, 'show']);
+
+// Public malls (قائمة + تفاصيل مول + تجار داخل مول)
+Route::get('/malls/details/{id}', [MallPublicController::class, 'mobileMallDetails'])->whereNumber('id');
+Route::get('/malls/{mallId}/merchants', [MallPublicController::class, 'merchants'])->where('mallId', '[0-9]+');
+Route::get('/malls', [MallPublicController::class, 'index']);
 
 // Public offers
 Route::get('/offers', [OfferController::class, 'index']);
@@ -95,20 +123,20 @@ Route::get('/content/static-pages', function () {
     return response()->json([
         'data' => [
             'complaints_suggestions' => [
-                'ar' => \App\Models\Setting::getValue('static_complaints_ar', ''),
-                'en' => \App\Models\Setting::getValue('static_complaints_en', ''),
+                'ar' => Setting::getValue('static_complaints_ar', ''),
+                'en' => Setting::getValue('static_complaints_en', ''),
             ],
             'privacy' => [
-                'ar' => \App\Models\Setting::getValue('static_privacy_ar', ''),
-                'en' => \App\Models\Setting::getValue('static_privacy_en', ''),
+                'ar' => Setting::getValue('static_privacy_ar', ''),
+                'en' => Setting::getValue('static_privacy_en', ''),
             ],
             'support' => [
-                'ar' => \App\Models\Setting::getValue('static_support_ar', ''),
-                'en' => \App\Models\Setting::getValue('static_support_en', ''),
+                'ar' => Setting::getValue('static_support_ar', ''),
+                'en' => Setting::getValue('static_support_en', ''),
             ],
             'about' => [
-                'ar' => \App\Models\Setting::getValue('static_about_ar', ''),
-                'en' => \App\Models\Setting::getValue('static_about_en', ''),
+                'ar' => Setting::getValue('static_about_ar', ''),
+                'en' => Setting::getValue('static_about_en', ''),
             ],
         ],
     ]);
@@ -116,11 +144,12 @@ Route::get('/content/static-pages', function () {
 
 // Test route without middleware
 Route::get('/test-notifications', function () {
-    $notifications = \App\Models\AdminNotification::with('creator')->take(5)->get();
+    $notifications = AdminNotification::with('creator')->take(5)->get();
+
     return response()->json([
         'message' => 'Test successful',
         'count' => $notifications->count(),
-        'data' => $notifications
+        'data' => $notifications,
     ]);
 });
 
@@ -128,6 +157,7 @@ Route::get('/test-notifications', function () {
 Route::get('/test-admin-auth', function () {
     try {
         $user = auth('sanctum')->user();
+
         return response()->json([
             'message' => 'Auth test',
             'authenticated' => $user ? true : false,
@@ -136,14 +166,14 @@ Route::get('/test-admin-auth', function () {
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role ? $user->role->name : 'no role',
-                'is_admin' => $user->isAdmin()
-            ] : null
+                'is_admin' => $user->isAdmin(),
+            ] : null,
         ]);
     } catch (Exception $e) {
         return response()->json([
             'error' => $e->getMessage(),
             'line' => $e->getLine(),
-            'file' => $e->getFile()
+            'file' => $e->getFile(),
         ], 500);
     }
 })->middleware(['auth:sanctum', 'access.token']);
@@ -151,17 +181,18 @@ Route::get('/test-admin-auth', function () {
 // Test admin notifications directly
 Route::get('/test-admin-notifications', function () {
     try {
-        $notifications = \App\Models\AdminNotification::with('creator')->take(5)->get();
+        $notifications = AdminNotification::with('creator')->take(5)->get();
+
         return response()->json([
             'message' => 'Admin notifications test',
             'count' => $notifications->count(),
-            'data' => $notifications
+            'data' => $notifications,
         ]);
     } catch (Exception $e) {
         return response()->json([
             'error' => $e->getMessage(),
             'line' => $e->getLine(),
-            'file' => $e->getFile()
+            'file' => $e->getFile(),
         ], 500);
     }
 });
@@ -169,18 +200,18 @@ Route::get('/test-admin-notifications', function () {
 // Test mark notification as read
 Route::post('/test-mark-read/{id}', function ($id) {
     try {
-        $notification = \App\Models\AdminNotification::findOrFail($id);
+        $notification = AdminNotification::findOrFail($id);
         $notification->update(['read_at' => now()]);
-        
+
         return response()->json([
             'message' => 'Notification marked as read',
-            'data' => $notification->fresh()
+            'data' => $notification->fresh(),
         ]);
     } catch (Exception $e) {
         return response()->json([
             'error' => $e->getMessage(),
             'line' => $e->getLine(),
-            'file' => $e->getFile()
+            'file' => $e->getFile(),
         ], 500);
     }
 });
@@ -253,7 +284,6 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
         Route::post('/redeem', [LoyaltyController::class, 'redeem']);
     });
 
-
     // Search
     Route::get('/search', [OfferController::class, 'search'])->middleware('throttle:30,1');
 
@@ -267,27 +297,27 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
         Route::put('/profile', [UserController::class, 'updateProfile']);
         Route::put('/password', [UserController::class, 'changePassword']);
         Route::put('/phone', [UserController::class, 'updatePhone']);
-        
+
         // Avatar Management
         Route::post('/avatar', [UserController::class, 'uploadAvatar']);
         Route::delete('/avatar', [UserController::class, 'deleteAvatar']);
-        
+
         // Notifications
         Route::get('/notifications', [UserController::class, 'getNotifications']);
         Route::post('/notifications/{id}/read', [UserController::class, 'markNotificationAsRead']);
         Route::post('/notifications/mark-all-read', [UserController::class, 'markAllNotificationsAsRead']);
         Route::delete('/notifications/{id}', [UserController::class, 'deleteNotification']);
-        
+
         // Statistics
         Route::get('/stats', [UserController::class, 'getStats']);
-        
+
         // Settings
         Route::get('/settings', [UserController::class, 'getSettings']);
         Route::put('/settings', [UserController::class, 'updateSettings']);
-        
+
         // Orders History
         Route::get('/orders', [UserController::class, 'getOrdersHistory']);
-        
+
         // Account Management
         Route::delete('/account', [UserController::class, 'deleteAccount']);
     });
@@ -306,7 +336,7 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
             Route::post('/', [MerchantController::class, 'createOffer'])->middleware('throttle:20,1');
             Route::put('/{id}', [MerchantController::class, 'updateOffer']);
             Route::delete('/{id}', [MerchantController::class, 'deleteOffer']);
-            
+
             // إضافة كوبونات للعرض (منقول من الأدمن)
             Route::post('/{offerId}/coupons', [MerchantController::class, 'storeOfferCoupon']);
         });
@@ -343,9 +373,10 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
             Route::put('/{id}', [MerchantController::class, 'updateCoupon']);
             Route::post('/{id}', [MerchantController::class, 'updateCoupon']); // FormData with _method=PUT
             Route::delete('/{id}', [MerchantController::class, 'deleteCoupon']);
-            Route::post('/{id}/activate', [MerchantController::class, 'activateCoupon']);
             Route::post('/{id}/deactivate', [MerchantController::class, 'deactivateCoupon']); // منقول من الأدمن
         });
+
+        Route::post('/entitlements/{id}/activate', [MerchantController::class, 'activateCoupon']);
 
         // Mall Coupons Management (Merchant)
         Route::get('/mall-coupons', [MerchantController::class, 'getMallCoupons']);
@@ -434,80 +465,81 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
     // Admin routes
     Route::prefix('admin')->middleware(['auth:sanctum', 'access.token', 'admin'])->group(function () {
         Route::prefix('users')->group(function () {
-            Route::get('/', [AdminController::class, 'users']);
-            Route::get('/{id}', [AdminController::class, 'getUser']);
-            Route::post('/', [AdminController::class, 'createUser']);
-            Route::put('/{id}', [AdminController::class, 'updateUser']);
-            Route::delete('/{id}', [AdminController::class, 'deleteUser']);
-            Route::post('/{id}/block', [AdminController::class, 'blockUser']);
+            Route::get('/', [AdminPanelUserController::class, 'users']);
+            Route::get('/{id}', [AdminPanelUserController::class, 'getUser']);
+            Route::post('/', [AdminPanelUserController::class, 'createUser']);
+            Route::put('/{id}', [AdminPanelUserController::class, 'updateUser']);
+            Route::delete('/{id}', [AdminPanelUserController::class, 'deleteUser']);
+            Route::post('/{id}/block', [AdminPanelUserController::class, 'blockUser']);
         });
 
         Route::prefix('merchants')->group(function () {
-            Route::get('/', [AdminController::class, 'merchants']);
-            Route::get('/select', [AdminController::class, 'getMerchantsForSelect']); // للاستخدام في dropdowns
-            Route::get('/test', function() {
+            Route::get('/', [AdminPanelMerchantController::class, 'merchants']);
+            Route::get('/select', [AdminPanelMerchantController::class, 'getMerchantsForSelect']); // للاستخدام في dropdowns
+            Route::get('/test', function () {
                 try {
-                    $count = \App\Models\Merchant::count();
+                    $count = Merchant::count();
+
                     return response()->json([
                         'message' => 'Test successful',
                         'merchants_count' => $count,
-                        'timestamp' => now()->toIso8601String()
+                        'timestamp' => now()->toIso8601String(),
                     ]);
-                } catch (\Exception $e) {
+                } catch (Exception $e) {
                     return response()->json([
                         'message' => 'Test failed',
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
                     ], 500);
                 }
             }); // اختبار بسيط
-            Route::put('/{id}/commission', [AdminController::class, 'updateMerchantCommission']);
-            Route::get('/{id}', [AdminController::class, 'getMerchant']);
-            Route::post('/', [AdminController::class, 'createMerchant']);
-            Route::put('/{id}', [AdminController::class, 'updateMerchant']);
-            Route::delete('/{id}', [AdminController::class, 'deleteMerchant']);
-            Route::post('/{id}/approve', [AdminController::class, 'approveMerchant']);
-            Route::post('/{id}/block', [AdminController::class, 'blockMerchant']);
+            Route::put('/{id}/commission', [AdminPanelMerchantController::class, 'updateMerchantCommission']);
+            Route::get('/{id}', [AdminPanelMerchantController::class, 'getMerchant']);
+            Route::post('/', [AdminPanelMerchantController::class, 'createMerchant']);
+            Route::put('/{id}', [AdminPanelMerchantController::class, 'updateMerchant']);
+            Route::delete('/{id}', [AdminPanelMerchantController::class, 'deleteMerchant']);
+            Route::post('/{id}/approve', [AdminPanelMerchantController::class, 'approveMerchant']);
+            Route::post('/{id}/block', [AdminPanelMerchantController::class, 'blockMerchant']);
         });
 
         Route::prefix('offers')->group(function () {
-            Route::get('/', [AdminController::class, 'offers']);
-            Route::post('/{offerId}/coupons', [AdminController::class, 'storeOfferCoupon']);
-            Route::get('/{id}', [AdminController::class, 'getOffer']);
-            Route::post('/', [AdminController::class, 'createOffer'])->middleware('throttle:20,1');
-            Route::put('/{id}', [AdminController::class, 'updateOffer']);
-            Route::delete('/{id}', [AdminController::class, 'deleteOffer']);
-            Route::post('/{id}/approve', [AdminController::class, 'approveOffer']);
+            Route::get('/', [AdminPanelOfferController::class, 'offers']);
+            Route::post('/{offerId}/coupons', [AdminPanelOfferController::class, 'storeOfferCoupon']);
+            Route::get('/{id}', [AdminPanelOfferController::class, 'getOffer']);
+            Route::post('/', [AdminPanelOfferController::class, 'createOffer'])->middleware('throttle:20,1');
+            Route::put('/{id}', [AdminPanelOfferController::class, 'updateOffer']);
+            Route::delete('/{id}', [AdminPanelOfferController::class, 'deleteOffer']);
+            Route::post('/{id}/approve', [AdminPanelOfferController::class, 'approveOffer']);
         });
 
-        // Banners Managementddsfd
+        // Banners Management
         Route::prefix('banners')->group(function () {
-            Route::get('/', [AdminController::class, 'getBanners']);
-            Route::post('/', [AdminController::class, 'createBanner']);
-            Route::post('/{id}', [AdminController::class, 'updateBanner']); // Use POST for multipart updates
-            Route::delete('/{id}', [AdminController::class, 'deleteBanner']);
+            Route::get('/', [AdminPanelAdController::class, 'getBanners']);
+            Route::post('/', [AdminPanelAdController::class, 'createBanner']);
+            Route::post('/{id}', [AdminPanelAdController::class, 'updateBanner']); // Use POST for multipart updates
+            Route::delete('/{id}', [AdminPanelAdController::class, 'deleteBanner']);
         });
 
         // Coupons Management (Admin) - توحيد مع منطق التاجر
         Route::prefix('coupons')->group(function () {
-            Route::get('/allCoupons', [AdminController::class, 'allCoupons']);
-            Route::get('/stats', [AdminController::class, 'couponStats']);
-            Route::get('/by-mall/{mallId}', [AdminController::class, 'getCouponsByMall']);
-            Route::get('/by-category/{categoryId}', [AdminController::class, 'getCouponsByCategory']);
-            Route::get('/available', [AdminController::class, 'getAvailableCoupons']); // For category + mall
-            Route::get('/{id}', [AdminController::class, 'getCoupon']);
-            Route::post('/', [AdminController::class, 'createCoupon']);
-            Route::put('/{id}', [AdminController::class, 'updateCoupon']);
-            Route::post('/{id}', [AdminController::class, 'updateCoupon']); // FormData with _method=PUT
-            Route::delete('/{id}', [AdminController::class, 'deleteCoupon']);
-            Route::post('/{id}/activate', [AdminController::class, 'activateCoupon']);
-            Route::post('/{id}/deactivate', [AdminController::class, 'deactivateCoupon']);
+            Route::get('/allCoupons', [AdminPanelCouponController::class, 'allCoupons']);
+            Route::get('/stats', [AdminPanelCouponController::class, 'couponStats']);
+            Route::get('/by-mall/{mallId}', [AdminPanelCouponController::class, 'getCouponsByMall']);
+            Route::get('/by-category/{categoryId}', [AdminPanelCouponController::class, 'getCouponsByCategory']);
+            Route::get('/available', [AdminPanelCouponController::class, 'getAvailableCoupons']); // For category + mall
+            Route::get('/{id}', [AdminPanelCouponController::class, 'getCoupon']);
+            Route::post('/', [AdminPanelCouponController::class, 'createCoupon']);
+            Route::put('/{id}', [AdminPanelCouponController::class, 'updateCoupon']);
+            Route::post('/{id}', [AdminPanelCouponController::class, 'updateCoupon']); // FormData with _method=PUT
+            Route::delete('/{id}', [AdminPanelCouponController::class, 'deleteCoupon']);
+            Route::post('/{id}/activate', [AdminPanelCouponController::class, 'activateCoupon']);
+            Route::post('/{id}/deactivate', [AdminPanelCouponController::class, 'deactivateCoupon']);
         });
 
         // Mall Coupons Management (Admin) - منقول من التاجر
-        Route::get('/mall-coupons', [AdminController::class, 'getMallCoupons']);
+        Route::get('/mall-coupons', [AdminPanelCouponController::class, 'getMallCoupons']);
 
         // Coupon Activations (Admin) - منقول من التاجر
-        Route::get('/coupon-activations', [AdminController::class, 'getCouponActivations']);
+        Route::get('/coupon-activations', [AdminPanelCouponController::class, 'getCouponActivations']);
 
         // Dashboard Stats (unified endpoint)
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
@@ -536,16 +568,16 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
         });
 
         Route::prefix('reports')->group(function () {
-            Route::get('/sales', [AdminController::class, 'salesReport']);
-            Route::get('/sales/export', [AdminController::class, 'exportSalesReport']);
+            Route::get('/sales', [AdminPanelReportController::class, 'salesReport']);
+            Route::get('/sales/export', [AdminPanelReportController::class, 'exportSalesReport']);
         });
 
-        Route::get('/financial/dashboard', [AdminController::class, 'financialDashboard']);
+        Route::get('/financial/dashboard', [AdminPanelReportController::class, 'financialDashboard']);
 
-        Route::get('/settings', [AdminController::class, 'getSettings']);
-        Route::put('/settings', [AdminController::class, 'updateSettings']);
-        Route::post('/settings/logo', [AdminController::class, 'uploadLogo']);
-        Route::put('/categories/order', [AdminController::class, 'updateCategoryOrder']);
+        Route::get('/settings', [AdminPanelSettingsController::class, 'getSettings']);
+        Route::put('/settings', [AdminPanelSettingsController::class, 'updateSettings']);
+        Route::post('/settings/logo', [AdminPanelSettingsController::class, 'uploadLogo']);
+        Route::put('/categories/order', [AdminPanelCategoryController::class, 'updateCategoryOrder']);
 
         // Static CMS sections used by the mobile app:
         //   - Privacy policy → /api/mobile/app/policy
@@ -568,15 +600,16 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
 
         // Categories Management - Full CRUD
         Route::prefix('categories')->group(function () {
-            Route::get('/', [AdminController::class, 'getCategories']);
-            Route::get('/{id}', [AdminController::class, 'getCategory']);
-            Route::post('/', [AdminController::class, 'createCategory']);
-            Route::put('/{id}', [AdminController::class, 'updateCategory']);
-            Route::delete('/{id}', [AdminController::class, 'deleteCategory']);
+            Route::get('/', [AdminPanelCategoryController::class, 'getCategories']);
+            Route::get('/{id}', [AdminPanelCategoryController::class, 'getCategory']);
+            Route::post('/', [AdminPanelCategoryController::class, 'createCategory']);
+            Route::put('/{id}', [AdminPanelCategoryController::class, 'updateCategory']);
+            Route::delete('/{id}', [AdminPanelCategoryController::class, 'deleteCategory']);
         });
 
         // Reports
         Route::prefix('reports')->group(function () {
+            Route::get('/entity-insight', [ReportController::class, 'entityInsightReport']);
             Route::get('/users', [ReportController::class, 'usersReport']);
             Route::get('/merchants', [ReportController::class, 'merchantsReport']);
             Route::get('/orders', [ReportController::class, 'ordersReport']);
@@ -587,6 +620,7 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
             Route::get('/gps-engagement', [ReportController::class, 'gpsEngagementReport']);
             Route::get('/conversion-funnel', [ReportController::class, 'conversionFunnelReport']);
             Route::get('/failed-payments', [ReportController::class, 'failedPaymentsReport']);
+            Route::get('/geo-distribution', [ReportController::class, 'geoDistribution']);
             Route::get('/export/{type}/pdf', [ReportController::class, 'exportPdf']);
             Route::get('/export/{type}/excel', [ReportController::class, 'exportExcel']);
         });
@@ -609,12 +643,11 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
 
         // Withdrawals management
         Route::prefix('withdrawals')->group(function () {
-            Route::get('/', [AdminController::class, 'withdrawals']);
-            Route::post('/{id}/approve', [AdminController::class, 'approveWithdrawal']);
-            Route::post('/{id}/reject', [AdminController::class, 'rejectWithdrawal']);
-            Route::post('/{id}/complete', [AdminController::class, 'completeWithdrawal']);
+            Route::get('/', [AdminPanelWithdrawalController::class, 'withdrawals']);
+            Route::post('/{id}/approve', [AdminPanelWithdrawalController::class, 'approveWithdrawal']);
+            Route::post('/{id}/reject', [AdminPanelWithdrawalController::class, 'rejectWithdrawal']);
+            Route::post('/{id}/complete', [AdminPanelWithdrawalController::class, 'completeWithdrawal']);
         });
-
 
         // Support Tickets Management
         Route::prefix('support')->group(function () {
@@ -623,28 +656,27 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
             Route::post('/tickets/{id}/resolve', [SupportTicketController::class, 'resolve']);
         });
 
-
         // Activity Logs
-        Route::get('/activity-logs', [AdminController::class, 'activityLogs']);
+        Route::get('/activity-logs', [AdminPanelActivityLogController::class, 'activityLogs']);
 
         // Payment Gateways
         Route::prefix('payment-gateways')->group(function () {
-            Route::get('/', [AdminController::class, 'paymentGateways']);
-            Route::post('/', [AdminController::class, 'createPaymentGateway']);
-            Route::put('/{id}', [AdminController::class, 'updatePaymentGateway']);
+            Route::get('/', [AdminPanelPaymentGatewayController::class, 'paymentGateways']);
+            Route::post('/', [AdminPanelPaymentGatewayController::class, 'createPaymentGateway']);
+            Route::put('/{id}', [AdminPanelPaymentGatewayController::class, 'updatePaymentGateway']);
         });
 
         // Tax Settings
         Route::prefix('tax')->group(function () {
-            Route::get('/', [AdminController::class, 'taxSettings']);
-            Route::put('/', [AdminController::class, 'updateTaxSettings']);
+            Route::get('/', [AdminPanelTaxSettingController::class, 'taxSettings']);
+            Route::put('/', [AdminPanelTaxSettingController::class, 'updateTaxSettings']);
         });
 
         // Generate Invoices
         Route::post('/invoices/generate', [InvoiceController::class, 'generateMonthly']);
 
         // Activation Reports
-        Route::get('/activation-reports', [AdminController::class, 'activationReports']);
+        Route::get('/activation-reports', [AdminPanelReportController::class, 'activationReports']);
 
         // Admin Wallet
         Route::prefix('wallet')->group(function () {
@@ -656,8 +688,8 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
 
         // Merchant Management
         Route::prefix('merchants')->group(function () {
-            Route::post('/{id}/suspend', [AdminController::class, 'suspendMerchant']);
-            Route::get('/{id}/wallet', [AdminController::class, 'getMerchantWallet']);
+            Route::post('/{id}/suspend', [AdminPanelMerchantController::class, 'suspendMerchant']);
+            Route::get('/{id}/wallet', [AdminPanelMerchantController::class, 'getMerchantWallet']);
         });
 
         // Merchant Verification
@@ -669,13 +701,13 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
 
         // Merchant Warnings (admin list = getMerchantWarnings)
         Route::prefix('warnings')->group(function () {
-            Route::get('/', [AdminController::class, 'getMerchantWarnings']);
-            Route::get('/merchants', [AdminController::class, 'getMerchantWarnings']);
-            Route::get('/users', [AdminController::class, 'getUserWarnings']);
+            Route::get('/', [AdminPanelWarningController::class, 'getMerchantWarnings']);
+            Route::get('/merchants', [AdminPanelWarningController::class, 'getMerchantWarnings']);
+            Route::get('/users', [AdminPanelWarningController::class, 'getUserWarnings']);
             Route::post('/merchants/{id}', [MerchantWarningController::class, 'issue']);
-            Route::post('/users/{id}', [AdminController::class, 'issueUserWarning']);
+            Route::post('/users/{id}', [AdminPanelWarningController::class, 'issueUserWarning']);
             Route::post('/{id}/deactivate', [MerchantWarningController::class, 'deactivate']);
-            Route::post('/users/{id}/deactivate', [AdminController::class, 'deactivateUserWarning']);
+            Route::post('/users/{id}/deactivate', [AdminPanelWarningController::class, 'deactivateUserWarning']);
         });
 
         // Review Moderation
@@ -719,73 +751,72 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
 
         // Orders Management
         Route::prefix('orders')->group(function () {
-            Route::get('/', [AdminController::class, 'getOrders']);
-            Route::get('/{id}', [AdminController::class, 'getOrder']);
-            Route::post('/', [AdminController::class, 'createOrder']);
-            Route::put('/{id}', [AdminController::class, 'updateOrder']);
-            Route::delete('/{id}', [AdminController::class, 'deleteOrder']);
-            Route::post('/{id}/cancel', [AdminController::class, 'cancelOrder']);
-            Route::post('/{id}/refund', [AdminController::class, 'refundOrder']);
+            Route::get('/', [AdminPanelOrderController::class, 'getOrders']);
+            Route::get('/{id}', [AdminPanelOrderController::class, 'getOrder']);
+            Route::post('/', [AdminPanelOrderController::class, 'createOrder']);
+            Route::put('/{id}', [AdminPanelOrderController::class, 'updateOrder']);
+            Route::delete('/{id}', [AdminPanelOrderController::class, 'deleteOrder']);
+            Route::post('/{id}/cancel', [AdminPanelOrderController::class, 'cancelOrder']);
+            Route::post('/{id}/refund', [AdminPanelOrderController::class, 'refundOrder']);
         });
 
         // Payments Management
         Route::prefix('payments')->group(function () {
-            Route::get('/', [AdminController::class, 'getPayments']);
-            Route::get('/{id}', [AdminController::class, 'getPayment']);
-            Route::post('/', [AdminController::class, 'createPayment']);
-            Route::put('/{id}', [AdminController::class, 'updatePayment']);
-            Route::delete('/{id}', [AdminController::class, 'deletePayment']);
-            Route::post('/{id}/refund', [AdminController::class, 'refundPayment']);
+            Route::get('/', [AdminPanelPaymentController::class, 'getPayments']);
+            Route::get('/{id}', [AdminPanelPaymentController::class, 'getPayment']);
+            Route::post('/', [AdminPanelPaymentController::class, 'createPayment']);
+            Route::put('/{id}', [AdminPanelPaymentController::class, 'updatePayment']);
+            Route::delete('/{id}', [AdminPanelPaymentController::class, 'deletePayment']);
+            Route::post('/{id}/refund', [AdminPanelPaymentController::class, 'refundPayment']);
         });
 
         // Transactions Management
         Route::prefix('transactions')->group(function () {
-            Route::get('/', [AdminController::class, 'getTransactions']);
-            Route::get('/{id}', [AdminController::class, 'getTransaction']);
-            Route::post('/', [AdminController::class, 'createTransaction']);
-            Route::put('/{id}', [AdminController::class, 'updateTransaction']);
-            Route::delete('/{id}', [AdminController::class, 'deleteTransaction']);
+            Route::get('/', [AdminPanelFinancialTransactionController::class, 'getTransactions']);
+            Route::get('/{id}', [AdminPanelFinancialTransactionController::class, 'getTransaction']);
+            Route::post('/', [AdminPanelFinancialTransactionController::class, 'createTransaction']);
+            Route::put('/{id}', [AdminPanelFinancialTransactionController::class, 'updateTransaction']);
+            Route::delete('/{id}', [AdminPanelFinancialTransactionController::class, 'deleteTransaction']);
         });
 
         // Locations Management
         Route::prefix('locations')->group(function () {
-            Route::get('/', [AdminController::class, 'getLocations']);
-            Route::get('/{id}', [AdminController::class, 'getLocation']);
-            Route::post('/', [AdminController::class, 'createLocation']);
-            Route::put('/{id}', [AdminController::class, 'updateLocation']);
-            Route::delete('/{id}', [AdminController::class, 'deleteLocation']);
+            Route::get('/', [AdminPanelLocationController::class, 'getLocations']);
+            Route::get('/{id}', [AdminPanelLocationController::class, 'getLocation']);
+            Route::post('/', [AdminPanelLocationController::class, 'createLocation']);
+            Route::put('/{id}', [AdminPanelLocationController::class, 'updateLocation']);
+            Route::delete('/{id}', [AdminPanelLocationController::class, 'deleteLocation']);
         });
-
 
         // Staff Management
         Route::prefix('staff')->group(function () {
-            Route::get('/', [AdminController::class, 'getStaff']);
-            Route::get('/{id}', [AdminController::class, 'getStaffMember']);
-            Route::post('/', [AdminController::class, 'createStaff']);
-            Route::put('/{id}', [AdminController::class, 'updateStaff']);
-            Route::delete('/{id}', [AdminController::class, 'deleteStaff']);
+            Route::get('/', [AdminPanelStaffController::class, 'getStaff']);
+            Route::get('/{id}', [AdminPanelStaffController::class, 'getStaffMember']);
+            Route::post('/', [AdminPanelStaffController::class, 'createStaff']);
+            Route::put('/{id}', [AdminPanelStaffController::class, 'updateStaff']);
+            Route::delete('/{id}', [AdminPanelStaffController::class, 'deleteStaff']);
         });
 
         // Notifications Management (static paths before /{id} so "mark-all-read" is not treated as an id)
         Route::prefix('notifications')->group(function () {
-            Route::get('/', [AdminController::class, 'getNotifications']);
-            Route::post('/mark-all-read', [AdminController::class, 'markAllNotificationsAsRead']);
-            Route::post('/', [AdminController::class, 'createNotification']);
-            Route::get('/{id}', [AdminController::class, 'getNotification']);
-            Route::put('/{id}', [AdminController::class, 'updateNotification']);
-            Route::delete('/{id}', [AdminController::class, 'deleteNotification']);
-            Route::post('/{id}/delete', [AdminController::class, 'deleteNotification']);
-            Route::post('/{id}/send', [AdminController::class, 'sendNotification']);
-            Route::post('/{id}/read', [AdminController::class, 'markNotificationAsRead']);
+            Route::get('/', [AdminPanelNotificationController::class, 'getNotifications']);
+            Route::post('/mark-all-read', [AdminPanelNotificationController::class, 'markAllNotificationsAsRead']);
+            Route::post('/', [AdminPanelNotificationController::class, 'createNotification']);
+            Route::get('/{id}', [AdminPanelNotificationController::class, 'getNotification']);
+            Route::put('/{id}', [AdminPanelNotificationController::class, 'updateNotification']);
+            Route::delete('/{id}', [AdminPanelNotificationController::class, 'deleteNotification']);
+            Route::post('/{id}/delete', [AdminPanelNotificationController::class, 'deleteNotification']);
+            Route::post('/{id}/send', [AdminPanelNotificationController::class, 'sendNotification']);
+            Route::post('/{id}/read', [AdminPanelNotificationController::class, 'markNotificationAsRead']);
         });
 
         // Malls Management
         Route::prefix('malls')->group(function () {
-            Route::get('/', [AdminController::class, 'getMalls']);
-            Route::get('/{id}', [AdminController::class, 'getMall']);
-            Route::post('/', [AdminController::class, 'createMall']);
-            Route::put('/{id}', [AdminController::class, 'updateMall']);
-            Route::delete('/{id}', [AdminController::class, 'deleteMall']);
+            Route::get('/', [AdminPanelMallController::class, 'getMalls']);
+            Route::get('/{id}', [AdminPanelMallController::class, 'getMall']);
+            Route::post('/', [AdminPanelMallController::class, 'createMall']);
+            Route::put('/{id}', [AdminPanelMallController::class, 'updateMall']);
+            Route::delete('/{id}', [AdminPanelMallController::class, 'deleteMall']);
         });
 
         // ─── Wallet Management ───────────────────────────────────────────────────────
@@ -818,38 +849,37 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
 
         // Ads Management
         Route::prefix('ads')->group(function () {
-            Route::get('/report-stats', [AdminController::class, 'getAdsReportStats']);
-            Route::get('/', [AdminController::class, 'getAds']);
-            Route::get('/{id}', [AdminController::class, 'getAd']);
-            Route::post('/', [AdminController::class, 'createAd']);
-            Route::put('/{id}', [AdminController::class, 'updateAd']);
-            Route::delete('/{id}', [AdminController::class, 'deleteAd']);
+            Route::get('/report-stats', [AdminPanelAdController::class, 'getAdsReportStats']);
+            Route::get('/', [AdminPanelAdController::class, 'getAds']);
+            Route::get('/{id}', [AdminPanelAdController::class, 'getAd']);
+            Route::post('/', [AdminPanelAdController::class, 'createAd']);
+            Route::put('/{id}', [AdminPanelAdController::class, 'updateAd']);
+            Route::delete('/{id}', [AdminPanelAdController::class, 'deleteAd']);
         });
 
         // Activity Logs Additional Routes
         Route::prefix('activity-logs')->group(function () {
-            Route::get('/{id}', [AdminController::class, 'getActivityLog']);
-            Route::delete('/{id}', [AdminController::class, 'deleteActivityLog']);
-            Route::delete('/', [AdminController::class, 'clearActivityLogs']);
+            Route::get('/{id}', [AdminPanelActivityLogController::class, 'getActivityLog']);
+            Route::delete('/{id}', [AdminPanelActivityLogController::class, 'deleteActivityLog']);
+            Route::delete('/', [AdminPanelActivityLogController::class, 'clearActivityLogs']);
         });
 
         // Payment Gateways Additional Routes
         Route::prefix('payment-gateways')->group(function () {
-            Route::get('/{id}', [AdminController::class, 'getPaymentGateway']);
-            Route::delete('/{id}', [AdminController::class, 'deletePaymentGateway']);
+            Route::get('/{id}', [AdminPanelPaymentGatewayController::class, 'getPaymentGateway']);
+            Route::delete('/{id}', [AdminPanelPaymentGatewayController::class, 'deletePaymentGateway']);
         });
 
         // Tax Settings Additional Routes
         Route::prefix('tax')->group(function () {
-            Route::post('/', [AdminController::class, 'createTaxSetting']);
-            Route::delete('/{id}', [AdminController::class, 'deleteTaxSetting']);
+            Route::post('/', [AdminPanelTaxSettingController::class, 'createTaxSetting']);
+            Route::delete('/{id}', [AdminPanelTaxSettingController::class, 'deleteTaxSetting']);
         });
-
 
         // Invoices Additional Routes
         Route::prefix('invoices')->group(function () {
-            Route::put('/{id}', [AdminController::class, 'updateInvoice']);
-            Route::delete('/{id}', [AdminController::class, 'deleteInvoice']);
+            Route::put('/{id}', [AdminPanelMerchantInvoiceController::class, 'updateInvoice']);
+            Route::delete('/{id}', [AdminPanelMerchantInvoiceController::class, 'deleteInvoice']);
         });
     });
 });

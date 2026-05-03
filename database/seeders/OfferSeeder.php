@@ -4,12 +4,12 @@ namespace Database\Seeders;
 
 use App\Models\Branch;
 use App\Models\Category;
-use App\Models\Coupon;
 use App\Models\Merchant;
 use App\Models\Offer;
+use Carbon\Carbon;
+use Faker\Factory as Faker;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Schema;
-use Faker\Factory as Faker;
 
 class OfferSeeder extends Seeder
 {
@@ -108,6 +108,7 @@ class OfferSeeder extends Seeder
 
         if ($categories->isEmpty() || $merchants->isEmpty()) {
             $this->command->warn('Categories or merchants missing. Run CategorySeeder and MerchantSeeder first.');
+
             return;
         }
 
@@ -128,8 +129,8 @@ class OfferSeeder extends Seeder
                 $discountPercent = $faker->randomElement([10, 15, 20, 25, 30, 35, 40, 50]);
                 $price = round($originalPrice * (1 - $discountPercent / 100), 2);
                 $status = $faker->randomElement(['active', 'active', 'active', 'pending', 'expired', 'draft']);
-                $startDate = $faker->dateTimeBetween('-30 days', 'now');
-                $endDate = $faker->dateTimeBetween('now', '+60 days');
+                $startDate = Carbon::createFromInterface($faker->dateTimeBetween('-30 days', 'now'))->utc();
+                $endDate = Carbon::createFromInterface($faker->dateTimeBetween('now', '+60 days'))->utc();
                 $descMain = $faker->realText(300);
                 $descAr = $faker->realText(200);
                 $descEn = $fakerEn->text(200);
@@ -185,7 +186,7 @@ class OfferSeeder extends Seeder
                 // كل عرض بداخله عدة كوبونات (كما في الداشبورد: عرض ← كوبونات)
                 $couponsCount = $faker->numberBetween(2, 5);
                 for ($c = 0; $c < $couponsCount; $c++) {
-                    $barcode = 'CPN-' . strtoupper($faker->unique()->bothify('########'));
+                    $barcode = 'CPN-'.strtoupper($faker->unique()->bothify('########'));
                     $couponPayload = [
                         'title' => $title['ar'],
                         'description' => $faker->realText(150),

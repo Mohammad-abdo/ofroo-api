@@ -63,7 +63,7 @@ paths:
                   example: ahmed@example.com
                 phone:
                   type: string
-                  example: +96512345678
+                  example: +201012345678
                 password:
                   type: string
                   format: password
@@ -111,7 +111,7 @@ paths:
                   example: ahmed@example.com
                 phone:
                   type: string
-                  example: +96512345678
+                  example: +201012345678
                 password:
                   type: string
                   format: password

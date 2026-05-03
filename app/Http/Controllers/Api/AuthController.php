@@ -4,16 +4,20 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
-use App\Http\Requests\RegisterRequest;
+use App\Http\Requests\MerchantRegisterRequest;
 use App\Http\Requests\MobileRegisterRequest;
+use App\Http\Requests\RegisterRequest;
 use App\Http\Resources\UserResource;
 use App\Jobs\SendOtpEmail;
 use App\Jobs\SendOtpPhoneNotification;
 use App\Models\City;
 use App\Models\LoginAttempt;
 use App\Models\Merchant;
+use App\Models\MerchantPin;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\UserDevice;
+use App\Services\ActivityLogService;
 use App\Services\ApiTokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +26,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
@@ -102,12 +106,15 @@ class AuthController extends Controller
     {
         $credentials = $request->only(['email', 'phone', 'password']);
 
-        // Find user by email or phone
+        // Find user by email or phone (case-insensitive email — avoids false “wrong password” on casing / stray spaces)
         $user = null;
-        if ($request->email) {
-            $user = User::where('email', $request->email)->first();
-        } elseif ($request->phone) {
-            $user = User::where('phone', $request->phone)->first();
+        if ($request->filled('email')) {
+            $normalized = Str::lower(trim((string) $request->input('email')));
+            $user = User::query()
+                ->whereRaw('LOWER(email) = ?', [$normalized])
+                ->first();
+        } elseif ($request->filled('phone')) {
+            $user = User::where('phone', trim((string) $request->input('phone')))->first();
         }
 
         // Log login attempt
@@ -120,10 +127,15 @@ class AuthController extends Controller
             'success' => false,
         ]);
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
+        if (! $user || ! Hash::check($request->password, $user->password)) {
+            // 401 (not 422) so clients and tests can distinguish “invalid credentials” from field validation.
+            return response()->json([
+                'message' => 'The provided credentials are incorrect.',
+                'message_ar' => 'البريد أو كلمة المرور غير صحيحة.',
+                'errors' => [
+                    'email' => ['The provided credentials are incorrect.'],
+                ],
+            ], 401);
         }
 
         // Update login attempt as successful
@@ -137,12 +149,12 @@ class AuthController extends Controller
         }
 
         // Log login activity
-        $activityLogService = app(\App\Services\ActivityLogService::class);
+        $activityLogService = app(ActivityLogService::class);
         $activityLogService->logLogin($user->id);
 
         // Track device
         if ($request->has('device_id')) {
-            \App\Models\UserDevice::updateOrCreate(
+            UserDevice::updateOrCreate(
                 [
                     'user_id' => $user->id,
                     'device_id' => $request->device_id,
@@ -186,7 +198,7 @@ class AuthController extends Controller
 
         $user->currentAccessToken()->delete();
 
-        $activityLogService = app(\App\Services\ActivityLogService::class);
+        $activityLogService = app(ActivityLogService::class);
         $activityLogService->logLogout($user->id);
 
         return response()->json([
@@ -214,7 +226,7 @@ class AuthController extends Controller
             ? User::where('email', $request->email)->first()
             : User::where('phone', $request->phone)->first();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'User not found'], 404);
         }
 
@@ -263,6 +275,7 @@ class AuthController extends Controller
             'otp' => config('app.debug') ? $otp : null,
         ]);
     }
+
     /**
      * Verify OTP: توكن في الهيدر أو phone/email في الـ body + otp. 123456 مقبول دائماً للتجربة.
      */
@@ -287,13 +300,13 @@ class AuthController extends Controller
             }
         }
 
-        if (!$user && ($request->filled('phone') || $request->filled('email'))) {
+        if (! $user && ($request->filled('phone') || $request->filled('email'))) {
             $user = $request->phone
                 ? User::where('phone', $request->phone)->first()
                 : User::where('email', $request->email)->first();
         }
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'message' => 'User not found. Send valid Bearer token in Authorization header, or phone/email in body.',
             ], 404);
@@ -394,6 +407,7 @@ class AuthController extends Controller
             'token' => $pair['access_token'],
             'refresh_token' => $pair['refresh_token'],
             'expires_in' => $pair['expires_in'],
+            'access_expires_at' => $pair['access_expires_at'],
             'token_type' => 'Bearer',
             'refresh_expires_at' => $pair['refresh_expires_at'],
             'user' => new UserResource($user),
@@ -406,7 +420,7 @@ class AuthController extends Controller
      * New accounts: create user + merchant. Existing accounts: same email+phone, verify password,
      * upgrade role to merchant, create or update merchant row (re-application allowed).
      */
-    public function registerMerchant(\App\Http\Requests\MerchantRegisterRequest $request): JsonResponse
+    public function registerMerchant(MerchantRegisterRequest $request): JsonResponse
     {
         $merchantRole = Role::where('name', 'merchant')->first();
         if (! $merchantRole) {
@@ -484,7 +498,7 @@ class AuthController extends Controller
             'whatsapp_link' => $request->whatsapp_link,
             'category_id' => $request->category_id,
             'mall_id' => $request->mall_id ?? null,
-            'branches_number' => $request->branches_number,
+            'branches_number' => $request->input('branches_number', 0),
             'city' => $request->city ?? null,
             'country' => 'مصر',
             'accepted_terms' => true,
@@ -565,10 +579,10 @@ class AuthController extends Controller
             'pin' => 'required|string|size:4',
         ]);
 
-        $merchant = \App\Models\Merchant::findOrFail($request->merchant_id);
-        $merchantPin = \App\Models\MerchantPin::where('merchant_id', $merchant->id)->first();
+        $merchant = Merchant::findOrFail($request->merchant_id);
+        $merchantPin = MerchantPin::where('merchant_id', $merchant->id)->first();
 
-        if (!$merchantPin) {
+        if (! $merchantPin) {
             return response()->json([
                 'message' => 'PIN not set for this merchant',
             ], 400);
@@ -581,7 +595,7 @@ class AuthController extends Controller
             ], 423);
         }
 
-        if (!$merchantPin->verifyPin($request->pin)) {
+        if (! $merchantPin->verifyPin($request->pin)) {
             return response()->json([
                 'message' => 'Invalid PIN',
                 'failed_attempts' => $merchantPin->failed_attempts,
@@ -593,7 +607,7 @@ class AuthController extends Controller
         $pair = ApiTokenService::issuePair($user);
 
         // Log login
-        $activityLogService = app(\App\Services\ActivityLogService::class);
+        $activityLogService = app(ActivityLogService::class);
         $activityLogService->logLogin($user->id);
 
         $tokenPayload = ApiTokenService::mergeTokenResponse([], $pair);

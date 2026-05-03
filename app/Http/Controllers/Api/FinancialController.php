@@ -4,10 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Concerns\ResolvesMerchantPortal;
 use App\Http\Controllers\Controller;
-use App\Models\MerchantWallet;
-use App\Models\FinancialTransaction;
-use App\Models\Withdrawal;
 use App\Models\Expense;
+use App\Models\FinancialTransaction;
+use App\Models\Order;
+use App\Models\Withdrawal;
+use App\Services\AdminAlertService;
 use App\Services\FinancialService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -100,7 +101,7 @@ class FinancialController extends Controller
         $from = $request->get('from');
         $to = $request->get('to');
 
-        if (!$from || !$to) {
+        if (! $from || ! $to) {
             switch ($period) {
                 case 'day':
                     $from = now()->startOfDay()->toDateString();
@@ -208,6 +209,8 @@ class FinancialController extends Controller
         try {
             $withdrawal = $this->financialService->requestWithdrawal($merchant, $request->all());
 
+            app(AdminAlertService::class)->merchantWithdrawalRequested($withdrawal, $merchant);
+
             return response()->json([
                 'message' => 'Withdrawal request submitted successfully',
                 'data' => $withdrawal,
@@ -255,7 +258,7 @@ class FinancialController extends Controller
         $user = $request->user();
         $merchant = $this->resolveMerchant($request);
 
-        $query = \App\Models\Order::with(['user', 'items.offer'])
+        $query = Order::with(['user', 'items.offer'])
             ->where('merchant_id', $merchant->id)
             ->where('payment_status', 'paid')
             ->orderBy('created_at', 'desc');

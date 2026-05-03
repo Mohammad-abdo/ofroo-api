@@ -21,10 +21,11 @@ return new class extends Migration
             $table->text('description_ar')->nullable()->comment('وصف الإعلان بالعربية');
             $table->text('description_en')->nullable()->comment('Ad description in English');
             $table->string('image_url', 500)->comment('Ad image URL');
+            $table->string('video_url', 500)->nullable()->comment('Ad video URL');
             $table->json('images')->nullable()->comment('Additional images array JSON');
             $table->string('link_url', 500)->nullable()->comment('Click link URL');
             $table->string('position', 50)->comment('Position: home_top, home_middle, category_top, offer_detail, etc');
-            $table->enum('ad_type', ['banner', 'popup', 'sidebar', 'inline'])->default('banner')->comment('Ad type');
+            $table->enum('ad_type', ['banner', 'popup', 'sidebar', 'inline', 'video'])->default('banner')->comment('Ad type');
             $table->foreignId('merchant_id')->nullable()->constrained('merchants')->onDelete('cascade')->comment('Merchant ID (if sponsored)');
             $table->foreignId('category_id')->nullable()->constrained('categories')->onDelete('set null')->comment('Category ID (if category-specific)');
             $table->boolean('is_active')->default(true)->comment('Active status');
@@ -36,7 +37,7 @@ return new class extends Migration
             $table->decimal('cost_per_click', 10, 2)->nullable()->comment('Cost per click');
             $table->decimal('total_budget', 10, 2)->nullable()->comment('Total budget');
             $table->timestamps();
-            
+
             $table->index('position');
             $table->index('ad_type');
             $table->index('is_active');
@@ -54,4 +55,3 @@ return new class extends Migration
         Schema::dropIfExists('ads');
     }
 };
-

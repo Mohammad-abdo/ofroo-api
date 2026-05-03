@@ -9,14 +9,20 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('activity_logs', function (Blueprint $table) {
-            if (!Schema::hasColumn('activity_logs', 'actor_role')) {
+            if (! Schema::hasColumn('activity_logs', 'actor_role')) {
                 $table->string('actor_role', 50)->nullable()->after('user_id')->comment('Actor role');
             }
-            if (!Schema::hasColumn('activity_logs', 'target_type')) {
+            if (! Schema::hasColumn('activity_logs', 'target_type')) {
                 $table->string('target_type', 100)->nullable()->after('actor_role')->comment('Target model type');
             }
-            if (!Schema::hasColumn('activity_logs', 'target_id')) {
+            if (! Schema::hasColumn('activity_logs', 'target_id')) {
                 $table->unsignedBigInteger('target_id')->nullable()->after('target_type')->comment('Target model ID');
+            }
+        });
+
+        Schema::table('activity_logs', function (Blueprint $table) {
+            if (Schema::hasColumn('activity_logs', 'target_type') && Schema::hasColumn('activity_logs', 'target_id')) {
+                $table->index(['target_type', 'target_id'], 'activity_logs_target_type_target_id_index');
             }
         });
     }
@@ -24,9 +30,13 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('activity_logs', function (Blueprint $table) {
+            if (Schema::hasColumn('activity_logs', 'target_type')) {
+                $table->dropIndex('activity_logs_target_type_target_id_index');
+            }
+        });
+
+        Schema::table('activity_logs', function (Blueprint $table) {
             $table->dropColumn(['actor_role', 'target_type', 'target_id']);
         });
     }
 };
-
-

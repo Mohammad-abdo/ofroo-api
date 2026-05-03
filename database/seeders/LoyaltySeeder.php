@@ -6,9 +6,9 @@ use App\Models\LoyaltyPoint;
 use App\Models\LoyaltyTransaction;
 use App\Models\Order;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
+use Carbon\Carbon;
 use Faker\Factory as Faker;
+use Illuminate\Database\Seeder;
 
 class LoyaltySeeder extends Seeder
 {
@@ -46,16 +46,18 @@ class LoyaltySeeder extends Seeder
             for ($i = 0; $i < 30; $i++) {
                 $transactionType = $faker->randomElement(['earned', 'redeemed', 'expired', 'bonus']);
                 $points = $faker->numberBetween(10, 500);
-                
+
                 // Points should be negative for redeemed and expired
                 $pointsValue = in_array($transactionType, ['redeemed', 'expired']) ? -$points : $points;
-                
+
                 $order = $faker->optional(0.5) ? $orders->random() : null;
 
                 $expiresAt = null;
                 if (($transactionType === 'earned' || $transactionType === 'bonus') && $faker->boolean(70)) {
-                    $expiresAt = $faker->dateTimeBetween('now', '+1 year')->format('Y-m-d');
+                    $expiresAt = Carbon::now('UTC')->addMonths(random_int(1, 24))->startOfDay()->format('Y-m-d');
                 }
+
+                $createdAt = Carbon::now('UTC')->subDays(random_int(0, 540))->subMinutes(random_int(0, 1440));
 
                 LoyaltyTransaction::create([
                     'user_id' => $user->id,
@@ -64,7 +66,8 @@ class LoyaltySeeder extends Seeder
                     'points' => $pointsValue,
                     'description' => $faker->sentence(),
                     'expires_at' => $expiresAt,
-                    'created_at' => $faker->dateTimeBetween('-6 months', 'now'),
+                    'created_at' => $createdAt,
+                    'updated_at' => $createdAt,
                 ]);
             }
         }

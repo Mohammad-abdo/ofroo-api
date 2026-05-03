@@ -6,9 +6,9 @@ use App\Models\Offer;
 use App\Models\Order;
 use App\Models\Review;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
+use Carbon\Carbon;
 use Faker\Factory as Faker;
+use Illuminate\Database\Seeder;
 
 class ReviewSeeder extends Seeder
 {
@@ -49,8 +49,10 @@ class ReviewSeeder extends Seeder
                 'moderated_by_admin_id' => $isModerated ? $faker->numberBetween(1, 10) : null,
                 'moderation_action' => $moderationAction,
                 'moderation_reason' => $isModerated ? $faker->optional(0.7)->sentence() : null,
-                'moderation_at' => $isModerated ? $faker->dateTimeBetween('-3 months', 'now') : null,
-                'created_at' => $faker->dateTimeBetween('-6 months', 'now'),
+                // db:seed runs Model::unguarded(): TIMESTAMP columns reject some Faker datetimes (TZ / invalid wall times).
+                'moderation_at' => $isModerated
+                    ? Carbon::createFromInterface($faker->dateTimeBetween('-3 months', 'now'))->utc()
+                    : null,
             ]);
         }
     }

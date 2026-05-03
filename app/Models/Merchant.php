@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -33,6 +34,7 @@ class Merchant extends Model
         'is_blocked',
         'country',
         'city',
+        'city_id',
         'mall_id',
         'logo_url',
         'category_id',
@@ -74,6 +76,11 @@ class Merchant extends Model
         return $this->belongsTo(Mall::class);
     }
 
+    public function cityModel(): BelongsTo
+    {
+        return $this->belongsTo(City::class, 'city_id');
+    }
+
     /**
      * Mall on the merchant row, or the first branch that has a mall_id (for portal/profile UI).
      */
@@ -112,6 +119,19 @@ class Merchant extends Model
     public function branches(): HasMany
     {
         return $this->hasMany(Branch::class);
+    }
+
+    /**
+     * Merchants tied to a mall: row mall_id or any branch in that mall.
+     */
+    public function scopeAssociatedWithMall(Builder $query, int|string $mallId): Builder
+    {
+        return $query->where(function ($q) use ($mallId) {
+            $q->where('mall_id', $mallId);
+            if (Schema::hasColumn('branches', 'mall_id')) {
+                $q->orWhereHas('branches', fn ($b) => $b->where('mall_id', $mallId));
+            }
+        });
     }
 
     /**
@@ -177,7 +197,6 @@ class Merchant extends Model
     {
         return $this->hasMany(Expense::class);
     }
-
 
     /**
      * Get merchant staff

@@ -2,37 +2,37 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\ResolvesMerchantPortal;
 use App\Http\Controllers\Controller;
-use App\Support\ApiMediaUrl;
-use App\Http\Requests\OfferRequest;
+use App\Http\Requests\MerchantProfileRequest;
 use App\Http\Requests\OfferStoreRequest;
 use App\Http\Requests\OfferUpdateRequest;
-use App\Http\Requests\StoreLocationRequest;
-use App\Http\Requests\UpdateLocationRequest;
-use App\Http\Requests\MerchantProfileRequest;
+use App\Http\Resources\CouponEntitlementResource;
+use App\Http\Resources\CouponResource;
 use App\Http\Resources\OfferResource;
-use App\Services\OfferService;
-use App\Services\MerchantStatisticsService;
-use App\Services\MerchantProfileService;
 use App\Models\ActivationReport;
 use App\Models\Ad;
 use App\Models\AppCouponSetting;
-use App\Models\Coupon;
 use App\Models\Commission;
+use App\Models\Coupon;
 use App\Models\Merchant;
 use App\Models\Offer;
 use App\Models\Order;
+use App\Services\AdminAlertService;
 use App\Services\CommissionRateResolver;
 use App\Services\FeatureFlagService;
+use App\Services\MerchantProfileService;
+use App\Services\MerchantStatisticsService;
+use App\Services\OfferService;
 use App\Services\QrActivationService;
+use App\Support\ApiMediaUrl;
+use App\Support\ImageUploadRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;
-use App\Helpers\StorageHelper;
-use App\Support\ImageUploadRules;
-use App\Http\Controllers\Concerns\ResolvesMerchantPortal;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class MerchantController extends Controller
 {
@@ -97,6 +97,7 @@ class MerchantController extends Controller
         $offer = Offer::where('merchant_id', $merchant->id)
             ->with(['merchant', 'category', 'mall', 'branches', 'coupons'])
             ->findOrFail($id);
+
         return response()->json([
             'data' => new OfferResource($offer),
         ]);
@@ -108,7 +109,7 @@ class MerchantController extends Controller
     public function createOffer(OfferStoreRequest $request): JsonResponse
     {
         $merchant = $request->user()->merchant;
-        if (!$merchant) {
+        if (! $merchant) {
             return response()->json(['message' => 'Merchant not found'], 403);
         }
 
@@ -118,6 +119,8 @@ class MerchantController extends Controller
         $data['status'] = 'pending_approval';
 
         $offer = $this->offerService->createOffer($data);
+
+        app(AdminAlertService::class)->offerPendingReview($offer, $merchant);
 
         return response()->json([
             'message' => 'Offer submitted for admin review. It will go live after approval.',
@@ -156,14 +159,14 @@ class MerchantController extends Controller
         $data = $request->validated();
 
         // Ensure branches array from request (FormData: branches[]=1&branches[]=2)
-        if (!array_key_exists('branches', $data) || !is_array($data['branches'])) {
+        if (! array_key_exists('branches', $data) || ! is_array($data['branches'])) {
             $raw = $request->input('branches', $request->branches ?? []);
             $data['branches'] = is_array($raw) ? $raw : (is_string($raw) ? (json_decode($raw, true) ?: []) : []);
         }
         $data['branches'] = array_values(array_filter(array_map('intval', $data['branches'] ?? [])));
 
         // Ensure coupons array from request (FormData: coupons = JSON string)
-        if (!array_key_exists('coupons', $data) || !is_array($data['coupons'])) {
+        if (! array_key_exists('coupons', $data) || ! is_array($data['coupons'])) {
             $raw = $request->input('coupons', $request->coupons ?? []);
             $data['coupons'] = is_string($raw) ? (json_decode($raw, true) ?: []) : (is_array($raw) ? $raw : []);
         }
@@ -182,18 +185,18 @@ class MerchantController extends Controller
         // New uploads: offer_images[] then legacy images[]
         foreach (['offer_images', 'images'] as $key) {
             $files = $request->file($key);
-            if (!$files) {
+            if (! $files) {
                 continue;
             }
             $files = is_array($files) ? $files : [$files];
             foreach ($files as $image) {
                 if ($image && $image->isValid()) {
                     $path = $image->store('offers', 'public');
-                    $imageUrls[] = asset('storage/' . $path);
+                    $imageUrls[] = asset('storage/'.$path);
                 }
             }
         }
-        if (!empty($imageUrls)) {
+        if (! empty($imageUrls)) {
             $data['offer_images'] = array_values(array_unique($imageUrls));
         }
 
@@ -282,7 +285,7 @@ class MerchantController extends Controller
             'data' => [
                 'coupon' => $result['coupon'],
                 'entitlement' => isset($result['entitlement'])
-                    ? new \App\Http\Resources\CouponEntitlementResource($result['entitlement'])
+                    ? new CouponEntitlementResource($result['entitlement'])
                     : null,
                 'redeem_type' => $result['redeem_type'] ?? null,
             ],
@@ -303,10 +306,12 @@ class MerchantController extends Controller
 
         $userReq = $request->user();
         $language = $request->get('language', $userReq ? $userReq->language : null) ?? 'ar';
+
         return response()->json([
             'data' => $locations->map(function ($location) use ($language) {
                 $name = $language === 'ar' ? ($location->name_ar ?: $location->name_en ?: $location->name)
                     : ($location->name_en ?: $location->name_ar ?: $location->name);
+
                 return [
                     'id' => $location->id,
                     'name' => $name,
@@ -383,6 +388,7 @@ class MerchantController extends Controller
         $userReq = $request->user();
         $language = $request->get('language', $userReq ? $userReq->language : null) ?? 'ar';
         $name = $language === 'ar' ? ($location->name_ar ?: $location->name_en ?: $location->name) : ($location->name_en ?: $location->name_ar ?: $location->name);
+
         return response()->json([
             'data' => [
                 'id' => $location->id,
@@ -496,27 +502,27 @@ class MerchantController extends Controller
         $user = $request->user();
         $merchant = $this->resolveMerchant($request);
 
-        $isOfferBased = $request->filled('offer_id') && !$request->filled('category_id');
+        $isOfferBased = $request->filled('offer_id') && ! $request->filled('category_id');
 
         if ($isOfferBased) {
             $rules = [
-                'offer_id'       => 'required|exists:offers,id',
-                'title'          => 'nullable|string|max:255',
-                'title_ar'       => 'nullable|string|max:255',
-                'title_en'       => 'nullable|string|max:255',
-                'description'    => 'nullable|string',
+                'offer_id' => 'required|exists:offers,id',
+                'title' => 'nullable|string|max:255',
+                'title_ar' => 'nullable|string|max:255',
+                'title_en' => 'nullable|string|max:255',
+                'description' => 'nullable|string',
                 'description_ar' => 'nullable|string',
                 'description_en' => 'nullable|string',
-                'price'          => 'required|numeric|min:0',
-                'discount'       => 'nullable|numeric|min:0',
-                'discount_type'  => 'nullable|in:percent,amount,percentage,fixed',
-                'barcode'        => 'nullable|string|max:64',
-                'coupon_code'    => 'nullable|string|unique:coupons,coupon_code',
-                'usage_limit'    => 'nullable|integer|min:0',
-                'status'         => 'nullable|in:active,inactive,used,expired,pending',
-                'starts_at'      => 'nullable|date',
-                'expires_at'     => 'nullable|date',
-                'image'          => 'nullable',
+                'price' => 'required|numeric|min:0',
+                'discount' => 'nullable|numeric|min:0',
+                'discount_type' => 'nullable|in:percent,amount,percentage,fixed',
+                'barcode' => 'nullable|string|max:64',
+                'coupon_code' => 'nullable|string|unique:coupons,coupon_code',
+                'usage_limit' => 'nullable|integer|min:0',
+                'status' => 'nullable|in:active,inactive,used,expired,pending',
+                'starts_at' => 'nullable|date',
+                'expires_at' => 'nullable|date',
+                'image' => 'nullable',
             ];
             if ($request->hasFile('image')) {
                 $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
@@ -526,7 +532,7 @@ class MerchantController extends Controller
             $offer = Offer::where('id', $request->offer_id)
                 ->where('merchant_id', $merchant->id)
                 ->first();
-            if (!$offer) {
+            if (! $offer) {
                 return response()->json([
                     'message' => 'Validation error',
                     'errors' => ['offer_id' => ['Offer not found or does not belong to your account.']],
@@ -534,21 +540,21 @@ class MerchantController extends Controller
             }
         } else {
             $rules = [
-                'category_id'      => 'required|exists:categories,id',
-                'mall_id'          => 'nullable|exists:malls,id',
-                'coupon_code'      => 'nullable|string|unique:coupons,coupon_code',
-                'usage_limit'      => 'required|integer|min:1',
-                'discount_type'    => 'nullable|in:percent,amount,percentage,fixed',
+                'category_id' => 'required|exists:categories,id',
+                'mall_id' => 'nullable|exists:malls,id',
+                'coupon_code' => 'nullable|string|unique:coupons,coupon_code',
+                'usage_limit' => 'required|integer|min:1',
+                'discount_type' => 'nullable|in:percent,amount,percentage,fixed',
                 'discount_percent' => 'nullable|numeric|min:0|max:100',
-                'discount_amount'  => 'nullable|numeric|min:0',
-                'status'           => 'nullable|in:pending,reserved,paid,activated,used,cancelled,expired,active,inactive',
-                'expires_at'       => 'nullable|date',
+                'discount_amount' => 'nullable|numeric|min:0',
+                'status' => 'nullable|in:pending,reserved,paid,activated,used,cancelled,expired,active,inactive',
+                'expires_at' => 'nullable|date',
                 'terms_conditions' => 'nullable|string',
-                'is_refundable'    => 'nullable|boolean',
+                'is_refundable' => 'nullable|boolean',
             ];
         }
 
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
+        $validator = Validator::make($request->all(), $rules);
         if ($validator->fails()) {
             return response()->json([
                 'message' => 'Validation error',
@@ -559,68 +565,70 @@ class MerchantController extends Controller
         if ($isOfferBased) {
             $dt = $request->input('discount_type', 'percent');
             $mappedDt = in_array($dt, ['fixed', 'amount'], true) ? 'amount' : 'percent';
-            $barcodeVal = $request->input('barcode') ?: ('CPN-' . strtoupper(uniqid()));
+            $barcodeVal = $request->input('barcode') ?: ('CPN-'.strtoupper(uniqid()));
             $imagePath = null;
             if ($request->hasFile('image') && $request->file('image')->isValid()) {
-                $imagePath = asset('storage/' . $request->file('image')->store('coupons', 'public'));
+                $imagePath = asset('storage/'.$request->file('image')->store('coupons', 'public'));
             } elseif ($request->filled('image') && is_string($request->image)) {
                 $imagePath = $request->image;
             }
 
             try {
                 AppCouponSetting::assertOfferCanAddCoupon($offer);
-            } catch (\Illuminate\Validation\ValidationException $e) {
+            } catch (ValidationException $e) {
                 return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], 422);
             }
 
             $coupon = Coupon::create([
-                'offer_id'       => $request->offer_id,
+                'offer_id' => $request->offer_id,
                 'coupon_setting_id' => AppCouponSetting::current()->id,
-                'title'          => $request->input('title', $request->input('title_ar', '')),
-                'title_ar'       => $request->input('title_ar'),
-                'title_en'       => $request->input('title_en'),
-                'description'    => $request->input('description', $request->input('description_ar', '')),
+                'title' => $request->input('title', $request->input('title_ar', '')),
+                'title_ar' => $request->input('title_ar'),
+                'title_en' => $request->input('title_en'),
+                'description' => $request->input('description', $request->input('description_ar', '')),
                 'description_ar' => $request->input('description_ar'),
                 'description_en' => $request->input('description_en'),
-                'price'          => (float) $request->price,
-                'discount'       => (float) ($request->discount ?? 0),
-                'discount_type'  => $mappedDt,
-                'barcode'        => $barcodeVal,
-                'coupon_code'    => $request->input('coupon_code', $barcodeVal),
-                'usage_limit'    => (int) ($request->usage_limit ?? 0),
-                'times_used'     => 0,
-                'status'         => $request->input('status', 'active'),
-                'starts_at'      => $request->starts_at ? date('Y-m-d H:i:s', strtotime($request->starts_at)) : null,
-                'expires_at'     => $request->expires_at ? date('Y-m-d H:i:s', strtotime($request->expires_at)) : null,
-                'image'          => $imagePath,
+                'price' => (float) $request->price,
+                'discount' => (float) ($request->discount ?? 0),
+                'discount_type' => $mappedDt,
+                'barcode' => $barcodeVal,
+                'coupon_code' => $request->input('coupon_code', $barcodeVal),
+                'usage_limit' => (int) ($request->usage_limit ?? 0),
+                'times_used' => 0,
+                'status' => $request->input('status', 'active'),
+                'starts_at' => $request->starts_at ? date('Y-m-d H:i:s', strtotime($request->starts_at)) : null,
+                'expires_at' => $request->expires_at ? date('Y-m-d H:i:s', strtotime($request->expires_at)) : null,
+                'image' => $imagePath,
             ]);
 
             $offer->update(['coupon_id' => $coupon->id]);
         } else {
-            $couponCode = $request->coupon_code ?? 'CPN-' . strtoupper(uniqid());
+            $couponCode = $request->coupon_code ?? 'CPN-'.strtoupper(uniqid());
             $coupon = Coupon::create([
                 'coupon_setting_id' => AppCouponSetting::current()->id,
-                'category_id'      => $request->category_id,
-                'mall_id'          => $request->mall_id,
-                'coupon_code'      => $couponCode,
-                'barcode_value'    => $request->barcode_value ?? $couponCode,
-                'usage_limit'      => $request->usage_limit,
-                'times_used'       => 0,
-                'discount_type'    => $request->input('discount_type', 'percent'),
+                'category_id' => $request->category_id,
+                'mall_id' => $request->mall_id,
+                'coupon_code' => $couponCode,
+                'barcode_value' => $request->barcode_value ?? $couponCode,
+                'usage_limit' => $request->usage_limit,
+                'times_used' => 0,
+                'discount_type' => $request->input('discount_type', 'percent'),
                 'discount_percent' => $request->discount_percent,
-                'discount_amount'  => $request->discount_amount,
-                'status'           => $request->input('status', 'pending'),
-                'expires_at'       => $request->expires_at,
+                'discount_amount' => $request->discount_amount,
+                'status' => $request->input('status', 'pending'),
+                'expires_at' => $request->expires_at,
                 'terms_conditions' => $request->terms_conditions,
-                'is_refundable'    => $request->boolean('is_refundable', false),
-                'created_by'       => $merchant->id,
-                'created_by_type'  => 'merchant',
+                'is_refundable' => $request->boolean('is_refundable', false),
+                'created_by' => $merchant->id,
+                'created_by_type' => 'merchant',
             ]);
         }
 
+        app(AdminAlertService::class)->couponCreatedByMerchant($coupon->loadMissing('offer'), $merchant);
+
         return response()->json([
             'message' => 'Coupon created successfully',
-            'data' => new \App\Http\Resources\CouponResource($coupon->load(['offer'])),
+            'data' => new CouponResource($coupon->load(['offer'])),
         ], 201);
     }
 
@@ -647,8 +655,8 @@ class MerchantController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('barcode', 'like', "%{$search}%")
-                  ->orWhere('coupon_code', 'like', "%{$search}%");
+                    ->orWhere('barcode', 'like', "%{$search}%")
+                    ->orWhere('coupon_code', 'like', "%{$search}%");
             });
         }
 
@@ -656,7 +664,7 @@ class MerchantController extends Controller
             ->paginate($request->get('per_page', 15));
 
         return response()->json([
-            'data' => \App\Http\Resources\CouponResource::collection($coupons->getCollection()),
+            'data' => CouponResource::collection($coupons->getCollection()),
             'meta' => [
                 'current_page' => $coupons->currentPage(),
                 'last_page' => $coupons->lastPage(),
@@ -679,7 +687,7 @@ class MerchantController extends Controller
             ->findOrFail($id);
 
         return response()->json([
-            'data' => new \App\Http\Resources\CouponResource($coupon),
+            'data' => new CouponResource($coupon),
         ]);
     }
 
@@ -713,9 +721,9 @@ class MerchantController extends Controller
             ], 422);
         }
 
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+        $validator = Validator::make($request->all(), [
             'category_id' => 'sometimes|exists:categories,id',
-            'coupon_code' => 'sometimes|string|unique:coupons,coupon_code,' . $id,
+            'coupon_code' => 'sometimes|string|unique:coupons,coupon_code,'.$id,
             'usage_limit' => 'sometimes|integer|min:1',
             'discount_percent' => 'nullable|numeric|min:0|max:100',
             'discount_amount' => 'nullable|numeric|min:0',
@@ -750,7 +758,7 @@ class MerchantController extends Controller
 
         return response()->json([
             'message' => 'Coupon updated successfully',
-            'data' => new \App\Http\Resources\CouponResource($coupon->load(['category', 'offer'])),
+            'data' => new CouponResource($coupon->load(['category', 'offer'])),
         ]);
     }
 
@@ -772,7 +780,7 @@ class MerchantController extends Controller
             'expires_at' => 'nullable|date',
             'terms_conditions' => 'nullable|string',
             'is_refundable' => 'nullable|boolean',
-            'coupon_code' => 'nullable|string|unique:coupons,coupon_code,' . $id,
+            'coupon_code' => 'nullable|string|unique:coupons,coupon_code,'.$id,
             'barcode_value' => 'nullable|string',
             'offer_id' => 'nullable|exists:offers,id',
             'title' => 'nullable|string|max:255',
@@ -791,7 +799,7 @@ class MerchantController extends Controller
             $maxKb = (int) config('app.max_admin_image_upload_kb', 131072);
             $rules['image'] = ImageUploadRules::fileMax($maxKb);
         }
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             return response()->json([
@@ -900,7 +908,7 @@ class MerchantController extends Controller
 
         return response()->json([
             'message' => 'Coupon updated successfully',
-            'data' => new \App\Http\Resources\CouponResource($coupon->load('offer')),
+            'data' => new CouponResource($coupon->load('offer')),
         ]);
     }
 
@@ -970,8 +978,8 @@ class MerchantController extends Controller
         // Search by coupon code
         if ($request->has('search') && $request->search) {
             $query->where(function ($q) use ($request) {
-                $q->where('coupon_code', 'like', '%' . $request->search . '%')
-                  ->orWhere('barcode_value', 'like', '%' . $request->search . '%');
+                $q->where('coupon_code', 'like', '%'.$request->search.'%')
+                    ->orWhere('barcode_value', 'like', '%'.$request->search.'%');
             });
         }
 
@@ -979,7 +987,7 @@ class MerchantController extends Controller
             ->paginate($request->get('per_page', 15));
 
         return response()->json([
-            'data' => \App\Http\Resources\CouponResource::collection($coupons->getCollection()),
+            'data' => CouponResource::collection($coupons->getCollection()),
             'meta' => [
                 'current_page' => $coupons->currentPage(),
                 'last_page' => $coupons->lastPage(),
@@ -1060,13 +1068,13 @@ class MerchantController extends Controller
     public function getProfile(Request $request): JsonResponse
     {
         $user = $request->user();
-        
+
         \Log::info('Get merchant profile - Request', [
             'user_id' => $user->id,
             'user_email' => $user->email,
             'user_name' => $user->name,
         ]);
-        
+
         $merchant = Merchant::with(['user', 'mall', 'category', 'branches.mall'])
             ->findOrFail($this->resolveMerchant($request)->id);
 
@@ -1206,7 +1214,7 @@ class MerchantController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('type', 'like', "%{$search}%")
-                  ->orWhere('data', 'like', "%{$search}%");
+                    ->orWhere('data', 'like', "%{$search}%");
             });
         }
 
@@ -1216,8 +1224,8 @@ class MerchantController extends Controller
 
         // Format notifications to match frontend expectations
         $formattedNotifications = $notifications->getCollection()->map(function ($notification) {
-            $data = is_string($notification->data) 
-                ? json_decode($notification->data, true) 
+            $data = is_string($notification->data)
+                ? json_decode($notification->data, true)
                 : $notification->data;
 
             return [
@@ -1321,7 +1329,7 @@ class MerchantController extends Controller
                 ->where('merchant_id', $merchant->id);
 
             // Filter by status
-            if ($request->has('status') && $request->status !== 'all' && !empty($request->status)) {
+            if ($request->has('status') && $request->status !== 'all' && ! empty($request->status)) {
                 $status = $request->status;
                 // Map status values
                 $statusMap = [
@@ -1330,7 +1338,7 @@ class MerchantController extends Controller
                     'approved' => 'approved',
                     'rejected' => 'rejected',
                 ];
-                
+
                 if (isset($statusMap[$status])) {
                     $query->where('status', $statusMap[$status]);
                 } else {
@@ -1344,7 +1352,7 @@ class MerchantController extends Controller
             }
 
             // Search filter
-            if ($request->has('search') && !empty($request->search)) {
+            if ($request->has('search') && ! empty($request->search)) {
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
                     $q->where('title_ar', 'like', "%{$search}%")
@@ -1371,7 +1379,7 @@ class MerchantController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            
+
             return response()->json([
                 'message' => 'Failed to fetch ads',
                 'error' => $e->getMessage(),
@@ -1384,7 +1392,7 @@ class MerchantController extends Controller
      */
     public function getAd(string $id): JsonResponse
     {
-        $user = \Illuminate\Support\Facades\Auth::user();
+        $user = Auth::user();
         $merchant = $this->resolveMerchant($request);
 
         $ad = Ad::with(['category'])
@@ -1404,16 +1412,17 @@ class MerchantController extends Controller
         $user = $request->user();
         $merchant = $this->resolveMerchant($request);
 
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+        $validator = Validator::make($request->all(), [
             'title_ar' => 'required|string|max:255',
             'title_en' => 'nullable|string|max:255',
             'description_ar' => 'nullable|string',
             'description_en' => 'nullable|string',
-            'image_url' => 'required|string|max:500',
+            'image_url' => 'nullable|string|max:500',
+            'video_url' => 'nullable|string|max:500',
             'images' => 'nullable|array',
             'link_url' => 'nullable|string|max:500',
-            'position' => 'required|string|max:50',
-            'ad_type' => 'nullable|in:banner,popup,sidebar,inline',
+            'position' => 'nullable|string|max:50',
+            'ad_type' => 'required|in:banner,video',
             'category_id' => 'nullable|exists:categories,id',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after:start_date',
@@ -1428,17 +1437,32 @@ class MerchantController extends Controller
             ], 422);
         }
 
+        $adType = $request->input('ad_type');
+        if ($adType === 'banner' && ! $request->filled('image_url')) {
+            return response()->json([
+                'message' => 'Image URL is required for banner ads',
+            ], 422);
+        }
+        if ($adType === 'video' && ! $request->filled('video_url')) {
+            return response()->json([
+                'message' => 'Video URL is required for video ads',
+            ], 422);
+        }
+
+        $position = $request->input('position') ?: 'header';
+
         $ad = Ad::create([
             'merchant_id' => $merchant->id,
             'title_ar' => $request->title_ar,
             'title_en' => $request->title_en ?? $request->title_ar,
             'description_ar' => $request->description_ar,
             'description_en' => $request->description_en,
-            'image_url' => $request->image_url,
+            'image_url' => $adType === 'banner' ? $request->image_url : null,
+            'video_url' => $adType === 'video' ? $request->video_url : null,
             'images' => $request->images ?? [],
             'link_url' => $request->link_url,
-            'position' => $request->position,
-            'ad_type' => $request->ad_type ?? 'banner',
+            'position' => $position,
+            'ad_type' => $adType,
             'category_id' => $request->category_id,
             'is_active' => false, // Requires admin approval
             'order_index' => 0,
@@ -1467,20 +1491,21 @@ class MerchantController extends Controller
 
         // If ad is active, merchant can only update certain fields
         if ($ad->is_active) {
-            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            $validator = Validator::make($request->all(), [
                 'link_url' => 'nullable|string|max:500',
             ]);
         } else {
-            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            $validator = Validator::make($request->all(), [
                 'title_ar' => 'sometimes|required|string|max:255',
                 'title_en' => 'nullable|string|max:255',
                 'description_ar' => 'nullable|string',
                 'description_en' => 'nullable|string',
-                'image_url' => 'sometimes|required|string|max:500',
+                'image_url' => 'nullable|string|max:500',
+                'video_url' => 'nullable|string|max:500',
                 'images' => 'nullable|array',
                 'link_url' => 'nullable|string|max:500',
-                'position' => 'sometimes|required|string|max:50',
-                'ad_type' => 'nullable|in:banner,popup,sidebar,inline',
+                'position' => 'nullable|string|max:50',
+                'ad_type' => 'sometimes|in:banner,video',
                 'category_id' => 'nullable|exists:categories,id',
                 'start_date' => 'nullable|date',
                 'end_date' => 'nullable|date|after:start_date',
@@ -1496,12 +1521,38 @@ class MerchantController extends Controller
             ], 422);
         }
 
+        if ($request->filled('ad_type')) {
+            $t = $request->input('ad_type');
+            if ($t === 'banner' && ! $request->filled('image_url') && ! $ad->image_url) {
+                return response()->json([
+                    'message' => 'Image URL is required for banner ads',
+                ], 422);
+            }
+            if ($t === 'video' && ! $request->filled('video_url') && ! $ad->video_url) {
+                return response()->json([
+                    'message' => 'Video URL is required for video ads',
+                ], 422);
+            }
+        }
+
         // Update ad
-        $ad->update($request->only([
+        $payload = $request->only([
             'title_ar', 'title_en', 'description_ar', 'description_en',
-            'image_url', 'images', 'link_url', 'position', 'ad_type',
-            'category_id', 'start_date', 'end_date', 'cost_per_click', 'total_budget'
-        ]));
+            'image_url', 'video_url', 'images', 'link_url', 'position', 'ad_type',
+            'category_id', 'start_date', 'end_date', 'cost_per_click', 'total_budget',
+        ]);
+        if ($request->filled('ad_type')) {
+            if ($request->input('ad_type') === 'banner') {
+                $payload['video_url'] = null;
+            }
+            if ($request->input('ad_type') === 'video') {
+                $payload['image_url'] = null;
+            }
+        }
+        if (array_key_exists('position', $payload) && ($payload['position'] === null || $payload['position'] === '')) {
+            $payload['position'] = 'header';
+        }
+        $ad->update($payload);
 
         // If ad was active and merchant updated it, set is_active back to false for admin review
         if ($ad->is_active && $request->hasAny(['title_ar', 'image_url', 'position'])) {
@@ -1521,7 +1572,7 @@ class MerchantController extends Controller
      */
     public function deleteAd(string $id): JsonResponse
     {
-        $user = \Illuminate\Support\Facades\Auth::user();
+        $user = Auth::user();
         $merchant = $this->resolveMerchant($request);
 
         $ad = Ad::where('merchant_id', $merchant->id)
@@ -1539,7 +1590,7 @@ class MerchantController extends Controller
      */
     public function getAdStatus(string $id): JsonResponse
     {
-        $user = \Illuminate\Support\Facades\Auth::user();
+        $user = Auth::user();
         $merchant = $this->resolveMerchant($request);
 
         $ad = Ad::where('merchant_id', $merchant->id)
@@ -1619,10 +1670,10 @@ class MerchantController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('coupon_code', 'like', "%{$search}%")
-                  ->orWhere('barcode_value', 'like', "%{$search}%")
-                  ->orWhereHas('order.user', function ($q) use ($search) {
-                      $q->where('name', 'like', "%{$search}%");
-                  });
+                    ->orWhere('barcode_value', 'like', "%{$search}%")
+                    ->orWhereHas('order.user', function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -1707,11 +1758,11 @@ class MerchantController extends Controller
             switch ($request->period) {
                 case 'this_month':
                     $query->whereMonth('created_at', now()->month)
-                          ->whereYear('created_at', now()->year);
+                        ->whereYear('created_at', now()->year);
                     break;
                 case 'last_month':
                     $query->whereMonth('created_at', now()->subMonth()->month)
-                          ->whereYear('created_at', now()->subMonth()->year);
+                        ->whereYear('created_at', now()->subMonth()->year);
                     break;
             }
         }
@@ -1723,11 +1774,11 @@ class MerchantController extends Controller
                 $q->whereHas('user', function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%");
                 })
-                ->orWhereHas('items.offer', function ($q) use ($search) {
-                    $q->where('title', 'like', "%{$search}%")
-                      ->orWhere('title_ar', 'like', "%{$search}%")
-                      ->orWhere('title_en', 'like', "%{$search}%");
-                });
+                    ->orWhereHas('items.offer', function ($q) use ($search) {
+                        $q->where('title', 'like', "%{$search}%")
+                            ->orWhere('title_ar', 'like', "%{$search}%")
+                            ->orWhere('title_en', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -1760,8 +1811,8 @@ class MerchantController extends Controller
                     'name' => $user->name ?? 'N/A',
                 ],
                 'customer' => $user->name ?? 'N/A',
-                'branch' => $order->location_id ? 'Branch ' . $order->location_id : 'N/A',
-                'location' => $order->location_id ? 'Branch ' . $order->location_id : 'N/A',
+                'branch' => $order->location_id ? 'Branch '.$order->location_id : 'N/A',
+                'location' => $order->location_id ? 'Branch '.$order->location_id : 'N/A',
                 'payment_method' => $order->payment_method ?? 'N/A',
                 'payment' => $order->payment_method ?? 'N/A',
                 'amount' => (float) $order->total_amount,
@@ -1849,7 +1900,7 @@ class MerchantController extends Controller
             ->where('merchant_id', $this->resolveMerchant($request)->id)
             ->firstOrFail();
 
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+        $validator = Validator::make($request->all(), [
             'title' => 'nullable|string|max:255',
             'title_ar' => 'nullable|string|max:255',
             'title_en' => 'nullable|string|max:255',
@@ -1915,9 +1966,9 @@ class MerchantController extends Controller
 
             return response()->json([
                 'message' => 'Coupon created successfully',
-                'data' => new \App\Http\Resources\CouponResource($coupon->load('offer')),
+                'data' => new CouponResource($coupon->load('offer')),
             ], 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], 422);
         }
     }
@@ -1927,7 +1978,7 @@ class MerchantController extends Controller
      */
     public function getMyCoupons(Request $request): JsonResponse
     {
-        $query = \App\Models\Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
+        $query = Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
             ->with(['offer', 'category', 'mall']);
 
         // Apply filters
@@ -1940,7 +1991,7 @@ class MerchantController extends Controller
         }
 
         if ($request->has('search')) {
-            $query->where('coupon_code', 'like', '%' . $request->search . '%');
+            $query->where('coupon_code', 'like', '%'.$request->search.'%');
         }
 
         $perPage = $request->get('per_page', 15);
@@ -1962,7 +2013,7 @@ class MerchantController extends Controller
      */
     public function getCouponsByMall(Request $request, $mallId): JsonResponse
     {
-        $query = \App\Models\Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
+        $query = Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
             ->where('mall_id', $mallId)
             ->with(['offer', 'category', 'mall']);
 
@@ -1985,7 +2036,7 @@ class MerchantController extends Controller
      */
     public function getCouponsByCategory(Request $request, $categoryId): JsonResponse
     {
-        $query = \App\Models\Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
+        $query = Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
             ->where('category_id', $categoryId)
             ->with(['offer', 'category', 'mall']);
 
@@ -2008,15 +2059,15 @@ class MerchantController extends Controller
      */
     public function getAvailableCoupons(Request $request): JsonResponse
     {
-        $query = \App\Models\Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
+        $query = Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
             ->where('status', 'active')
             ->where(function ($q) {
                 $q->whereNull('expires_at')
-                  ->orWhere('expires_at', '>', now());
+                    ->orWhere('expires_at', '>', now());
             })
             ->where(function ($q) {
                 $q->whereNull('usage_limit')
-                  ->orWhereRaw('times_used < usage_limit');
+                    ->orWhereRaw('times_used < usage_limit');
             })
             ->with(['offer', 'category', 'mall']);
 
@@ -2049,7 +2100,7 @@ class MerchantController extends Controller
     public function deactivateCoupon(Request $request, $id): JsonResponse
     {
         $this->assertMerchantOwner($request);
-        $coupon = \App\Models\Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
+        $coupon = Coupon::where('merchant_id', $this->resolveMerchant($request)->id)
             ->findOrFail($id);
 
         $coupon->status = 'inactive';

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -45,6 +46,44 @@ class Ad extends Model
     }
 
     /**
+     * Expose absolute URLs when the DB stores relative storage paths (e.g. seeded ads, legacy rows).
+     */
+    protected function imageUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function (?string $value) {
+                if ($value === null || $value === '') {
+                    return $value;
+                }
+                if (preg_match('#^https?://#i', $value)) {
+                    return $value;
+                }
+
+                return asset('storage/'.ltrim($value, '/'));
+            }
+        );
+    }
+
+    /**
+     * Same as image_url for uploaded or relative video paths.
+     */
+    protected function videoUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function (?string $value) {
+                if ($value === null || $value === '') {
+                    return $value;
+                }
+                if (preg_match('#^https?://#i', $value)) {
+                    return $value;
+                }
+
+                return asset('storage/'.ltrim($value, '/'));
+            }
+        );
+    }
+
+    /**
      * Get the merchant that owns the ad.
      */
     public function merchant(): BelongsTo
@@ -68,6 +107,7 @@ class Ad extends Model
         if ($this->views_count == 0) {
             return 0.0;
         }
+
         return round(($this->clicks_count / $this->views_count) * 100, 2);
     }
 
@@ -76,13 +116,13 @@ class Ad extends Model
      */
     public function getEstimatedReachAttribute(): int
     {
-        $multiplier = match($this->position) {
+        $multiplier = match ($this->position) {
             'header' => 1.5,
             'sidebar' => 1.2,
             'inline' => 1.0,
             default => 1.0
         };
-        
+
         return intval($this->views_count * $multiplier);
     }
 
@@ -92,20 +132,19 @@ class Ad extends Model
     public function getStatusAttribute(): string
     {
         $now = now();
-        
-        if (!$this->is_active) {
+
+        if (! $this->is_active) {
             return 'inactive';
         }
-        
+
         if ($this->start_date && $now->lt($this->start_date)) {
             return 'scheduled';
         }
-        
+
         if ($this->end_date && $now->gt($this->end_date)) {
             return 'expired';
         }
-        
+
         return 'active';
     }
 }
-

@@ -3,24 +3,33 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\CouponEntitlementResource;
 use App\Http\Resources\CouponResource;
 use App\Http\Resources\OrderResource;
-use App\Http\Resources\CouponEntitlementResource;
+use App\Jobs\SendOrderConfirmationEmail;
 use App\Models\Cart;
+use App\Models\Commission;
 use App\Models\Coupon;
 use App\Models\CouponEntitlement;
 use App\Models\Offer;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Setting;
+use App\Services\ActivityLogService;
 use App\Services\CouponService;
-use App\Services\FinancialService;
+use App\Services\FeatureFlagService;
+use App\Services\InvoiceGenerationService;
+use App\Services\LoyaltyService;
+use App\Services\NotificationService;
+use App\Services\PaymentGatewayService;
 use App\Services\QrCodeService;
+use App\Services\WalletService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class OrderController extends Controller
 {
@@ -155,7 +164,7 @@ class OrderController extends Controller
         ]);
 
         // Check if electronic payments are enabled for card payments
-        if ($request->payment_method === 'card' && !\App\Services\FeatureFlagService::isElectronicPaymentsEnabled()) {
+        if ($request->payment_method === 'card' && ! FeatureFlagService::isElectronicPaymentsEnabled()) {
             return response()->json([
                 'message' => 'Electronic payments are currently disabled',
             ], 403);
@@ -253,7 +262,7 @@ class OrderController extends Controller
 
             $payment = null;
             if ($paymentMethod !== 'cash') {
-                $paymentGatewayService = app(\App\Services\PaymentGatewayService::class);
+                $paymentGatewayService = app(PaymentGatewayService::class);
                 $paymentData = $request->payment_data ?? [];
                 if (! isset($paymentData['amount'])) {
                     $paymentData['amount'] = $overallTotalAmount;
@@ -266,6 +275,7 @@ class OrderController extends Controller
 
                 if ($payment->status !== 'success') {
                     DB::rollBack();
+
                     return response()->json([
                         'message' => 'Payment failed',
                         'errors' => ['payment' => 'Payment could not be processed'],
@@ -274,6 +284,16 @@ class OrderController extends Controller
             }
 
             $orders = collect();
+
+            // Reservation lifecycle: orders are created in `pending` state and held
+            // for $reservationTtl minutes. The reservation is finalized at QR scan
+            // (see QrActivationService) or released by the orders:expire-reservations
+            // scheduled command. Inventory contract:
+            //   - checkout:   coupons_remaining -= qty, reserved_quantity += qty
+            //   - QR scan:    reserved_quantity -= qty, used_quantity += qty (coupons_remaining UNCHANGED)
+            //   - expiry:     coupons_remaining += qty, reserved_quantity -= qty
+            $reservationTtl = (int) Setting::getValue('reservation_ttl_minutes', 1440);
+            $reservationExpiresAt = now()->addMinutes($reservationTtl);
 
             foreach ($groupedByMerchant as $merchantId => $merchantItems) {
                 $merchantTotal = $merchantItems->sum(function ($item) {
@@ -287,11 +307,13 @@ class OrderController extends Controller
                     'payment_method' => $paymentMethod,
                     'payment_status' => $paymentMethod === 'cash' ? 'pending' : ($payment ? $payment->status : null) ?? 'pending',
                     'notes' => $request->notes,
+                    'status' => 'pending',
+                    'reservation_expires_at' => $reservationExpiresAt,
                 ]);
 
                 // Link payment when a single online payment is used.
                 if (isset($payment)) {
-                    app(\App\Services\PaymentGatewayService::class)->linkPaymentToOrder($payment, $order);
+                    app(PaymentGatewayService::class)->linkPaymentToOrder($payment, $order);
                 }
 
                 foreach ($merchantItems as $cartItem) {
@@ -303,15 +325,19 @@ class OrderController extends Controller
                         'total_price' => $cartItem->price_at_add * $cartItem->quantity,
                     ]);
 
-                    if ($cartItem->coupon_id) {
-                        \App\Models\Coupon::where('id', $cartItem->coupon_id)->increment('times_used', (int) $cartItem->quantity);
-                    } else {
-                        $cartItem->offer->consumeCoupons($cartItem->quantity);
-                    }
+                    // Reserve inventory only — do NOT consume.
+                    // The atomic reserve() helper handles both coupons_remaining and
+                    // reserved_quantity in a single SQL statement.
+                    // coupons.times_used is intentionally NOT incremented here anymore;
+                    // QR activation is the source of truth for redemption counters.
+                    $cartItem->offer->reserve((int) $cartItem->quantity);
                 }
 
                 $this->couponService->createCouponsForOrder($order);
                 if ($order->payment_status === 'paid') {
+                    // Card / online prepaid path keeps today's behavior: entitlements
+                    // become active immediately so the customer can use the wallet
+                    // straight away. Cash entitlements stay 'pending' until QR scan.
                     $this->couponService->updateCouponStatusAfterPayment($order);
                 }
 
@@ -323,16 +349,30 @@ class OrderController extends Controller
 
             DB::commit();
 
-            $walletService = app(\App\Services\WalletService::class);
-            $invoiceService = app(\App\Services\InvoiceGenerationService::class);
-            $loyaltyService = app(\App\Services\LoyaltyService::class);
-            $activityLogService = app(\App\Services\ActivityLogService::class);
-            $notificationService = app(\App\Services\NotificationService::class);
+            $walletService = app(WalletService::class);
+            $invoiceService = app(InvoiceGenerationService::class);
+            $loyaltyService = app(LoyaltyService::class);
+            $activityLogService = app(ActivityLogService::class);
+            $notificationService = app(NotificationService::class);
 
             foreach ($orders as $order) {
                 try {
                     if ($order->payment_status === 'paid') {
-                        $walletService->processOrderPayment($order);
+                        // Idempotency + row lock: mirror QrActivationService so parallel
+                        // HTTP retries cannot double-credit under race conditions.
+                        DB::transaction(function () use ($order, $walletService) {
+                            $o = Order::whereKey($order->id)->lockForUpdate()->first();
+                            if (! $o || $o->payment_status !== 'paid') {
+                                return;
+                            }
+                            if ($o->wallet_processed_at !== null
+                                || Commission::where('order_id', $o->id)->exists()) {
+                                return;
+                            }
+                            $walletService->processOrderPayment($o);
+                            $o->forceFill(['wallet_processed_at' => now()])->save();
+                        });
+                        $order->refresh();
                         $invoiceService->generateOrderInvoice($order, $user);
                         $loyaltyService->awardPointsForOrder($order);
 
@@ -346,7 +386,7 @@ class OrderController extends Controller
                             ];
                         })->values()->all();
 
-                        \App\Jobs\SendOrderConfirmationEmail::dispatch($order, $couponPayload, $user->language ?? 'ar');
+                        SendOrderConfirmationEmail::dispatch($order, $couponPayload, $user->language ?? 'ar');
                     }
                 } catch (\Throwable $paidSideEffectException) {
                     Log::warning('Order post-commit paid side-effects failed', [
@@ -391,7 +431,7 @@ class OrderController extends Controller
                                 'order_id' => (string) $order->id,
                                 'payment_status' => (string) $order->payment_status,
                                 'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-                                'route' => '/orders/' . $order->id,
+                                'route' => '/orders/'.$order->id,
                             ]
                         );
                     }
@@ -436,8 +476,9 @@ class OrderController extends Controller
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
-                'message' => 'Order creation failed: ' . $e->getMessage(),
+                'message' => 'Order creation failed: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -477,7 +518,7 @@ class OrderController extends Controller
         }
 
         $paymentMethod = $validated['payment_method'] ?? 'cash';
-        if ($paymentMethod === 'card' && ! \App\Services\FeatureFlagService::isElectronicPaymentsEnabled()) {
+        if ($paymentMethod === 'card' && ! FeatureFlagService::isElectronicPaymentsEnabled()) {
             return response()->json([
                 'message' => 'Electronic payments are currently disabled',
             ], 403);
@@ -521,6 +562,13 @@ class OrderController extends Controller
             return (float) ($c->price_after_discount ?? $c->price ?? 0);
         });
 
+        // Reservation lifecycle: see OrderController::checkout for the inventory contract.
+        // This endpoint never processed wallet/commission at checkout (the original
+        // financial gap), so nothing to remove — the QR scan flow handles wallet
+        // credit + commission idempotently when the order is first activated.
+        $reservationTtl = (int) Setting::getValue('reservation_ttl_minutes', 1440);
+        $reservationExpiresAt = now()->addMinutes($reservationTtl);
+
         DB::beginTransaction();
         try {
             $order = Order::create([
@@ -530,6 +578,8 @@ class OrderController extends Controller
                 'payment_method' => $paymentMethod,
                 'payment_status' => $paymentMethod === 'cash' ? 'pending' : 'paid',
                 'notes' => $validated['notes'] ?? null,
+                'status' => 'pending',
+                'reservation_expires_at' => $reservationExpiresAt,
             ]);
 
             foreach ($coupons as $coupon) {
@@ -542,6 +592,13 @@ class OrderController extends Controller
                     'unit_price' => $unitPrice,
                     'total_price' => $unitPrice,
                 ]);
+
+                // Reserve one unit per coupon line. Closes the inventory gap this
+                // endpoint had previously: cart-checkout reserved, but coupons-checkout
+                // did not, so coupons_remaining could be inconsistent across the two flows.
+                if ($coupon->offer) {
+                    $coupon->offer->reserve(1);
+                }
 
                 $entitlementStatus = $order->payment_status === 'paid' ? 'active' : 'pending';
                 CouponEntitlement::create([
@@ -562,26 +619,26 @@ class OrderController extends Controller
             DB::rollBack();
 
             return response()->json([
-                'message' => 'Order creation failed: ' . $e->getMessage(),
+                'message' => 'Order creation failed: '.$e->getMessage(),
             ], 500);
         }
 
         // Empty the user's cart after a successful checkout (same as cart-based checkout).
         // Best-effort — a failure here must not roll back the already-committed order.
         try {
-            $userCart = \App\Models\Cart::where('user_id', $user->id)->first();
+            $userCart = Cart::where('user_id', $user->id)->first();
             if ($userCart) {
                 $userCart->items()->delete();
             }
         } catch (\Throwable $cartEx) {
-            \Illuminate\Support\Facades\Log::warning('checkoutCoupons: failed to clear cart after order commit', [
+            Log::warning('checkoutCoupons: failed to clear cart after order commit', [
                 'order_id' => $order->id,
-                'error'    => $cartEx->getMessage(),
+                'error' => $cartEx->getMessage(),
             ]);
         }
 
         try {
-            $notificationService = app(\App\Services\NotificationService::class);
+            $notificationService = app(NotificationService::class);
             $notificationTitleAr = $order->payment_status === 'paid'
                 ? 'تم تأكيد طلبك'
                 : 'تم استلام طلبك';
@@ -613,7 +670,7 @@ class OrderController extends Controller
                         'order_id' => (string) $order->id,
                         'payment_status' => (string) $order->payment_status,
                         'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-                        'route' => '/orders/' . $order->id,
+                        'route' => '/orders/'.$order->id,
                     ]
                 );
             }
@@ -627,36 +684,29 @@ class OrderController extends Controller
 
         $order->load(['items.offer', 'couponEntitlements.coupon.offer', 'merchant']);
 
-        $scheme = (string) \App\Models\Setting::getValue('app_deep_link_scheme', 'ofroo');
+        $scheme = (string) Setting::getValue('app_deep_link_scheme', 'ofroo');
+        // تنبيه: هذا الـQR يحمل توكن أول entitlement فقط.
+        // عند تعدد الكوبونات في الطلب، استخدم coupons[].qr_code_base64
+        // لكل بند على حدة لضمان تفعيل جميع البنود.
         $orderToken = (string) (
             $order->couponEntitlements->first()->redeem_token ?? ''
         );
-        $deepLink = $scheme . '://orders/' . $order->id
-            . ($orderToken !== '' ? ('?token=' . $orderToken) : '');
-        $webLanding = (string) \App\Models\Setting::getValue(
+        $deepLink = $scheme.'://orders/'.$order->id
+            .($orderToken !== '' ? ('?token='.$orderToken) : '');
+        $webLanding = (string) Setting::getValue(
             'app_landing_url',
             rtrim((string) config('app.url', ''), '/')
         );
         $shareableLink = $webLanding !== ''
-            ? rtrim($webLanding, '/') . '/orders/' . $order->id
+            ? rtrim($webLanding, '/').'/orders/'.$order->id
             : $deepLink;
 
-        $qrPayload = json_encode([
-            'type' => 'order',
-            'order_id' => $order->id,
-            'user_id' => $user->id,
-            'token' => $orderToken,
-        ], JSON_UNESCAPED_UNICODE);
-        $qrPayload = $qrPayload !== false ? $qrPayload : ('ORDER:' . $order->id);
+        $qrPayload = $orderToken;
 
         $qrDataUri = $qrService->dataUri($qrPayload);
 
         $couponsPayload = $order->couponEntitlements->map(function (CouponEntitlement $e) use ($qrService) {
-            $perCouponPayload = json_encode([
-                'type' => 'coupon_entitlement',
-                'entitlement_id' => $e->id,
-                'token' => $e->redeem_token,
-            ], JSON_UNESCAPED_UNICODE) ?: ('ENT:' . $e->id);
+            $perCouponPayload = (string) ($e->redeem_token ?? '');
 
             return [
                 'entitlement_id' => $e->id,
@@ -686,7 +736,7 @@ class OrderController extends Controller
                     'method' => $order->payment_method,
                     'status' => $order->payment_status,
                     'amount' => (float) $order->total_amount,
-                    'currency' => (string) \App\Models\Setting::getValue('currency', 'SAR'),
+                    'currency' => (string) Setting::getValue('currency', 'SAR'),
                 ],
                 'qr_code' => [
                     'payload' => $qrPayload,
@@ -903,12 +953,26 @@ class OrderController extends Controller
         // Only allow cancellation if payment is pending
         if ($order->payment_status !== 'pending') {
             return response()->json([
-                'message' => 'Cannot cancel order. Payment status: ' . $order->payment_status,
+                'message' => 'Cannot cancel order. Payment status: '.$order->payment_status,
             ], 400);
         }
 
         DB::beginTransaction();
         try {
+            $order = Order::with('items.offer')
+                ->where('user_id', $user->id)
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($order->payment_status !== 'pending') {
+                DB::rollBack();
+
+                return response()->json([
+                    'message' => 'Cannot cancel order. Payment status: '.$order->payment_status,
+                ], 400);
+            }
+
             // Cancel legacy coupon rows and wallet entitlements
             $order->coupons()->update([
                 'status' => 'cancelled',
@@ -916,14 +980,20 @@ class OrderController extends Controller
 
             CouponEntitlement::where('order_id', $order->id)->update(['status' => 'cancelled']);
 
-            // Restore coupons_remaining in offers
-            foreach ($order->items as $item) {
-                $item->offer->increment('coupons_remaining', $item->quantity);
+            // Symmetric to reserve() at checkout — only while the reservation
+            // is still active. If status is already `expired`, the scheduled job
+            // already ran releaseReservation(); releasing again would corrupt counts.
+            if ((string) ($order->status ?? '') === 'pending') {
+                foreach ($order->items as $item) {
+                    if ($item->offer) {
+                        $item->offer->releaseReservation((int) $item->quantity);
+                    }
+                }
             }
 
-            // Update order payment status
             $order->update([
                 'payment_status' => 'failed',
+                'status' => 'cancelled',
             ]);
 
             DB::commit();
@@ -933,8 +1003,9 @@ class OrderController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
-                'message' => 'Order cancellation failed: ' . $e->getMessage(),
+                'message' => 'Order cancellation failed: '.$e->getMessage(),
             ], 500);
         }
     }

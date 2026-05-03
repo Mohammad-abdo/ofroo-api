@@ -1,5 +1,9 @@
 <?php
 
+use Spatie\Permission\DefaultTeamResolver;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+
 return [
 
     'models' => [
@@ -13,7 +17,7 @@ return [
          * `Spatie\Permission\Contracts\Permission` contract.
          */
 
-        'permission' => Spatie\Permission\Models\Permission::class,
+        'permission' => Permission::class,
 
         /*
          * When using the "HasRoles" trait from this package, we need to know which
@@ -24,7 +28,7 @@ return [
          * `Spatie\Permission\Contracts\Role` contract.
          */
 
-        'role' => Spatie\Permission\Models\Role::class,
+        'role' => Role::class,
 
     ],
 
@@ -68,6 +72,11 @@ return [
          * basic default value but you may easily change it to any table you like.
          */
 
+        /*
+         * Spatie pivot tables (model_has_*, role_has_permissions) may be absent if migration
+         * `remove_unused_spatie_permission_pivot_tables` ran — this app uses `role_permissions`
+         * via App\Models\Role::permissions instead of HasRoles trait pivots.
+         */
         'role_has_permissions' => 'role_has_permissions',
     ],
 
@@ -136,7 +145,7 @@ return [
     /*
      * The class to use to resolve the permissions team id
      */
-    'team_resolver' => \Spatie\Permission\DefaultTeamResolver::class,
+    'team_resolver' => DefaultTeamResolver::class,
 
     /*
      * Passport Client Credentials Grant
@@ -183,7 +192,7 @@ return [
          * When permissions or roles are updated the cache is flushed automatically.
          */
 
-        'expiration_time' => \DateInterval::createFromDateString('24 hours'),
+        'expiration_time' => DateInterval::createFromDateString('24 hours'),
 
         /*
          * The cache key used to store all permissions.

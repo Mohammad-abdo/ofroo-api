@@ -2,9 +2,8 @@
 
 namespace Tests\Feature\Api;
 
-use App\Models\User;
 use App\Models\Role;
-use App\Models\Merchant;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -19,6 +18,8 @@ class AuthTest extends TestCase
         $response = $this->postJson('/api/auth/register', [
             'name' => 'Test User',
             'email' => 'test@example.com',
+            'phone' => '+201010101010',
+            'city' => 'القاهرة',
             'password' => 'password123',
             'password_confirmation' => 'password123',
         ]);
@@ -26,10 +27,8 @@ class AuthTest extends TestCase
         $response->assertStatus(201)
             ->assertJsonStructure([
                 'message',
-                'data' => [
-                    'user' => ['id', 'name', 'email'],
-                    'token',
-                ],
+                'user' => ['id', 'name', 'email'],
+                'token',
             ]);
 
         $this->assertDatabaseHas('users', [
@@ -77,10 +76,8 @@ class AuthTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonStructure([
                 'message',
-                'data' => [
-                    'user',
-                    'token',
-                ],
+                'user',
+                'token',
             ]);
     }
 
@@ -165,6 +162,6 @@ class AuthTest extends TestCase
             'password' => 'password123',
         ]);
 
-        $response->assertStatus(422);
+        $response->assertStatus(401);
     }
 }

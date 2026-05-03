@@ -2,64 +2,92 @@
 
 namespace Database\Seeders;
 
+use App\Models\Setting;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema;
 
 class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
+    /** @var list<class-string<Seeder>> */
+    protected array $foundationSeeders = [
+        GovernorateSeeder::class,
+        PermissionSeeder::class,
+        RoleSeeder::class,
+        UserSeeder::class,
+        AdminStaffSeeder::class,
+        CategorySeeder::class,
+        MallSeeder::class,
+        MerchantSeeder::class,
+        SettingsSeeder::class,
+    ];
+
+    /** @var list<class-string<Seeder>> */
+    protected array $demoSeeders = [
+        OfferSeeder::class,
+        CouponSeeder::class,
+        OrderSeeder::class,
+        CartSeeder::class,
+        FinancialSeeder::class,
+        WalletSeeder::class,
+        ReviewSeeder::class,
+        LoyaltySeeder::class,
+        SupportSeeder::class,
+        MerchantStaffSeeder::class,
+        AdSeeder::class,
+        WarningSeeder::class,
+        NotificationSeeder::class,
+        ActivityLogSeeder::class,
+    ];
+
     public function run(): void
     {
-        $this->call([
-            // 1. Foundation: locations, permissions, roles, users
-            GovernorateSeeder::class,
-            PermissionSeeder::class,
-            RoleSeeder::class,
-            UserSeeder::class,
-            AdminStaffSeeder::class,
+        $this->call($this->foundationSeeders);
 
-            // 2. Business entities
-            CategorySeeder::class,
-            MallSeeder::class,
-            MerchantSeeder::class,
+        if (! config('seeding.run_demo_seeders')) {
+            $this->command?->info('SEED_DEMO=false: skipped demo seeders (offers, orders, reviews, …).');
 
-            // 3. Products & coupons
-            OfferSeeder::class,
-            CouponSeeder::class,
+            return;
+        }
 
-            // 4. Orders & payments
-            OrderSeeder::class,
-            CartSeeder::class,
+        if ($this->shouldSkipDemoBecauseAlreadyCompleted()) {
+            $this->command?->warn(
+                'Demo data already seeded — skipped duplicate-prone seeders. '.
+                'Use migrate:fresh --seed for a clean DB, or set SEED_FORCE=true (duplicates rows), or SEED_SKIP_DEMO_IF_DONE=false.'
+            );
 
-            // 5. Financial (wallets, commissions, withdrawals, expenses)
-            FinancialSeeder::class,
-            WalletSeeder::class,
+            return;
+        }
 
-            // 6. Reviews & loyalty
-            ReviewSeeder::class,
-            LoyaltySeeder::class,
+        $this->call($this->demoSeeders);
+        $this->markDemoSeedCompleted();
+    }
 
-            // 7. Support tickets
-            SupportSeeder::class,
+    protected function shouldSkipDemoBecauseAlreadyCompleted(): bool
+    {
+        if (! config('seeding.skip_demo_if_already_completed')) {
+            return false;
+        }
 
-            // 8. Settings & payment gateways
-            SettingsSeeder::class,
+        if (config('seeding.force_demo_repeat')) {
+            return false;
+        }
 
-            // 9. Merchant staff (employees, coupon activation staff)
-            MerchantStaffSeeder::class,
+        if (! Schema::hasTable('settings')) {
+            return false;
+        }
 
-            // 10. Ads & banners
-            AdSeeder::class,
+        return (bool) Setting::getValue('seed_demo_completed', false);
+    }
 
-            // 11. Warnings
-            WarningSeeder::class,
+    protected function markDemoSeedCompleted(): void
+    {
+        if (! Schema::hasTable('settings')) {
+            return;
+        }
 
-            // 12. Admin notifications
-            NotificationSeeder::class,
-
-            // 13. Activity logs (last — references all other entities)
-            ActivityLogSeeder::class,
-        ]);
+        Setting::setValue('seed_demo_completed', true, 'boolean');
     }
 }
