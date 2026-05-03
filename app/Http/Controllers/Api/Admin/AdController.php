@@ -411,11 +411,21 @@ class AdController extends Controller
             });
         }
 
+        $perPage = max(1, min(200, (int) $request->get('per_page', 100)));
         $banners = $query->orderBy('order_index')
             ->orderBy('created_at', 'desc')
-            ->paginate($request->get('per_page', 15));
+            ->paginate($perPage);
 
-        return response()->json($banners);
+        // Same shape as other admin list endpoints — avoids clients mistaking paginator `links` for rows.
+        return response()->json([
+            'data' => $banners->items(),
+            'meta' => [
+                'current_page' => $banners->currentPage(),
+                'last_page' => $banners->lastPage(),
+                'per_page' => $banners->perPage(),
+                'total' => $banners->total(),
+            ],
+        ]);
     }
 
     /**
@@ -453,6 +463,9 @@ class AdController extends Controller
             $imageUrl = asset('storage/'.$path);
         }
 
+        $startDate = $request->filled('start_date') ? $request->date('start_date')->startOfDay() : null;
+        $endDate = $request->filled('end_date') ? $request->date('end_date')->endOfDay() : null;
+
         $banner = Ad::create([
             'title' => $request->title_en,
             'title_ar' => $request->title_ar,
@@ -465,8 +478,8 @@ class AdController extends Controller
             'ad_type' => 'banner',
             'is_active' => $request->boolean('is_active', true),
             'order_index' => $request->order_index ?? 0,
-            'start_date' => $request->start_date,
-            'end_date' => $request->end_date,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
         ]);
 
         return response()->json([
@@ -515,6 +528,13 @@ class AdController extends Controller
 
         if (isset($data['title_en'])) {
             $data['title'] = $data['title_en'];
+        }
+
+        if (array_key_exists('start_date', $data)) {
+            $data['start_date'] = $request->filled('start_date') ? $request->date('start_date')->startOfDay() : null;
+        }
+        if (array_key_exists('end_date', $data)) {
+            $data['end_date'] = $request->filled('end_date') ? $request->date('end_date')->endOfDay() : null;
         }
 
         $banner->update($data);
