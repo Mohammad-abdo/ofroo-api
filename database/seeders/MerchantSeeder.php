@@ -40,7 +40,9 @@ class MerchantSeeder extends Seeder
             $this->command->warn('No categories found. Run CategorySeeder before MerchantSeeder so merchants get category_id.');
         }
 
-        $mallsByNameEn = Mall::query()->pluck('id', 'name_en');
+        $mallsByNameEn = Mall::query()
+            ->get(['id', 'name_en'])
+            ->keyBy(fn (Mall $m) => strtolower(trim((string) $m->name_en)));
         $hasMerchantMallId = Schema::hasColumn('merchants', 'mall_id');
         $hasBranchMallId = Schema::hasColumn('branches', 'mall_id');
 
@@ -149,11 +151,12 @@ class MerchantSeeder extends Seeder
                 ]
             );
 
-            $mallNameEn = $merchantData['mall_name_en'] ?? null;
-            $mallId = ($hasMerchantMallId && $mallNameEn && $mallsByNameEn->has($mallNameEn))
-                ? (int) $mallsByNameEn->get($mallNameEn)
+            $mallNameEn = isset($merchantData['mall_name_en']) ? trim((string) $merchantData['mall_name_en']) : '';
+            $mallKey = $mallNameEn !== '' ? strtolower($mallNameEn) : null;
+            $mallId = ($hasMerchantMallId && $mallKey && $mallsByNameEn->has($mallKey))
+                ? (int) $mallsByNameEn->get($mallKey)->id
                 : null;
-            if ($mallNameEn && $hasMerchantMallId && ! $mallId) {
+            if ($mallNameEn !== '' && $hasMerchantMallId && ! $mallId) {
                 $this->command->warn("Mall not found for merchant seed (name_en={$mallNameEn}). Run MallSeeder first.");
             }
 

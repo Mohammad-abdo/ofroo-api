@@ -29,13 +29,16 @@ class CategoryController extends Controller
         }
         $categories = $query->orderBy('order_index')->get();
 
-        $data = $categories->map(function ($category) use ($language) {
+        $data = $categories->map(function ($category) use ($language, $isMobile) {
+            $active = (bool) ($category->is_active ?? false);
+
             return [
                 'id' => $category->id,
                 'name' => $language === 'ar'
                     ? ($category->name_ar ?? $category->name_en)
                     : ($category->name_en ?? $category->name_ar),
-                'is_active' => $category->is_active,
+                // Mobile (Flutter): many models expect String, not bool, for this field.
+                'is_active' => $isMobile ? ($active ? '1' : '0') : $active,
             ];
         });
 
@@ -96,9 +99,10 @@ class CategoryController extends Controller
             ->orderBy('order_index')
             ->get();
 
-        return $categories->map(function ($category) use ($language, $request) {
+        return $categories->map(function ($category) use ($language, $request, $isMobile) {
             $offersForCategory = $category->offers->where('category_id', $category->id)->values();
             $children = $offersForCategory->map(fn ($offer) => (new OfferResource($offer))->toArray($request))->all();
+            $active = (bool) ($category->is_active ?? false);
 
             return [
                 'id' => $category->id,
@@ -108,7 +112,7 @@ class CategoryController extends Controller
                 'order_index' => $category->order_index,
                 'image' => $category->image_url,
                 'children' => $children,
-                'is_active' => $category->is_active,
+                'is_active' => $isMobile ? ($active ? '1' : '0') : $active,
             ];
         })->values()->all();
     }
@@ -148,6 +152,8 @@ class CategoryController extends Controller
             ? ($category->name_ar ?? $category->name_en)
             : ($category->name_en ?? $category->name_ar);
 
+        $active = (bool) ($category->is_active ?? false);
+
         return response()->json([
             'data' => [
                 'id' => $category->id,
@@ -157,7 +163,7 @@ class CategoryController extends Controller
                 'order_index' => $category->order_index,
                 'image' => $category->image_url,
                 'children' => $children,
-                'is_active' => $category->is_active,
+                'is_active' => $isMobile ? ($active ? '1' : '0') : $active,
             ],
         ]);
     }

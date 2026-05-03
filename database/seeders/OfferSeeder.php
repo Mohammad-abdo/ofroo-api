@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Branch;
 use App\Models\Category;
+use App\Models\Mall;
 use App\Models\Merchant;
 use App\Models\Offer;
 use Carbon\Carbon;
@@ -176,6 +177,22 @@ class OfferSeeder extends Seeder
                     unset($offerAttrs['start_date'], $offerAttrs['end_date']);
                 }
 
+                if (Schema::hasColumn('offers', 'mall_id')) {
+                    $resolvedMallId = $merchant->mall_id ?: ($branch?->mall_id ?? null);
+                    if (! $resolvedMallId && Schema::hasColumn('merchants', 'category_id')) {
+                        $mallCategory = $categories->firstWhere('name_ar', 'مولات');
+                        if ($mallCategory && (int) $merchant->category_id === (int) $mallCategory->id) {
+                            $resolvedMallId = Mall::query()
+                                ->where('is_active', true)
+                                ->inRandomOrder()
+                                ->value('id');
+                        }
+                    }
+                    if ($resolvedMallId) {
+                        $offerAttrs['mall_id'] = (int) $resolvedMallId;
+                    }
+                }
+
                 // forceCreate: legacy DB may use title_ar/description_ar columns not in $fillable
                 $offer = Offer::forceCreate($offerAttrs);
 
@@ -206,6 +223,23 @@ class OfferSeeder extends Seeder
 
                 $created++;
             }
+        }
+
+        if (Schema::hasColumn('offers', 'mall_id')) {
+            Offer::query()
+                ->whereNull('mall_id')
+                ->with(['merchant:id,mall_id', 'branches:id,mall_id'])
+                ->chunkById(200, function ($offers): void {
+                    foreach ($offers as $offer) {
+                        $mid = $offer->merchant?->mall_id;
+                        if (! $mid && $offer->relationLoaded('branches')) {
+                            $mid = $offer->branches->first()?->mall_id;
+                        }
+                        if ($mid) {
+                            $offer->forceFill(['mall_id' => (int) $mid])->saveQuietly();
+                        }
+                    }
+                });
         }
     }
 }
