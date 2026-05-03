@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Mall;
+use App\Models\Merchant;
 use App\Support\ImageUploadRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class MallController extends Controller
@@ -37,7 +39,25 @@ class MallController extends Controller
             });
         }
 
-        $malls = $query->orderBy('order_index')
+        $hasBranchMallId = Schema::hasColumn('branches', 'mall_id');
+
+        $malls = $query
+            ->withCount(['offers'])
+            ->addSelect([
+                'merchants_count' => Merchant::query()
+                    ->selectRaw('count(*)')
+                    ->where(function ($q) use ($hasBranchMallId) {
+                        $q->whereColumn('merchants.mall_id', 'malls.id');
+                        if ($hasBranchMallId) {
+                            $q->orWhereExists(function ($sub) {
+                                $sub->from('branches')
+                                    ->whereColumn('branches.merchant_id', 'merchants.id')
+                                    ->whereColumn('branches.mall_id', 'malls.id');
+                            });
+                        }
+                    }),
+            ])
+            ->orderBy('order_index')
             ->orderBy('created_at', 'desc')
             ->paginate($request->get('per_page', 15));
 
@@ -358,7 +378,8 @@ class MallController extends Controller
 
         return asset('storage/'.$imagePath);
     }
-    private  function  getmobileMAllDetails(Mall $mall): array
+
+    private function getmobileMAllDetails(Mall $mall): array
     {
         return [
             'id' => $mall->id,
@@ -369,12 +390,12 @@ class MallController extends Controller
                 ? ($mall->name_ar ?? $mall->name_en ?? $mall->name ?? '')
                 : ($mall->name_en ?? $mall->name_ar ?? $mall->name ?? '');
 
-            return [
-                'id' => $mall->id,
-                'name' => $name,
-                'image_url' => ApiMediaUrl::publicAbsolute(is_string($mall->image_url) ? $mall->image_url : ''),
-                'latitude' => $mall->latitude !== null ? (float) $mall->latitude : null,
-                'longitude' => $mall->longitude !== null ? (float) $mall->longitude : null,
-            ];
+        return [
+            'id' => $mall->id,
+            'name' => $name,
+            'image_url' => ApiMediaUrl::publicAbsolute(is_string($mall->image_url) ? $mall->image_url : ''),
+            'latitude' => $mall->latitude !== null ? (float) $mall->latitude : null,
+            'longitude' => $mall->longitude !== null ? (float) $mall->longitude : null,
+        ];
     }
 }
