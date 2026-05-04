@@ -46,6 +46,41 @@ class CategoryController extends Controller
     }
 
     /**
+     * Minimal `{ id, name }` list for pickers (e.g. mall details filters: merchant_category_id, offer_category_id).
+     * Same category roots apply to merchants and offers in this project.
+     *
+     * GET /api/mobile/categories/filter-options?language=ar|en
+     * GET /api/mobile/merchant-categories/options
+     * GET /api/mobile/offer-categories/options
+     */
+    public function filterOptions(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $language = $request->get('language', $user ? $user->language : null) ?? 'ar';
+        $isMobile = $request->is('api/mobile/*');
+
+        $query = Category::query()
+            ->whereNull('parent_id')
+            ->select(['id', 'name_ar', 'name_en', 'order_index'])
+            ->orderBy('order_index');
+
+        if ($isMobile) {
+            $query->where('is_active', true);
+        }
+
+        $data = $query->get()->map(function (Category $category) use ($language) {
+            return [
+                'id' => (int) $category->id,
+                'name' => $language === 'ar'
+                    ? (string) ($category->name_ar ?? $category->name_en ?? '')
+                    : (string) ($category->name_en ?? $category->name_ar ?? ''),
+            ];
+        })->values()->all();
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
      * List all categories with active offers in children (mobile API).
      */
     public function index(Request $request): JsonResponse

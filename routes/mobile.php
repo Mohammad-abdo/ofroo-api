@@ -50,6 +50,9 @@ Route::get('/', function () {
             'governorates' => '/api/mobile/governorates',
             'cities' => '/api/mobile/cities',
             'categories' => '/api/mobile/categories',
+            'categories_filter_options' => '/api/mobile/categories/filter-options',
+            'merchant_category_options' => '/api/mobile/merchant-categories/options',
+            'offer_category_options' => '/api/mobile/offer-categories/options',
             'category-name' => '/api/mobile/category-name',
             'offers' => '/api/mobile/offers',
             'merchants' => '/api/mobile/merchants',
@@ -94,8 +97,11 @@ Route::get('/cities', [LocationController::class, 'cities']);
 // 3. التصنيفات (Categories) - Public Routes
 // ================================
 Route::get('/category-name', [CategoryController::class, 'categoryName']);
+Route::get('/categories/filter-options', [CategoryController::class, 'filterOptions']);
+Route::get('/merchant-categories/options', [CategoryController::class, 'filterOptions']);
+Route::get('/offer-categories/options', [CategoryController::class, 'filterOptions']);
 Route::get('/categories', [CategoryController::class, 'index']);
-Route::get('/categories/{id}', [CategoryController::class, 'show']);
+Route::get('/categories/{id}', [CategoryController::class, 'show'])->whereNumber('id');
 
 // ================================
 // 3.1 كيان المولات (جدول malls) منفصل عن فئات العروض/التجار — التجار بالمول عبر mall_id/الفرع؛ category_id = نشاط التاجر فقط.

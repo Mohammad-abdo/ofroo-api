@@ -14,6 +14,7 @@ use App\Models\CouponEntitlement;
 use App\Models\Offer;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Review;
 use App\Models\Setting;
 use App\Services\ActivityLogService;
 use App\Services\CouponService;
@@ -29,6 +30,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class OrderController extends Controller
@@ -905,13 +907,15 @@ class OrderController extends Controller
     }
 
     /**
-     * Create review
+     * POST /api/mobile/reviews — تقييم بعد الطلب (تاجر فقط أو تاجر + عرض).
+     * Body: order_id, merchant_id, rating, notes?, offer_id? (اختياري — إن وُجد يُربط بالعرض ويظهر على GET …/offers/{id})
      */
     public function createReview(Request $request): JsonResponse
     {
         $request->validate([
             'order_id' => 'required|exists:orders,id',
             'merchant_id' => 'required|exists:merchants,id',
+            'offer_id' => 'nullable|integer|exists:offers,id',
             'rating' => 'required|integer|min:1|max:5',
             'notes' => 'nullable|string',
             'notes_ar' => 'nullable|string',
@@ -920,25 +924,82 @@ class OrderController extends Controller
 
         $user = $request->user();
 
-        // Verify order belongs to user
-        $order = Order::where('user_id', $user->id)
-            ->where('id', $request->order_id)
+        $order = Order::query()
+            ->where('user_id', $user->id)
+            ->whereKey($request->order_id)
+            ->with('items')
             ->firstOrFail();
+
+        $offerId = $request->filled('offer_id') ? (int) $request->input('offer_id') : null;
+
+        if ($offerId !== null) {
+            if (! Schema::hasColumn('reviews', 'offer_id')) {
+                return response()->json([
+                    'message' => 'Offer reviews are not available until database migration is applied.',
+                    'message_ar' => 'تقييم العروض غير مفعّل بعد — شغّل migrations.',
+                ], 503);
+            }
+
+            $offer = Offer::query()->whereKey($offerId)->firstOrFail();
+
+            if ((int) $offer->merchant_id !== (int) $request->merchant_id) {
+                return response()->json([
+                    'message' => 'merchant_id does not match the offer owner.',
+                    'message_ar' => 'معرّف التاجر لا يطابق مالك العرض.',
+                ], 422);
+            }
+
+            $hasOfferLine = $order->items->contains(fn (OrderItem $item) => (int) $item->offer_id === $offerId);
+            if (! $hasOfferLine) {
+                return response()->json([
+                    'message' => 'This order does not include the specified offer.',
+                    'message_ar' => 'الطلب لا يحتوي على هذا العرض.',
+                ], 422);
+            }
+
+            $duplicate = Review::query()
+                ->where('user_id', $user->id)
+                ->where('order_id', $order->id)
+                ->where('offer_id', $offerId)
+                ->exists();
+            if ($duplicate) {
+                return response()->json([
+                    'message' => 'You have already reviewed this offer for this order.',
+                    'message_ar' => 'لقد قيّمت هذا العرض لهذا الطلب مسبقاً.',
+                ], 409);
+            }
+        }
+
+        $visibleToPublic = $offerId !== null;
 
         $review = $user->reviews()->create([
             'merchant_id' => $request->merchant_id,
             'order_id' => $order->id,
+            'offer_id' => $offerId,
             'rating' => $request->rating,
             'notes' => $request->notes,
             'notes_ar' => $request->notes_ar,
             'notes_en' => $request->notes_en,
-            'visible_to_public' => false, // Per SRS, reviews are not public
+            'visible_to_public' => $visibleToPublic,
         ]);
 
         return response()->json([
             'message' => 'Review created successfully',
-            'data' => $review,
+            'data' => $review->fresh()->loadMissing(['offer:id,title,title_en', 'merchant:id,company_name_ar,company_name_en']),
         ], 201);
+    }
+
+    /**
+     * POST /api/mobile/offers/{offer}/reviews — نفس منطق createReview مع offer_id من المسار.
+     */
+    public function createOfferReview(Request $request, string $offer): JsonResponse
+    {
+        if (! ctype_digit($offer)) {
+            abort(404);
+        }
+        $request->merge(['offer_id' => (int) $offer]);
+
+        return $this->createReview($request);
     }
 
     /**

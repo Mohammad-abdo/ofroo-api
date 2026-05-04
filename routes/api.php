@@ -100,8 +100,11 @@ Route::prefix('auth')->group(function () {
 });
 
 // Public categories
+Route::get('/categories/filter-options', [CategoryController::class, 'filterOptions']);
+Route::get('/merchant-categories/options', [CategoryController::class, 'filterOptions']);
+Route::get('/offer-categories/options', [CategoryController::class, 'filterOptions']);
 Route::get('/categories', [CategoryController::class, 'index']);
-Route::get('/categories/{id}', [CategoryController::class, 'show']);
+Route::get('/categories/{id}', [CategoryController::class, 'show'])->whereNumber('id');
 
 // Public malls — تفاصيل مول: ?category_id= أو ?merchant_category_id= و ?offer_category_id=
 Route::get('/malls/details/{id}', [MallPublicController::class, 'mobileMallDetails'])->whereNumber('id');

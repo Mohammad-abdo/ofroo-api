@@ -101,6 +101,14 @@ class Offer extends Model
     }
 
     /**
+     * User reviews tied to this offer (post-checkout ratings).
+     */
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class, 'offer_id');
+    }
+
+    /**
      * Scope a query to only include active offers.
      * Null start_date / end_date means no bound on that side (SQL would otherwise drop rows).
      */

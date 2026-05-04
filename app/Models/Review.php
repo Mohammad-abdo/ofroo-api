@@ -11,6 +11,7 @@ class Review extends Model
         'user_id',
         'merchant_id',
         'order_id',
+        'offer_id',
         'rating',
         'notes',
         'notes_ar',
@@ -52,6 +53,11 @@ class Review extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function offer(): BelongsTo
+    {
+        return $this->belongsTo(Offer::class);
     }
 
     public function moderatedBy(): BelongsTo
