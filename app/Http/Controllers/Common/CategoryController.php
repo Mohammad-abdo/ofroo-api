@@ -136,7 +136,10 @@ class CategoryController extends Controller
 
         return $categories->map(function ($category) use ($language, $request, $isMobile) {
             $offersForCategory = $category->offers->where('category_id', $category->id)->values();
-            $children = $offersForCategory->map(fn ($offer) => (new OfferResource($offer))->toArray($request))->all();
+            $children = $offersForCategory
+                ->map(fn ($offer) => (new OfferResource($offer))->toArray($request))
+                ->values()
+                ->all();
             $active = (bool) ($category->is_active ?? false);
 
             return [

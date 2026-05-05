@@ -127,7 +127,24 @@ class AuthController extends Controller
             'success' => false,
         ]);
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        if (! $user) {
+            Log::warning('Login failed: user not found', [
+                'email' => $request->filled('email') ? Str::lower(trim((string) $request->input('email'))) : null,
+                'phone' => $request->filled('phone') ? trim((string) $request->input('phone')) : null,
+                'ip' => $request->ip(),
+                'ua' => $request->userAgent(),
+            ]);
+        } elseif (! Hash::check($request->password, (string) $user->password)) {
+            Log::warning('Login failed: password mismatch', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'ip' => $request->ip(),
+                'ua' => $request->userAgent(),
+            ]);
+        }
+
+        if (! $user || ! Hash::check($request->password, (string) $user->password)) {
             // 401 (not 422) so clients and tests can distinguish “invalid credentials” from field validation.
             return response()->json([
                 'message' => 'The provided credentials are incorrect.',
