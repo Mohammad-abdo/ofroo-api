@@ -70,7 +70,6 @@ class AdController extends Controller
             'video_url' => $videoUrl,
             'images' => $images,
             'link_url' => $ad->link_url ?? null,
-            'position' => $ad->position ?? null,
             'ad_type' => $ad->ad_type ?? null,
             'order_index' => (int) ($ad->order_index ?? 0),
             'start_date' => $ad->start_date?->toIso8601String(),
@@ -89,7 +88,7 @@ class AdController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Ad::with(['merchant', 'category'])
+        $query = Ad::with(['merchant', 'category', 'offer'])
             ->where('is_active', true);
 
         $now = now();
@@ -100,9 +99,6 @@ class AdController extends Controller
             $q->whereNull('end_date')->orWhere('end_date', '>=', $now);
         });
 
-        if ($request->filled('position')) {
-            $query->where('position', $request->position);
-        }
         if ($request->filled('ad_type')) {
             $query->where('ad_type', $request->ad_type);
         }
@@ -135,7 +131,7 @@ class AdController extends Controller
      */
     public function show(string $id): JsonResponse
     {
-        $ad = Ad::with(['merchant', 'category'])->findOrFail($id);
+        $ad = Ad::with(['merchant', 'category', 'offer'])->findOrFail($id);
         return response()->json(['data' => $this->adPayload($ad)]);
     }
 
@@ -189,7 +185,7 @@ class AdController extends Controller
     {
         $now = now();
 
-        $query = Ad::with(['merchant', 'category'])
+        $query = Ad::with(['merchant', 'category', 'offer'])
             ->where('ad_type', $type)
             ->where('is_active', true)
             ->where(function ($q) use ($now) {
@@ -199,9 +195,6 @@ class AdController extends Controller
                 $q->whereNull('end_date')->orWhere('end_date', '>=', $now);
             });
 
-        if ($request->filled('position')) {
-            $query->where('position', $request->position);
-        }
         if ($request->filled('merchant_id')) {
             $query->where('merchant_id', $request->merchant_id);
         }

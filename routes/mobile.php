@@ -118,6 +118,9 @@ Route::get('/malls', [MallPublicController::class, 'index']);
 Route::get('/offers', [OfferController::class, 'index']);
 Route::get('/offers/{offer}', [OfferController::class, 'show']);
 Route::get('/offers/{offer}/coupons', [CouponController::class, 'index']);
+// Public search (browse without login)
+Route::get('/search', [OfferController::class, 'searchMobile']);
+Route::get('/offers/{id}/whatsapp', [OfferController::class, 'whatsappContact']);
 
 // ================================
 // 4.1 لليوزر: قائمة التجار + بيانات التاجر + عروضه (بدون مصادقة)
@@ -178,11 +181,8 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
     Route::get('/merchant/application/status', [MerchantApplicationController::class, 'status']);
 
     // ================================
-    // 4. العروض - Protected (بحث، واتساب، مفضلة)
+    // 4. العروض - Protected (مفضلة فقط)
     // ================================
-    // Unified mobile search across offers + coupons + categories → { id, title, image, type }
-    Route::get('/search', [OfferController::class, 'searchMobile']);
-    Route::get('/offers/{id}/whatsapp', [OfferController::class, 'whatsappContact']);
     Route::post('/offers/{offer}/favorite', [OfferController::class, 'toggleFavorite']);
 
     // ================================

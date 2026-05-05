@@ -25,10 +25,6 @@ class AdController extends Controller
             $query->where('is_active', $request->boolean('is_active'));
         }
 
-        if ($request->filled('position')) {
-            $query->where('position', $request->position);
-        }
-
         if ($request->filled('ad_type')) {
             $query->where('ad_type', $request->ad_type);
         }
@@ -153,10 +149,7 @@ class AdController extends Controller
     public function createAd(Request $request): JsonResponse
     {
         $input = $request->all();
-        // Accept "budget" from frontend as total_budget
-        if ($request->has('budget') && ! $request->filled('total_budget')) {
-            $input['total_budget'] = $request->budget;
-        }
+        // total_budget is deprecated/unused — ignore it (kept in DB only for backward compatibility).
         // Treat empty date strings as null so validation passes
         foreach (['start_date', 'end_date'] as $dateField) {
             if (isset($input[$dateField]) && (is_string($input[$dateField]) && trim($input[$dateField]) === '')) {
@@ -190,17 +183,14 @@ class AdController extends Controller
             'video_url' => 'nullable|string|max:500',
             'images' => 'nullable|array',
             'link_url' => 'nullable|string|max:500',
-            'position' => 'required|string|max:50',
             'ad_type' => 'required|in:banner,video',
             'merchant_id' => 'nullable|exists:merchants,id',
+            'offer_id' => 'nullable|exists:offers,id',
             'category_id' => 'nullable|exists:categories,id',
             'is_active' => 'nullable',
             'order_index' => 'nullable|integer',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
-            'cost_per_click' => 'nullable|numeric|min:0',
-            'total_budget' => 'nullable|numeric|min:0',
-            'budget' => 'nullable|numeric|min:0',
             // إضافة دعم الإحصائيات عند الإنشاء
             'views_count' => 'nullable|integer|min:0',
             'clicks_count' => 'nullable|integer|min:0',
@@ -256,7 +246,21 @@ class AdController extends Controller
             $imageUrl = null;
         }
 
-        $totalBudget = $request->filled('total_budget') ? $request->total_budget : $request->input('budget');
+        $offerId = $request->filled('offer_id') ? (int) $request->offer_id : null;
+        if ($offerId !== null && ! $request->filled('merchant_id')) {
+            return response()->json([
+                'message' => 'merchant_id is required when offer_id is provided',
+            ], 422);
+        }
+        if ($offerId !== null) {
+            $offer = \App\Models\Offer::query()->whereKey($offerId)->first();
+            if (! $offer || (int) $offer->merchant_id !== (int) $request->merchant_id) {
+                return response()->json([
+                    'message' => 'offer_id must belong to the provided merchant_id',
+                ], 422);
+            }
+        }
+
         $ad = Ad::create([
             'title' => $request->title,
             'title_ar' => $request->title_ar,
@@ -268,16 +272,14 @@ class AdController extends Controller
             'video_url' => $videoUrl,
             'images' => $request->images,
             'link_url' => $request->link_url,
-            'position' => $request->position,
             'ad_type' => $request->ad_type,
             'merchant_id' => $request->merchant_id,
+            'offer_id' => $offerId,
             'category_id' => $request->category_id,
             'is_active' => $request->boolean('is_active', true),
             'order_index' => $request->order_index ?? 0,
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
-            'cost_per_click' => $request->cost_per_click,
-            'total_budget' => $totalBudget,
         ]);
 
         return response()->json([
@@ -327,17 +329,14 @@ class AdController extends Controller
             'video_url' => 'sometimes|nullable|string|max:500',
             'images' => 'sometimes|array',
             'link_url' => 'sometimes|nullable|string|max:500',
-            'position' => 'sometimes|string|max:50',
             'ad_type' => 'sometimes|in:banner,video',
             'merchant_id' => 'sometimes|nullable|exists:merchants,id',
+            'offer_id' => 'sometimes|nullable|exists:offers,id',
             'category_id' => 'sometimes|nullable|exists:categories,id',
             'is_active' => 'sometimes|boolean',
             'order_index' => 'sometimes|integer',
             'start_date' => 'sometimes|date',
             'end_date' => 'sometimes|nullable|date|after:start_date',
-            'cost_per_click' => 'sometimes|numeric|min:0',
-            'total_budget' => 'sometimes|numeric|min:0',
-            'budget' => 'sometimes|numeric|min:0',
             // إضافة دعم تحديث الإحصائيات
             'views_count' => 'sometimes|integer|min:0',
             'clicks_count' => 'sometimes|integer|min:0',
@@ -347,8 +346,28 @@ class AdController extends Controller
             ->except(['image', 'video'])
             ->all();
 
-        if ($request->filled('budget') && ! $request->filled('total_budget')) {
-            $updateData['total_budget'] = $request->input('budget');
+        // total_budget is deprecated/unused — do not update it anymore.
+
+        if (array_key_exists('offer_id', $updateData)) {
+            $offerId = $updateData['offer_id'];
+            if ($offerId === null || $offerId === '') {
+                $updateData['offer_id'] = null;
+            } else {
+                $mid = array_key_exists('merchant_id', $updateData)
+                    ? $updateData['merchant_id']
+                    : $ad->merchant_id;
+                if (! $mid) {
+                    return response()->json([
+                        'message' => 'merchant_id is required when offer_id is provided',
+                    ], 422);
+                }
+                $offer = \App\Models\Offer::query()->whereKey($offerId)->first();
+                if (! $offer || (int) $offer->merchant_id !== (int) $mid) {
+                    return response()->json([
+                        'message' => 'offer_id must belong to the provided merchant_id',
+                    ], 422);
+                }
+            }
         }
 
         // Handle file uploads for updates (مسار promo لتجنب حجب مانعات الإعلانات)
@@ -398,10 +417,6 @@ class AdController extends Controller
             $query->where('is_active', $request->boolean('is_active'));
         }
 
-        if ($request->has('position')) {
-            $query->where('position', $request->position);
-        }
-
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -441,7 +456,6 @@ class AdController extends Controller
             'description_en' => 'nullable|string',
             'image' => ImageUploadRules::requiredFileMax($maxKb),
             'link_url' => 'nullable|string|max:500',
-            'position' => 'required|string|max:50',
             'is_active' => 'nullable|boolean',
             'order_index' => 'nullable|integer',
             'start_date' => 'nullable|date',
@@ -474,7 +488,6 @@ class AdController extends Controller
             'description_en' => $request->description_en,
             'image_url' => $imageUrl,
             'link_url' => $request->link_url,
-            'position' => $request->position,
             'ad_type' => 'banner',
             'is_active' => $request->boolean('is_active', true),
             'order_index' => $request->order_index ?? 0,
@@ -503,7 +516,6 @@ class AdController extends Controller
             'description_en' => 'sometimes|string',
             'image' => ImageUploadRules::sometimesFileMax($maxKb),
             'link_url' => 'sometimes|string|max:500',
-            'position' => 'sometimes|string|max:50',
             'is_active' => 'sometimes|boolean',
             'order_index' => 'sometimes|integer',
             'start_date' => 'sometimes|date',

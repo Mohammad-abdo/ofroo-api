@@ -19,9 +19,9 @@ class Ad extends Model
         'video_url',
         'images',
         'link_url',
-        'position',
         'ad_type',
         'merchant_id',
+        'offer_id',
         'category_id',
         'is_active',
         'order_index',
@@ -29,8 +29,13 @@ class Ad extends Model
         'end_date',
         'clicks_count',
         'views_count',
-        'cost_per_click',
+    ];
+
+    protected $hidden = [
+        // Not used in OFROO anymore; kept in DB for backward compatibility.
         'total_budget',
+        'cost_per_click',
+        'position',
     ];
 
     protected function casts(): array
@@ -40,8 +45,6 @@ class Ad extends Model
             'is_active' => 'boolean',
             'start_date' => 'datetime',
             'end_date' => 'datetime',
-            'cost_per_click' => 'decimal:2',
-            'total_budget' => 'decimal:2',
         ];
     }
 
@@ -91,6 +94,11 @@ class Ad extends Model
         return $this->belongsTo(Merchant::class);
     }
 
+    public function offer(): BelongsTo
+    {
+        return $this->belongsTo(Offer::class);
+    }
+
     /**
      * Get the category for the ad.
      */
@@ -109,21 +117,6 @@ class Ad extends Model
         }
 
         return round(($this->clicks_count / $this->views_count) * 100, 2);
-    }
-
-    /**
-     * Get estimated reach based on views and position
-     */
-    public function getEstimatedReachAttribute(): int
-    {
-        $multiplier = match ($this->position) {
-            'header' => 1.5,
-            'sidebar' => 1.2,
-            'inline' => 1.0,
-            default => 1.0
-        };
-
-        return intval($this->views_count * $multiplier);
     }
 
     /**

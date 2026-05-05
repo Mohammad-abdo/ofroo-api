@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Branch;
 use App\Models\Category;
+use App\Models\Mall;
 use App\Models\Merchant;
 use App\Models\Offer;
 use Carbon\Carbon;
@@ -231,6 +232,95 @@ class OfferSeeder extends Seeder
                         }
                     }
                 });
+        }
+
+        // Ensure each active mall has some offers (so Admin Mall overview doesn't show عروض (0)).
+        // Idempotent: only creates missing offers up to the target per mall.
+        if (Schema::hasColumn('offers', 'mall_id')) {
+            $targetPerMall = 6;
+            $malls = Mall::query()->where('is_active', true)->get(['id']);
+
+            foreach ($malls as $mall) {
+                $mallId = (int) $mall->id;
+                $existing = Offer::query()->where('mall_id', $mallId)->count();
+                $toCreate = max(0, $targetPerMall - $existing);
+                if ($toCreate <= 0) {
+                    continue;
+                }
+
+                $mallMerchants = Merchant::query()
+                    ->where('approved', true)
+                    ->associatedWithMall($mallId)
+                    ->get();
+                if ($mallMerchants->isEmpty()) {
+                    continue;
+                }
+
+                for ($i = 0; $i < $toCreate; $i++) {
+                    $merchant = $mallMerchants->random();
+                    $branch = Branch::where('merchant_id', $merchant->id)->first();
+                    $category = $categories->random();
+                    $titles = $titlesByCategory[$category->order_index] ?? $titlesByCategory[1];
+                    $title = $titles[array_rand($titles)];
+
+                    $originalPrice = $faker->randomFloat(2, 10, 500);
+                    $discountPercent = $faker->randomElement([10, 15, 20, 25, 30, 35, 40, 50]);
+                    $price = round($originalPrice * (1 - $discountPercent / 100), 2);
+                    $status = 'active';
+                    $startDate = Carbon::createFromInterface($faker->dateTimeBetween('-30 days', 'now'))->utc();
+                    $endDate = Carbon::createFromInterface($faker->dateTimeBetween('now', '+60 days'))->utc();
+                    $descMain = $faker->realText(260);
+                    $descAr = $faker->realText(180);
+                    $descEn = $fakerEn->text(180);
+
+                    $offerAttrs = [
+                        'merchant_id' => $merchant->id,
+                        'category_id' => $category->id,
+                        'price' => $price,
+                        'discount' => $discountPercent,
+                        'offer_images' => [
+                            $faker->randomElement([
+                                'https://img.freepik.com/free-psd/super-sale-podium-product-banner-with-editable-text_47987-12084.jpg',
+                                'https://img.freepik.com/free-psd/cyber-monday-facebook-template_23-2149839017.jpg',
+                            ]),
+                        ],
+                        'start_date' => $startDate,
+                        'end_date' => $endDate,
+                        'status' => $status,
+                        'mall_id' => $mallId,
+                    ];
+
+                    if (Schema::hasColumn('offers', 'title_ar')) {
+                        $offerAttrs['title_ar'] = $title['ar'];
+                        $offerAttrs['title_en'] = $title['en'];
+                        $offerAttrs['description_ar'] = $descAr;
+                        $offerAttrs['description_en'] = $descEn;
+                        if (Schema::hasColumn('offers', 'description')) {
+                            $offerAttrs['description'] = $descMain;
+                        }
+                    } else {
+                        $offerAttrs['title'] = $title['ar'];
+                        $offerAttrs['title_en'] = $title['en'];
+                        $offerAttrs['description'] = $descMain;
+                        $offerAttrs['description_en'] = $descEn;
+                    }
+
+                    if (Schema::hasColumn('offers', 'images') && ! Schema::hasColumn('offers', 'offer_images')) {
+                        $offerAttrs['images'] = $offerAttrs['offer_images'];
+                        unset($offerAttrs['offer_images']);
+                    }
+                    if (Schema::hasColumn('offers', 'start_at') && ! Schema::hasColumn('offers', 'start_date')) {
+                        $offerAttrs['start_at'] = $startDate;
+                        $offerAttrs['end_at'] = $endDate;
+                        unset($offerAttrs['start_date'], $offerAttrs['end_date']);
+                    }
+
+                    $offer = Offer::forceCreate($offerAttrs);
+                    if ($branch) {
+                        $offer->branches()->sync([$branch->id]);
+                    }
+                }
+            }
         }
     }
 }

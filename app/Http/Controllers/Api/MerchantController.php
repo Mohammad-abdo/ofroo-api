@@ -1421,13 +1421,11 @@ class MerchantController extends Controller
             'video_url' => 'nullable|string|max:500',
             'images' => 'nullable|array',
             'link_url' => 'nullable|string|max:500',
-            'position' => 'nullable|string|max:50',
             'ad_type' => 'required|in:banner,video',
             'category_id' => 'nullable|exists:categories,id',
+            'offer_id' => 'nullable|exists:offers,id',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after:start_date',
-            'cost_per_click' => 'nullable|numeric|min:0',
-            'total_budget' => 'nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -1449,7 +1447,15 @@ class MerchantController extends Controller
             ], 422);
         }
 
-        $position = $request->input('position') ?: 'header';
+        $offerId = $request->filled('offer_id') ? (int) $request->offer_id : null;
+        if ($offerId !== null) {
+            $offer = \App\Models\Offer::query()->whereKey($offerId)->first();
+            if (! $offer || (int) $offer->merchant_id !== (int) $merchant->id) {
+                return response()->json([
+                    'message' => 'offer_id must belong to this merchant',
+                ], 422);
+            }
+        }
 
         $ad = Ad::create([
             'merchant_id' => $merchant->id,
@@ -1461,15 +1467,13 @@ class MerchantController extends Controller
             'video_url' => $adType === 'video' ? $request->video_url : null,
             'images' => $request->images ?? [],
             'link_url' => $request->link_url,
-            'position' => $position,
             'ad_type' => $adType,
             'category_id' => $request->category_id,
+            'offer_id' => $offerId,
             'is_active' => false, // Requires admin approval
             'order_index' => 0,
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
-            'cost_per_click' => $request->cost_per_click,
-            'total_budget' => $request->total_budget,
         ]);
 
         return response()->json([
@@ -1504,13 +1508,11 @@ class MerchantController extends Controller
                 'video_url' => 'nullable|string|max:500',
                 'images' => 'nullable|array',
                 'link_url' => 'nullable|string|max:500',
-                'position' => 'nullable|string|max:50',
                 'ad_type' => 'sometimes|in:banner,video',
                 'category_id' => 'nullable|exists:categories,id',
+                'offer_id' => 'nullable|exists:offers,id',
                 'start_date' => 'nullable|date',
                 'end_date' => 'nullable|date|after:start_date',
-                'cost_per_click' => 'nullable|numeric|min:0',
-                'total_budget' => 'nullable|numeric|min:0',
             ]);
         }
 
@@ -1538,9 +1540,18 @@ class MerchantController extends Controller
         // Update ad
         $payload = $request->only([
             'title_ar', 'title_en', 'description_ar', 'description_en',
-            'image_url', 'video_url', 'images', 'link_url', 'position', 'ad_type',
-            'category_id', 'start_date', 'end_date', 'cost_per_click', 'total_budget',
+            'image_url', 'video_url', 'images', 'link_url', 'ad_type',
+            'category_id', 'offer_id', 'start_date', 'end_date',
         ]);
+
+        if ($request->filled('offer_id')) {
+            $offer = \App\Models\Offer::query()->whereKey((int) $request->offer_id)->first();
+            if (! $offer || (int) $offer->merchant_id !== (int) $merchant->id) {
+                return response()->json([
+                    'message' => 'offer_id must belong to this merchant',
+                ], 422);
+            }
+        }
         if ($request->filled('ad_type')) {
             if ($request->input('ad_type') === 'banner') {
                 $payload['video_url'] = null;
@@ -1549,13 +1560,10 @@ class MerchantController extends Controller
                 $payload['image_url'] = null;
             }
         }
-        if (array_key_exists('position', $payload) && ($payload['position'] === null || $payload['position'] === '')) {
-            $payload['position'] = 'header';
-        }
         $ad->update($payload);
 
         // If ad was active and merchant updated it, set is_active back to false for admin review
-        if ($ad->is_active && $request->hasAny(['title_ar', 'image_url', 'position'])) {
+        if ($ad->is_active && $request->hasAny(['title_ar', 'image_url'])) {
             $ad->update([
                 'is_active' => false,
             ]);
