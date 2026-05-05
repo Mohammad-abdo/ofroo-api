@@ -14,7 +14,12 @@ class ReviewModerationController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Review::with(['user', 'merchant', 'order.items.offer'])
+        $query = Review::with([
+            'user',
+            'merchant',
+            'offer:id,title,title_ar,title_en,merchant_id',
+            'order.items.offer',
+        ])
             ->orderBy('created_at', 'desc');
 
         if ($request->filled('merchant_id')) {
@@ -109,7 +114,7 @@ class ReviewModerationController extends Controller
             ['merchant_id' => $review->merchant_id, 'user_id' => $review->user_id]
         );
 
-        $review->load(['user', 'merchant', 'order.items.offer']);
+        $review->load(['user', 'merchant', 'offer:id,title,title_ar,title_en,merchant_id', 'order.items.offer']);
 
         return response()->json([
             'message' => 'Review updated successfully',
@@ -160,7 +165,7 @@ class ReviewModerationController extends Controller
 
         return response()->json([
             'message' => "Review {$verb} successfully",
-            'data' => $review->fresh(['user', 'merchant', 'order.items.offer']),
+            'data' => $review->fresh(['user', 'merchant', 'offer:id,title,title_ar,title_en,merchant_id', 'order.items.offer']),
         ]);
     }
 
@@ -196,7 +201,7 @@ class ReviewModerationController extends Controller
 
         return response()->json([
             'message' => 'Review restored successfully',
-            'data' => $review->fresh(['user', 'merchant', 'order.items.offer']),
+            'data' => $review->fresh(['user', 'merchant', 'offer:id,title,title_ar,title_en,merchant_id', 'order.items.offer']),
         ]);
     }
 }
