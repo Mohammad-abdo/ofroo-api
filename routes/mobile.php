@@ -102,6 +102,7 @@ Route::get('/merchant-categories/options', [CategoryController::class, 'filterOp
 Route::get('/offer-categories/options', [CategoryController::class, 'filterOptions']);
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/{id}', [CategoryController::class, 'show'])->whereNumber('id');
+Route::get('/categories/{id}/offers', [CategoryController::class, 'offers'])->whereNumber('id');
 
 // ================================
 // 3.1 كيان المولات (جدول malls) منفصل عن فئات العروض/التجار — التجار بالمول عبر mall_id/الفرع؛ category_id = نشاط التاجر فقط.

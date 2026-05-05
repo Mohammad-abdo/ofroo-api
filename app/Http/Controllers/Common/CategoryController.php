@@ -181,7 +181,7 @@ class CategoryController extends Controller
         $offersForCategory = $category->offers->where('category_id', $category->id)->values();
         $children = $offersForCategory->map(function ($offer) use ($request) {
             return (new OfferResource($offer))->toArray($request);
-        })->all();
+        })->values()->all();
 
         $name = $language === 'ar'
             ? ($category->name_ar ?? $category->name_en)
@@ -199,6 +199,41 @@ class CategoryController extends Controller
                 'image' => $category->image_url,
                 'children' => $children,
                 'is_active' => $isMobile ? ($active ? '1' : '0') : $active,
+            ],
+        ]);
+    }
+
+    /**
+     * Mobile-friendly endpoint: offers list for a category.
+     * GET /api/mobile/categories/{id}/offers
+     */
+    public function offers(Request $request, string $id): JsonResponse
+    {
+        $isMobile = $request->is('api/mobile/*');
+
+        $categoryQuery = Category::query();
+        if ($isMobile) {
+            $categoryQuery->where('is_active', true);
+        }
+        $category = $categoryQuery->findOrFail($id);
+
+        $q = $category->offers()
+            ->whereNotNull('category_id')
+            ->when($isMobile, fn ($qq) => $qq->mobilePubliclyAvailable(), fn ($qq) => $qq->where('status', 'active'))
+            ->with(['merchant', 'category', 'mall', 'branches', 'coupons'])
+            ->orderByDesc('id');
+
+        $perPage = max(1, min(50, (int) $request->get('per_page', 15)));
+        $page = $q->paginate($perPage);
+
+        return response()->json([
+            'data' => $page->getCollection()->map(fn ($offer) => (new OfferResource($offer))->toArray($request))->values(),
+            'meta' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+                'category_id' => (int) $category->id,
             ],
         ]);
     }

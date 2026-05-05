@@ -62,6 +62,8 @@ final class ApiTokenService
     {
         return array_merge($base, [
             'token' => $pair['access_token'],
+            // Explicit key for clients that expect access_token (Flutter, etc.)
+            'access_token' => $pair['access_token'],
             'refresh_token' => $pair['refresh_token'],
             'expires_in' => $pair['expires_in'],
             'access_expires_at' => $pair['access_expires_at'],
