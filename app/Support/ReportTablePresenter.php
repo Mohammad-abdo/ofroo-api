@@ -154,11 +154,24 @@ class ReportTablePresenter
             }
             if (is_array($value)) {
                 foreach ($value as $subK => $subV) {
-                    $label = self::translateSummaryKey((string) $key, $isAr).' · '.$subK;
+                    // Translate the sub-key depending on the parent key context
+                    $subKeyLabel = match ((string) $key) {
+                        'by_type'    => self::translateTransactionType((string) $subK, $isAr),
+                        'by_flow'    => self::translateTransactionFlow((string) $subK, $isAr),
+                        'by_status'  => self::translateTransactionStatus((string) $subK, $isAr),
+                        default      => ucwords(str_replace('_', ' ', (string) $subK)),
+                    };
+                    $label = self::translateSummaryKey((string) $key, $isAr).' · '.$subKeyLabel;
+
                     if (is_scalar($subV)) {
                         $blocks[] = ['label' => $label, 'value' => self::formatScalar($subV)];
                     } elseif (is_array($subV)) {
-                        $blocks[] = ['label' => $label, 'value' => json_encode($subV, JSON_UNESCAPED_UNICODE)];
+                        // Format count/total pairs (e.g. {"count":23,"total":10510.25}) as readable text
+                        $hasCountOrTotal = array_key_exists('count', $subV) || array_key_exists('total', $subV);
+                        $formattedValue  = $hasCountOrTotal
+                            ? self::formatCountTotal($subV, $isAr)
+                            : Str::limit(json_encode($subV, JSON_UNESCAPED_UNICODE), 400);
+                        $blocks[] = ['label' => $label, 'value' => $formattedValue];
                     } else {
                         $blocks[] = ['label' => $label, 'value' => self::pdfStr($subV)];
                     }
@@ -379,13 +392,18 @@ class ReportTablePresenter
             if (! is_object($row)) {
                 continue;
             }
+
+            $rawType   = (string) ($row->transaction_type ?? '');
+            $rawFlow   = (string) ($row->transaction_flow ?? '');
+            $rawStatus = (string) ($row->status ?? '');
+
             $rows[] = [
                 (string) ($row->id ?? ''),
                 self::pdfStr(optional($row->merchant)->company_name ?? null),
-                self::pdfStr($row->transaction_type ?? null),
-                self::pdfStr($row->transaction_flow ?? null),
+                $rawType !== '' ? self::translateTransactionType($rawType, $isAr) : '—',
+                $rawFlow !== '' ? self::translateTransactionFlow($rawFlow, $isAr) : '—',
                 self::formatScalar($row->amount ?? 0),
-                self::pdfStr($row->status ?? null),
+                $rawStatus !== '' ? self::translateTransactionStatus($rawStatus, $isAr) : '—',
                 self::fmtDate($row->created_at ?? null),
             ];
         }
@@ -438,6 +456,87 @@ class ReportTablePresenter
         }
 
         return str_replace('_', ' ', $key);
+    }
+
+    protected static function translateTransactionType(string $type, bool $isAr): string
+    {
+        $map = [
+            'order_revenue'  => ['إيرادات الطلبات', 'Order Revenue'],
+            'commission'     => ['عمولة', 'Commission'],
+            'withdrawal'     => ['سحب', 'Withdrawal'],
+            'expense'        => ['مصروف', 'Expense'],
+            'refund'         => ['استرداد', 'Refund'],
+            'subscription'   => ['اشتراك', 'Subscription'],
+            'deposit'        => ['إيداع', 'Deposit'],
+            'adjustment'     => ['تسوية', 'Adjustment'],
+            'penalty'        => ['غرامة', 'Penalty'],
+            'bonus'          => ['مكافأة', 'Bonus'],
+            'transfer'       => ['تحويل', 'Transfer'],
+            'fee'            => ['رسوم', 'Fee'],
+        ];
+
+        $pair = $map[strtolower($type)] ?? null;
+        if (is_array($pair)) {
+            return $pair[$isAr ? 0 : 1];
+        }
+
+        return ucwords(str_replace('_', ' ', $type));
+    }
+
+    protected static function translateTransactionFlow(string $flow, bool $isAr): string
+    {
+        return match (strtolower($flow)) {
+            'incoming' => $isAr ? 'وارد' : 'Incoming',
+            'outgoing' => $isAr ? 'صادر' : 'Outgoing',
+            default    => ucfirst($flow),
+        };
+    }
+
+    protected static function translateTransactionStatus(string $status, bool $isAr): string
+    {
+        return match (strtolower($status)) {
+            'completed' => $isAr ? 'مكتمل' : 'Completed',
+            'pending'   => $isAr ? 'قيد الانتظار' : 'Pending',
+            'failed'    => $isAr ? 'فشل' : 'Failed',
+            'cancelled' => $isAr ? 'ملغي' : 'Cancelled',
+            'reversed'  => $isAr ? 'مُعكوس' : 'Reversed',
+            default     => ucfirst($status),
+        };
+    }
+
+    /**
+     * Format a count/total sub-array as a human-readable string.
+     *
+     * @param  array<string, mixed>  $arr
+     */
+    protected static function formatCountTotal(array $arr, bool $isAr): string
+    {
+        $count = $arr['count'] ?? null;
+        $total = $arr['total'] ?? null;
+
+        $parts = [];
+
+        if ($count !== null) {
+            $countLabel = $isAr ? 'عدد' : 'Count';
+            $parts[] = $countLabel.': '.number_format((int) $count);
+        }
+
+        if ($total !== null) {
+            $totalLabel = $isAr ? 'إجمالي' : 'Total';
+            $parts[] = $totalLabel.': '.number_format((float) $total, 2);
+        }
+
+        if ($parts !== []) {
+            return implode(' · ', $parts);
+        }
+
+        // Fallback: render any remaining keys
+        $fallback = [];
+        foreach ($arr as $k => $v) {
+            $fallback[] = $k.': '.self::formatScalar($v);
+        }
+
+        return implode(', ', $fallback) ?: '—';
     }
 
     protected static function translateMetricKey(string $key, bool $isAr): string

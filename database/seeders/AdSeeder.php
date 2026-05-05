@@ -18,7 +18,8 @@ class AdSeeder extends Seeder
         $categories = Category::whereNull('parent_id')->pluck('id')->toArray();
 
         $positions = ['home_top', 'home_middle', 'category_top', 'offer_detail', 'sidebar', 'footer'];
-        $adTypes = ['banner', 'popup', 'sidebar', 'inline'];
+        // Include 'video' so /api/mobile/ads/video returns results in demo DB.
+        $adTypes = ['banner', 'popup', 'sidebar', 'inline', 'video'];
 
         $adTitles = [
             ['ar' => 'عرض خاص - خصم حتى 50%', 'en' => 'Special Offer - Up to 50% Off'],
@@ -38,6 +39,7 @@ class AdSeeder extends Seeder
             $isActive = $faker->boolean(75);
             $startDate = Carbon::createFromInterface($faker->dateTimeBetween('-60 days', 'now'))->utc();
             $endDate = Carbon::createFromInterface($faker->dateTimeBetween('now', '+90 days'))->utc();
+            $type = $faker->randomElement($adTypes);
 
             try {
                 Ad::create([
@@ -48,13 +50,20 @@ class AdSeeder extends Seeder
                     'description_ar' => $faker->realText(200),
                     'description_en' => $faker->text(150),
                     'image_url' => 'ads/banner_'.$faker->numberBetween(1, 10).'.jpg',
+                    // For video ads, seed a demo video URL (can be replaced by real uploads later).
+                    'video_url' => $type === 'video'
+                        ? $faker->randomElement([
+                            'https://samplelib.com/lib/preview/mp4/sample-5s.mp4',
+                            'https://samplelib.com/lib/preview/mp4/sample-10s.mp4',
+                        ])
+                        : null,
                     'images' => $faker->optional(0.4) ? [
                         'ads/slide_'.$faker->numberBetween(1, 5).'.jpg',
                         'ads/slide_'.$faker->numberBetween(6, 10).'.jpg',
                     ] : null,
                     'link_url' => $faker->optional(0.6)->url(),
                     'position' => $faker->randomElement($positions),
-                    'ad_type' => $faker->randomElement($adTypes),
+                    'ad_type' => $type,
                     'merchant_id' => $faker->optional(0.5) ? $faker->randomElement($merchants) : null,
                     'category_id' => $faker->optional(0.3) ? $faker->randomElement($categories) : null,
                     'is_active' => $isActive,
