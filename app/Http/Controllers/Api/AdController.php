@@ -137,12 +137,12 @@ class AdController extends Controller
 
     /**
      * GET /api/mobile/banners
-     * Return active banners (ad_type = 'banner') within their date window,
-     * ordered by order_index. Supports optional ?position= filter.
+     * Return active banners + videos within their date window,
+     * ordered by order_index. Each row includes `ad_type` (banner|video) to distinguish.
      */
     public function banners(Request $request): JsonResponse
     {
-        return $this->byType($request, 'banner');
+        return $this->byTypes($request, ['banner', 'video'], 'banner');
     }
 
     /**
@@ -226,6 +226,62 @@ class AdController extends Controller
             'ad_type' => $type,
             'data'    => $ads->map(fn (Ad $ad) => $this->adPayload($ad))->values(),
             'total'   => $ads->count(),
+        ]);
+    }
+
+    /**
+     * Shared helper — returns active ads for a set of ad_types.
+     * `$label` is kept for backward compatibility with clients reading response.ad_type,
+     * while each item still contains its own `ad_type` field for distinguishing.
+     *
+     * @param  list<string>  $types
+     */
+    private function byTypes(Request $request, array $types, string $label): JsonResponse
+    {
+        $now = now();
+
+        $query = Ad::with(['merchant', 'category', 'offer'])
+            ->whereIn('ad_type', $types)
+            ->where('is_active', true)
+            ->where(function ($q) use ($now) {
+                $q->whereNull('start_date')->orWhere('start_date', '<=', $now);
+            })
+            ->where(function ($q) use ($now) {
+                $q->whereNull('end_date')->orWhere('end_date', '>=', $now);
+            });
+
+        if ($request->filled('merchant_id')) {
+            $query->where('merchant_id', $request->merchant_id);
+        }
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
+
+        $perPage = $request->get('per_page');
+        if ($perPage) {
+            $perPage = max(1, min(50, (int) $perPage));
+            $ads = $query->orderBy('order_index')->orderBy('created_at', 'desc')->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'ad_type' => $label,
+                'data' => $ads->getCollection()->map(fn (Ad $ad) => $this->adPayload($ad))->values(),
+                'meta' => [
+                    'current_page' => $ads->currentPage(),
+                    'last_page' => $ads->lastPage(),
+                    'per_page' => $ads->perPage(),
+                    'total' => $ads->total(),
+                ],
+            ]);
+        }
+
+        $ads = $query->orderBy('order_index')->orderBy('created_at', 'desc')->get();
+
+        return response()->json([
+            'success' => true,
+            'ad_type' => $label,
+            'data' => $ads->map(fn (Ad $ad) => $this->adPayload($ad))->values(),
+            'total' => $ads->count(),
         ]);
     }
 }
