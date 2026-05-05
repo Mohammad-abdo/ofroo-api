@@ -46,7 +46,8 @@
         }
         .hero-top td { vertical-align: middle; padding: 2px 6px; }
         .logo-cell { width: 110px; }
-        .logo-cell img { max-height: 48px; max-width: 130px; display: block; }
+        /* mPDF can ignore max-height/max-width on data-uri images; force a fixed height. */
+        .logo-cell img { height: 34px; width: auto; max-width: 80px; display: block; }
         .brand-badge {
             display: inline-block;
             background: #2563eb;
@@ -187,7 +188,7 @@
             <tr>
                 <td class="logo-cell">
                     @if(!empty($branding['logo_data_uri']))
-                        <img src="{{ $branding['logo_data_uri'] }}" alt="">
+                        <img src="{{ $branding['logo_data_uri'] }}" alt="" height="34">
                     @else
                         <span class="brand-badge">OFROO</span>
                     @endif

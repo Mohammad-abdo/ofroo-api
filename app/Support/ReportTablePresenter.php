@@ -20,6 +20,39 @@ class ReportTablePresenter
         if ($value === null) {
             return '—';
         }
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+        if (is_array($value)) {
+            $json = json_encode($value, JSON_UNESCAPED_UNICODE);
+            if (! is_string($json) || $json === '') {
+                return '—';
+            }
+
+            return Str::limit($json, 400);
+        }
+        if (is_object($value)) {
+            if ($value instanceof CarbonInterface) {
+                return self::fmtDate($value);
+            }
+            if (method_exists($value, 'toArray')) {
+                /** @var mixed $arr */
+                $arr = $value->toArray();
+                if (is_array($arr)) {
+                    $json = json_encode($arr, JSON_UNESCAPED_UNICODE);
+
+                    return is_string($json) && $json !== '' ? Str::limit($json, 400) : '—';
+                }
+            }
+            if (method_exists($value, '__toString')) {
+                $s = trim((string) $value);
+
+                return $s === '' ? '—' : Str::limit($s, 400);
+            }
+
+            // Never leak PHP object debug strings into PDF.
+            return '—';
+        }
         $s = trim((string) $value);
 
         return $s === '' ? '—' : $s;
