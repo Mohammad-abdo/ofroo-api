@@ -1255,7 +1255,7 @@ class MerchantController extends Controller
             ->where(function ($q) use ($merchant) {
                 $q->whereIn('target_audience', ['all', 'merchants']);
                 $q->orWhere(function ($q2) use ($merchant) {
-                    $q2->where('target_audience', 'merchants')
+                    $q2->whereIn('target_audience', ['merchants', 'specific'])
                         ->whereNotNull('target_merchant_ids')
                         ->whereJsonContains('target_merchant_ids', (int) $merchant->id);
                 });
