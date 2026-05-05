@@ -17,7 +17,8 @@ class ReviewModerationController extends Controller
         $query = Review::with([
             'user',
             'merchant',
-            'offer:id,title,title_ar,title_en,merchant_id',
+            // offers table no longer has title_ar (title is the primary Arabic field after refactor)
+            'offer:id,title,title_en,merchant_id',
             'order.items.offer',
         ])
             ->orderBy('created_at', 'desc');
@@ -114,7 +115,7 @@ class ReviewModerationController extends Controller
             ['merchant_id' => $review->merchant_id, 'user_id' => $review->user_id]
         );
 
-        $review->load(['user', 'merchant', 'offer:id,title,title_ar,title_en,merchant_id', 'order.items.offer']);
+        $review->load(['user', 'merchant', 'offer:id,title,title_en,merchant_id', 'order.items.offer']);
 
         return response()->json([
             'message' => 'Review updated successfully',
@@ -165,7 +166,7 @@ class ReviewModerationController extends Controller
 
         return response()->json([
             'message' => "Review {$verb} successfully",
-            'data' => $review->fresh(['user', 'merchant', 'offer:id,title,title_ar,title_en,merchant_id', 'order.items.offer']),
+            'data' => $review->fresh(['user', 'merchant', 'offer:id,title,title_en,merchant_id', 'order.items.offer']),
         ]);
     }
 
@@ -201,7 +202,7 @@ class ReviewModerationController extends Controller
 
         return response()->json([
             'message' => 'Review restored successfully',
-            'data' => $review->fresh(['user', 'merchant', 'offer:id,title,title_ar,title_en,merchant_id', 'order.items.offer']),
+            'data' => $review->fresh(['user', 'merchant', 'offer:id,title,title_en,merchant_id', 'order.items.offer']),
         ]);
     }
 }
