@@ -23,7 +23,8 @@ class MallController extends Controller
      *
      * Query (اختياري):
      * - category_id: فلترة التجار بـ merchants.category_id + العروض بـ offers.category_id (نفس المعرف).
-     * - merchant_category_id: فلترة التجار فقط.
+     * - merchant_id: فلترة التجار (والعروض داخلهم) بتاجر معيّن داخل هذا المول.
+     * - merchant_category_id: فلترة التجار فقط (قديم للتوافق الخلفي).
      * - offer_category_id: فلترة العروض فقط (حسب offers.category_id).
      */
     public function mobileMallDetails(Request $request, string $id): JsonResponse
@@ -50,11 +51,16 @@ class MallController extends Controller
     /**
      * Decode optional category filters for mall details (merchants + nested offers).
      *
-     * @return array{merchant_category_id: ?int, offer_category_id: ?int}
+     * @return array{merchant_id: ?int, merchant_category_id: ?int, offer_category_id: ?int}
      */
     protected function mallDetailsCategoryFilterIds(Request $request): array
     {
         $syncCategoryId = $request->filled('category_id') && ctype_digit((string) $request->query('category_id'));
+
+        $merchantId = null;
+        if ($request->filled('merchant_id') && ctype_digit((string) $request->query('merchant_id'))) {
+            $merchantId = (int) $request->query('merchant_id');
+        }
 
         $merchantCategoryId = null;
         if ($request->filled('merchant_category_id') && ctype_digit((string) $request->query('merchant_category_id'))) {
@@ -71,6 +77,7 @@ class MallController extends Controller
         }
 
         return [
+            'merchant_id' => $merchantId,
             'merchant_category_id' => $merchantCategoryId,
             'offer_category_id' => $offerCategoryId,
         ];
@@ -87,6 +94,7 @@ class MallController extends Controller
     {
         $mallId = (int) $mall->id;
         $filters = $this->mallDetailsCategoryFilterIds($request);
+        $merchantId = $filters['merchant_id'];
         $merchantCategoryId = $filters['merchant_category_id'];
         $offerCategoryId = $filters['offer_category_id'];
 
@@ -117,7 +125,8 @@ class MallController extends Controller
                 $q->whereNull('is_blocked')->orWhere('is_blocked', false);
             })
             ->associatedWithMall($mallId)
-            ->when($merchantCategoryId !== null, fn ($q) => $q->where('category_id', $merchantCategoryId))
+            ->when($merchantId !== null, fn ($q) => $q->whereKey($merchantId))
+            ->when($merchantId === null && $merchantCategoryId !== null, fn ($q) => $q->where('category_id', $merchantCategoryId))
             ->orderBy('company_name_ar')
             ->orderBy('id')
             ->get();
@@ -249,6 +258,71 @@ class MallController extends Controller
                 'last_page' => $merchants->lastPage(),
                 'per_page' => $merchants->perPage(),
                 'total' => $merchants->total(),
+                'mall_id' => (int) $mallId,
+            ],
+        ]);
+    }
+
+    /**
+     * All merchants tied to a mall (no pagination).
+     * GET /api/mobile/malls/{mallId}/merchants/all  و  GET /api/malls/{mallId}/merchants/all
+     */
+    public function merchantsAll(Request $request, string $mallId): JsonResponse
+    {
+        if (! ctype_digit($mallId)) {
+            abort(404);
+        }
+
+        Mall::query()
+            ->where('id', $mallId)
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $language = $request->get('language', 'ar');
+
+        $merchants = Merchant::query()
+            ->select([
+                'id',
+                'company_name',
+                'company_name_ar',
+                'company_name_en',
+                'logo_url',
+                'category_id',
+                'mall_id',
+            ])
+            ->with(['category:id,name_ar,name_en'])
+            ->where('approved', true)
+            ->where(function ($q) {
+                $q->whereNull('is_blocked')->orWhere('is_blocked', false);
+            })
+            ->associatedWithMall($mallId)
+            ->orderBy('company_name_ar')
+            ->orderBy('id')
+            ->get();
+
+        $data = $merchants->map(function (Merchant $merchant) use ($language) {
+            $name = $language === 'ar'
+                ? ($merchant->company_name_ar ?? $merchant->company_name_en ?? $merchant->company_name ?? '')
+                : ($merchant->company_name_en ?? $merchant->company_name_ar ?? $merchant->company_name ?? '');
+
+            $cat = $merchant->category;
+            $categoryName = $cat
+                ? ($language === 'ar' ? ($cat->name_ar ?? $cat->name_en) : ($cat->name_en ?? $cat->name_ar))
+                : null;
+
+            return [
+                'id' => $merchant->id,
+                'name' => $name,
+                'logo_url' => ApiMediaUrl::publicAbsolute(is_string($merchant->logo_url) ? $merchant->logo_url : ''),
+                'category_id' => $merchant->category_id,
+                'category_name' => $categoryName,
+            ];
+        })->values()->all();
+
+        return response()->json([
+            'data' => $data,
+            'meta' => [
+                'total' => count($data),
                 'mall_id' => (int) $mallId,
             ],
         ]);

@@ -108,6 +108,7 @@ Route::get('/categories/{id}', [CategoryController::class, 'show'])->whereNumber
 // ================================
 // تفاصيل مول + تجار وعروضهم — اختياري: ?category_id= أو ?merchant_category_id= و ?offer_category_id=
 Route::get('/malls/details/{id}', [MallPublicController::class, 'mobileMallDetails'])->whereNumber('id');
+Route::get('/malls/{mallId}/merchants/all', [MallPublicController::class, 'merchantsAll'])->where('mallId', '[0-9]+');
 Route::get('/malls/{mallId}/merchants', [MallPublicController::class, 'merchants'])->where('mallId', '[0-9]+');
 Route::get('/malls', [MallPublicController::class, 'index']);
 
@@ -225,6 +226,8 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
     // 8. التقييمات (Reviews) - تتطلب مصادقة
     // ================================
     Route::post('/reviews', [OrderController::class, 'createReview']);
+    Route::post('/offers/{offer}/reviews', [OrderController::class, 'createOfferReview'])
+        ->whereNumber('offer');
 
     // ================================
     // 9. الدعم الفني (Support) - تتطلب مصادقة

@@ -908,12 +908,18 @@ class OrderController extends Controller
 
     /**
      * POST /api/mobile/reviews — تقييم بعد الطلب (تاجر فقط أو تاجر + عرض).
-     * Body: order_id, merchant_id, rating, notes?, offer_id? (اختياري — إن وُجد يُربط بالعرض ويظهر على GET …/offers/{id})
+     * Body:
+     * - merchant_id, rating, notes?
+     * - order_id (مطلوب لتقييم التاجر فقط)
+     * - offer_id? (اختياري — إن وُجد يُربط بالعرض ويظهر على GET …/offers/{id})
+     *
+     * ملاحظة: عند تقييم عرض (offer_id موجود) يمكن إرسال order_id أو تركه فارغاً
+     * وسيتم اختيار آخر طلب مؤهل للمستخدم يحتوي هذا العرض.
      */
     public function createReview(Request $request): JsonResponse
     {
         $request->validate([
-            'order_id' => 'required|exists:orders,id',
+            'order_id' => 'nullable|exists:orders,id',
             'merchant_id' => 'required|exists:merchants,id',
             'offer_id' => 'nullable|integer|exists:offers,id',
             'rating' => 'required|integer|min:1|max:5',
@@ -924,13 +930,23 @@ class OrderController extends Controller
 
         $user = $request->user();
 
-        $order = Order::query()
-            ->where('user_id', $user->id)
-            ->whereKey($request->order_id)
-            ->with('items')
-            ->firstOrFail();
-
         $offerId = $request->filled('offer_id') ? (int) $request->input('offer_id') : null;
+
+        if ($offerId === null && ! $request->filled('order_id')) {
+            return response()->json([
+                'message' => 'order_id is required when reviewing a merchant.',
+                'message_ar' => 'رقم الطلب مطلوب عند تقييم التاجر.',
+            ], 422);
+        }
+
+        $order = null;
+        if ($request->filled('order_id')) {
+            $order = Order::query()
+                ->where('user_id', $user->id)
+                ->whereKey($request->order_id)
+                ->with('items')
+                ->firstOrFail();
+        }
 
         if ($offerId !== null) {
             if (! Schema::hasColumn('reviews', 'offer_id')) {
@@ -947,6 +963,28 @@ class OrderController extends Controller
                     'message' => 'merchant_id does not match the offer owner.',
                     'message_ar' => 'معرّف التاجر لا يطابق مالك العرض.',
                 ], 422);
+            }
+
+            // If order_id not provided, auto-pick the latest eligible order that includes this offer.
+            if ($order === null) {
+                $order = Order::query()
+                    ->where('user_id', $user->id)
+                    ->where('merchant_id', (int) $request->merchant_id)
+                    ->where(function ($q) {
+                        $q->where('payment_status', 'paid')
+                            ->orWhere('status', 'activated');
+                    })
+                    ->whereHas('items', fn ($q) => $q->where('offer_id', $offerId))
+                    ->with('items')
+                    ->orderByDesc('id')
+                    ->first();
+
+                if (! $order) {
+                    return response()->json([
+                        'message' => 'No eligible order found to review this offer.',
+                        'message_ar' => 'لا يوجد طلب مؤهل لتقييم هذا العرض.',
+                    ], 422);
+                }
             }
 
             $hasOfferLine = $order->items->contains(fn (OrderItem $item) => (int) $item->offer_id === $offerId);
@@ -974,7 +1012,7 @@ class OrderController extends Controller
 
         $review = $user->reviews()->create([
             'merchant_id' => $request->merchant_id,
-            'order_id' => $order->id,
+            'order_id' => $order?->id,
             'offer_id' => $offerId,
             'rating' => $request->rating,
             'notes' => $request->notes,

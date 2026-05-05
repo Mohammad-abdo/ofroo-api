@@ -8,6 +8,7 @@ use App\Http\Resources\OfferResource;
 use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\Offer;
+use App\Models\Review;
 use App\Repositories\OfferRepository;
 use App\Services\NotificationService;
 use App\Services\OfferService;
@@ -307,7 +308,62 @@ class OfferController extends Controller
         }
         $data['terms_conditions_ar'] = $offer->terms_conditions_ar ?? '';
         $data['terms_conditions_en'] = $offer->terms_conditions_en ?? '';
+
+        // Public offer reviews + summary (avg + count)
+        $data = array_merge($data, $this->publicOfferReviewsForApi((int) $offer->id));
+
         return response()->json(['data' => $data]);
+    }
+
+    /**
+     * Public ratings for an offer (visible_to_public + offer_id). Included on GET …/offers/{id}.
+     *
+     * @return array{review_summary: array{average_rating: float, count: int}, reviews: list<array<string, mixed>>}
+     */
+    private function publicOfferReviewsForApi(int $offerId): array
+    {
+        if (! Schema::hasColumn('reviews', 'offer_id')) {
+            return [
+                'review_summary' => ['average_rating' => 0.0, 'count' => 0],
+                'reviews' => [],
+            ];
+        }
+
+        $base = Review::query()
+            ->where('offer_id', $offerId)
+            ->where('visible_to_public', true);
+
+        $count = (clone $base)->count();
+        $avg = $count > 0 ? round((float) (clone $base)->avg('rating'), 2) : 0.0;
+
+        $rows = (clone $base)
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->limit(200)
+            ->get();
+
+        $reviews = $rows->map(function (Review $r) {
+            return [
+                'id' => $r->id,
+                'rating' => (int) $r->rating,
+                'notes' => $r->notes,
+                'notes_ar' => $r->notes_ar,
+                'notes_en' => $r->notes_en,
+                'created_at' => $r->created_at?->toIso8601String(),
+                'user' => [
+                    'id' => $r->user_id,
+                    'name' => (string) ($r->user?->name ?? ''),
+                ],
+            ];
+        })->values()->all();
+
+        return [
+            'review_summary' => [
+                'average_rating' => $avg,
+                'count' => $count,
+            ],
+            'reviews' => $reviews,
+        ];
     }
 
     /**

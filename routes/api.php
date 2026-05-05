@@ -108,6 +108,7 @@ Route::get('/categories/{id}', [CategoryController::class, 'show'])->whereNumber
 
 // Public malls — تفاصيل مول: ?category_id= أو ?merchant_category_id= و ?offer_category_id=
 Route::get('/malls/details/{id}', [MallPublicController::class, 'mobileMallDetails'])->whereNumber('id');
+Route::get('/malls/{mallId}/merchants/all', [MallPublicController::class, 'merchantsAll'])->where('mallId', '[0-9]+');
 Route::get('/malls/{mallId}/merchants', [MallPublicController::class, 'merchants'])->where('mallId', '[0-9]+');
 Route::get('/malls', [MallPublicController::class, 'index']);
 
@@ -272,6 +273,8 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
 
     // Reviews - يتطلب مصادقة
     Route::post('/reviews', [OrderController::class, 'createReview']);
+    Route::post('/offers/{offer}/reviews', [OrderController::class, 'createOfferReview'])
+        ->whereNumber('offer');
 
     // Support Tickets - يتطلب مصادقة
     Route::prefix('support')->middleware('auth:sanctum')->group(function () {
