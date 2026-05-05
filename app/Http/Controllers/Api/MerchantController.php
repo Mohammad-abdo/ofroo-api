@@ -12,6 +12,7 @@ use App\Http\Resources\CouponResource;
 use App\Http\Resources\OfferResource;
 use App\Models\ActivationReport;
 use App\Models\Ad;
+use App\Models\AdminNotification;
 use App\Models\AppCouponSetting;
 use App\Models\Commission;
 use App\Models\Coupon;
@@ -1190,6 +1191,9 @@ class MerchantController extends Controller
     {
         $user = $request->user();
 
+        // In-app notifications for merchants come from two sources:
+        // 1) Laravel database notifications (user->notifications()) for direct messages
+        // 2) Admin broadcast notifications (admin_notifications) targeted to merchants/all
         $query = $user->notifications();
 
         // Filter by type if provided
@@ -1243,12 +1247,52 @@ class MerchantController extends Controller
             ];
         });
 
+        // Merge admin broadcast notifications so merchant dashboard receives announcements.
+        // Read/mark endpoints still apply only to database notifications.
+        $merchant = $this->resolveMerchant($request);
+        $broadcast = AdminNotification::query()
+            ->where('is_sent', true)
+            ->where(function ($q) use ($merchant) {
+                $q->whereIn('target_audience', ['all', 'merchants']);
+                $q->orWhere(function ($q2) use ($merchant) {
+                    $q2->where('target_audience', 'merchants')
+                        ->whereNotNull('target_merchant_ids')
+                        ->whereJsonContains('target_merchant_ids', (int) $merchant->id);
+                });
+            })
+            ->orderByDesc('sent_at')
+            ->orderByDesc('created_at')
+            ->limit(200)
+            ->get();
+
+        $broadcastFormatted = $broadcast->map(function (AdminNotification $n) {
+            return [
+                'id' => 'admin_'.$n->id,
+                'title' => $n->title ?? $n->title_en ?? '',
+                'title_ar' => $n->title_ar ?? $n->title ?? '',
+                'title_en' => $n->title_en ?? $n->title ?? '',
+                'message' => $n->message ?? $n->message_en ?? '',
+                'message_ar' => $n->message_ar ?? $n->message ?? '',
+                'message_en' => $n->message_en ?? $n->message ?? '',
+                'type' => $n->type ?? 'info',
+                'read_at' => null,
+                'created_at' => ($n->sent_at ?? $n->created_at)?->toIso8601String(),
+                'updated_at' => $n->updated_at?->toIso8601String(),
+            ];
+        });
+
+        $merged = $formattedNotifications
+            ->concat($broadcastFormatted)
+            ->sortByDesc(fn ($row) => $row['created_at'] ?? '')
+            ->values();
+
         return response()->json([
-            'data' => $formattedNotifications,
+            'data' => $merged,
             'meta' => [
                 'current_page' => $notifications->currentPage(),
                 'last_page' => $notifications->lastPage(),
                 'per_page' => $notifications->perPage(),
+                // broadcast rows are merged client-side; keep paginator totals for direct notifications
                 'total' => $notifications->total(),
             ],
         ]);
