@@ -253,10 +253,14 @@ class AdController extends Controller
             ], 422);
         }
         if ($offerId !== null) {
-            $offer = \App\Models\Offer::query()->whereKey($offerId)->first();
-            if (! $offer || (int) $offer->merchant_id !== (int) $request->merchant_id) {
+            $offer = \App\Models\Offer::query()
+                ->whereKey($offerId)
+                ->where('merchant_id', (int) $request->merchant_id)
+                ->active()
+                ->first();
+            if (! $offer) {
                 return response()->json([
-                    'message' => 'offer_id must belong to the provided merchant_id',
+                    'message' => 'offer_id must belong to the provided merchant_id and be active',
                 ], 422);
             }
         }
@@ -284,7 +288,7 @@ class AdController extends Controller
 
         return response()->json([
             'message' => 'Ad created successfully',
-            'data' => $ad->load(['merchant', 'category']),
+            'data' => $ad->load(['merchant', 'category', 'offer']),
         ], 201);
     }
 
@@ -361,10 +365,14 @@ class AdController extends Controller
                         'message' => 'merchant_id is required when offer_id is provided',
                     ], 422);
                 }
-                $offer = \App\Models\Offer::query()->whereKey($offerId)->first();
-                if (! $offer || (int) $offer->merchant_id !== (int) $mid) {
+                $offer = \App\Models\Offer::query()
+                    ->whereKey($offerId)
+                    ->where('merchant_id', (int) $mid)
+                    ->active()
+                    ->first();
+                if (! $offer) {
                     return response()->json([
-                        'message' => 'offer_id must belong to the provided merchant_id',
+                        'message' => 'offer_id must belong to the provided merchant_id and be active',
                     ], 422);
                 }
             }
@@ -389,7 +397,7 @@ class AdController extends Controller
 
         return response()->json([
             'message' => 'Ad updated successfully',
-            'data' => $ad->fresh()->load(['merchant', 'category']),
+            'data' => $ad->fresh()->load(['merchant', 'category', 'offer']),
         ]);
     }
 

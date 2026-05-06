@@ -73,8 +73,12 @@ class OfferController extends Controller
     public function offers(Request $request): JsonResponse
     {
         $perPage = min((int) $request->get('per_page', 15), 500);
+        $forSelect = $request->boolean('for_select', false);
 
-        $offers = Offer::with(['merchant', 'category', 'mall', 'branches', 'coupons'])
+        // When a screen only needs a dropdown list (e.g. Ads form),
+        // avoid eager-loading heavy relations; some merchants have hundreds of offers
+        // which can cause timeouts and the UI falls back to "no offers".
+        $base = Offer::query()
             ->when($request->has('status') && $request->status, function ($query) use ($request) {
                 $query->where('status', $request->status);
             })
@@ -101,7 +105,26 @@ class OfferController extends Controller
                         });
                 });
             })
-            ->orderBy('created_at', 'desc')
+            ->orderBy('created_at', 'desc');
+
+        if ($forSelect) {
+            $offers = $base
+                ->select(['id', 'merchant_id', 'title', 'title_en', 'status', 'start_date', 'end_date'])
+                ->paginate($perPage);
+
+            return response()->json([
+                'data' => $offers->items(),
+                'meta' => [
+                    'current_page' => $offers->currentPage(),
+                    'last_page' => $offers->lastPage(),
+                    'per_page' => $offers->perPage(),
+                    'total' => $offers->total(),
+                ],
+            ]);
+        }
+
+        $offers = $base
+            ->with(['merchant', 'category', 'mall', 'branches', 'coupons'])
             ->paginate($perPage);
 
         return response()->json([
