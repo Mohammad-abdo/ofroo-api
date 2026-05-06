@@ -1048,7 +1048,15 @@ class OrderController extends Controller
         if (! ctype_digit($offer)) {
             abort(404);
         }
-        $request->merge(['offer_id' => (int) $offer]);
+        $offerId = (int) $offer;
+        $offerModel = Offer::query()->whereKey($offerId)->firstOrFail();
+
+        // Make this endpoint "minimal body" friendly: infer merchant_id from offer_id
+        // so clients can send only: rating + notes...
+        $request->merge([
+            'offer_id' => $offerId,
+            'merchant_id' => $request->input('merchant_id') ?? (int) $offerModel->merchant_id,
+        ]);
 
         return $this->createReview($request);
     }
