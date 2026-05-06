@@ -39,6 +39,8 @@ class OfferResource extends JsonResource
             'location' => $this->location ?? '',
             'status' => $this->status ?? '',
             'is_expired' => $this->resource->isExpired(),
+            // Legacy/typo compatibility for some mobile clients
+            'is_expire' => $this->resource->isExpired(),
             'is_not_started' => $this->resource->isNotYetStarted(),
             'effective_status' => $this->resource->effectiveStatus(),
             'status_label_ar' => $this->offerStatusLabelAr(),

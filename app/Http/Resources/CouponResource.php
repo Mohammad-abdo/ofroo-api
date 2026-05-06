@@ -76,6 +76,8 @@ class CouponResource extends JsonResource
             'expires_at' => $this->expires_at ? $this->expires_at->toIso8601String() : '',
             'status' => $this->status ?? '',
             'is_expired' => $this->resource->isExpired(),
+            // Legacy/typo compatibility for some mobile clients
+            'is_expire' => $this->resource->isExpired(),
             'is_not_started' => $this->resource->isNotYetStarted(),
             'effective_status' => $this->resource->effectiveStatus(),
             'status_label_ar' => $this->couponStatusLabelAr(),
@@ -85,6 +87,10 @@ class CouponResource extends JsonResource
             'times_used' => $timesUsed,
             'usage_remaining' => $remaining,
             'is_exhausted' => $isExhausted,
+            // Mobile-friendly aliases (quantity wording)
+            'quantity_remaining' => $remaining,
+            'is_quantity_exhausted' => $isExhausted,
+            'is_sold_out' => $isExhausted,
             'created_at' => $this->created_at ? $this->created_at->toIso8601String() : '',
         ];
         if ($this->relationLoaded('offer') && $this->offer) {
@@ -99,6 +105,7 @@ class CouponResource extends JsonResource
                 'start_date' => $o->start_date?->toIso8601String(),
                 'end_date' => $o->end_date?->toIso8601String(),
                 'is_expired' => $o->isExpired(),
+                'is_expire' => $o->isExpired(),
                 'is_not_started' => $o->isNotYetStarted(),
                 'effective_status' => $o->effectiveStatus(),
             ];
