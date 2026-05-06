@@ -274,8 +274,14 @@ class OfferController extends Controller
     /**
      * Display the specified offer (with full merchant details and terms).
      */
-    public function show(Request $request, Offer $offer): JsonResponse
+    public function show(Request $request, string $offer): JsonResponse
     {
+        // IMPORTANT:
+        // Mobile app may open an offer directly from banners/ads even after it expires.
+        // In that case we should return the offer payload (with status flags) instead of 404,
+        // while keeping the list endpoints filtered to active offers.
+        $offer = Offer::query()->withTrashed()->findOrFail($offer);
+
         if (strtolower((string) ($offer->status ?? '')) === 'pending_approval') {
             $user = $request->user();
             $allowed = false;
@@ -294,9 +300,10 @@ class OfferController extends Controller
             }
         }
 
+        $mobilePubliclyAvailable = true;
         if ($request->is('api/mobile/*')) {
             if (! Offer::query()->whereKey($offer->id)->mobilePubliclyAvailable()->exists()) {
-                abort(404);
+                $mobilePubliclyAvailable = false;
             }
         }
 
@@ -311,6 +318,11 @@ class OfferController extends Controller
 
         // Public offer reviews + summary (avg + count)
         $data = array_merge($data, $this->publicOfferReviewsForApi((int) $offer->id));
+
+        // Helps mobile distinguish "can view" vs "can purchase"
+        if ($request->is('api/mobile/*')) {
+            $data['mobile_publicly_available'] = $mobilePubliclyAvailable;
+        }
 
         return response()->json(['data' => $data]);
     }

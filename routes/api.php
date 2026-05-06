@@ -117,6 +117,11 @@ Route::get('/offers', [OfferController::class, 'index']);
 Route::get('/offers/{offer}', [OfferController::class, 'show']);
 Route::get('/offers/{offer}/coupons', [CouponController::class, 'index']);
 
+// Mobile path aliases (some deployments may not register routes/mobile.php under /api/mobile)
+Route::get('/mobile/offers', [OfferController::class, 'index']);
+Route::get('/mobile/offers/{offer}', [OfferController::class, 'show'])->whereNumber('offer');
+Route::get('/mobile/offers/{offer}/coupons', [CouponController::class, 'index'])->whereNumber('offer');
+
 // للتاجر: لليوزر يشوف بيانات التجار وعروضهم (بدون مصادقة)
 Route::get('/merchants', [MerchantProfileController::class, 'index']);
 Route::get('/merchants/{id}/offers', [MerchantProfileController::class, 'offers']);
