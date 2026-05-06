@@ -27,6 +27,11 @@ class OfferListResource extends JsonResource
             'start_date' => $this->start_date ? $this->start_date->toIso8601String() : null,
             'end_date' => $this->end_date ? $this->end_date->toIso8601String() : null,
             'status' => $this->status ?? '',
+            'is_expired' => $this->resource->isExpired(),
+            // Legacy/typo compatibility for some mobile clients
+            'is_expire' => $this->resource->isExpired(),
+            'is_not_started' => $this->resource->isNotYetStarted(),
+            'effective_status' => $this->resource->effectiveStatus(),
             'merchant_name' => $this->when(
                 $this->relationLoaded('merchant') && $this->merchant,
                 fn () => $this->merchant->company_name ?? null
