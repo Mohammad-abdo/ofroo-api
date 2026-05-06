@@ -328,6 +328,20 @@ class OfferController extends Controller
     }
 
     /**
+     * Public offer reviews endpoint for mobile clients.
+     *
+     * Route: GET /api/mobile/offers/{offer}/reviews
+     */
+    public function reviews(Request $request, string $offer): JsonResponse
+    {
+        $offerModel = Offer::query()->withTrashed()->findOrFail($offer);
+
+        return response()->json([
+            'data' => $this->publicOfferReviewsForApi((int) $offerModel->id),
+        ]);
+    }
+
+    /**
      * Public ratings for an offer (visible_to_public + offer_id). Included on GET …/offers/{id}.
      *
      * @return array{review_summary: array{average_rating: float, count: int}, reviews: list<array<string, mixed>>}

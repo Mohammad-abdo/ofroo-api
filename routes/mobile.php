@@ -119,6 +119,7 @@ Route::get('/malls', [MallPublicController::class, 'index']);
 Route::get('/offers', [OfferController::class, 'index']);
 Route::get('/offers/{offer}', [OfferController::class, 'show']);
 Route::get('/offers/{offer}/coupons', [CouponController::class, 'index']);
+Route::get('/offers/{offer}/reviews', [OfferController::class, 'reviews'])->whereNumber('offer');
 // Public search (browse without login)
 Route::get('/search', [OfferController::class, 'searchMobile']);
 Route::get('/offers/{id}/whatsapp', [OfferController::class, 'whatsappContact']);

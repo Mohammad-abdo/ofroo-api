@@ -121,6 +121,7 @@ Route::get('/offers/{offer}/coupons', [CouponController::class, 'index']);
 Route::get('/mobile/offers', [OfferController::class, 'index']);
 Route::get('/mobile/offers/{offer}', [OfferController::class, 'show'])->whereNumber('offer');
 Route::get('/mobile/offers/{offer}/coupons', [CouponController::class, 'index'])->whereNumber('offer');
+Route::get('/mobile/offers/{offer}/reviews', [OfferController::class, 'reviews'])->whereNumber('offer');
 
 // للتاجر: لليوزر يشوف بيانات التجار وعروضهم (بدون مصادقة)
 Route::get('/merchants', [MerchantProfileController::class, 'index']);
@@ -279,6 +280,10 @@ Route::middleware(['auth:sanctum', 'access.token'])->group(function () {
     // Reviews - يتطلب مصادقة
     Route::post('/reviews', [OrderController::class, 'createReview']);
     Route::post('/offers/{offer}/reviews', [OrderController::class, 'createOfferReview'])
+        ->whereNumber('offer');
+
+    // Mobile path alias (for deployments that don't register routes/mobile.php)
+    Route::post('/mobile/offers/{offer}/reviews', [OrderController::class, 'createOfferReview'])
         ->whereNumber('offer');
 
     // Support Tickets - يتطلب مصادقة
