@@ -1048,17 +1048,62 @@ class OrderController extends Controller
         if (! ctype_digit($offer)) {
             abort(404);
         }
-        $offerId = (int) $offer;
-        $offerModel = Offer::query()->whereKey($offerId)->firstOrFail();
+        // This endpoint is intentionally minimal:
+        // - does NOT require merchant_id (inferred from offer)
+        // - does NOT require order_id (any logged-in user can review the offer)
+        $user = $request->user();
+        if (! $user) {
+            return response()->json([
+                'message' => 'Unauthenticated',
+                'message_ar' => 'غير مصرح',
+                'message_en' => 'Unauthenticated',
+            ], 401);
+        }
 
-        // Make this endpoint "minimal body" friendly: infer merchant_id from offer_id
-        // so clients can send only: rating + notes...
-        $request->merge([
-            'offer_id' => $offerId,
-            'merchant_id' => $request->input('merchant_id') ?? (int) $offerModel->merchant_id,
+        $request->validate([
+            'rating' => 'required|integer|min:1|max:5',
+            'notes' => 'nullable|string',
+            'notes_ar' => 'nullable|string',
+            'notes_en' => 'nullable|string',
         ]);
 
-        return $this->createReview($request);
+        if (! Schema::hasColumn('reviews', 'offer_id')) {
+            return response()->json([
+                'message' => 'Offer reviews are not available until database migration is applied.',
+                'message_ar' => 'تقييم العروض غير مفعّل بعد — شغّل migrations.',
+            ], 503);
+        }
+
+        $offerId = (int) $offer;
+        $offerModel = Offer::query()->whereKey($offerId)->firstOrFail();
+        $merchantId = (int) $offerModel->merchant_id;
+
+        $duplicate = Review::query()
+            ->where('user_id', $user->id)
+            ->where('offer_id', $offerId)
+            ->exists();
+        if ($duplicate) {
+            return response()->json([
+                'message' => 'You have already reviewed this offer.',
+                'message_ar' => 'لقد قيّمت هذا العرض مسبقاً.',
+            ], 409);
+        }
+
+        $review = $user->reviews()->create([
+            'merchant_id' => $merchantId,
+            'order_id' => null,
+            'offer_id' => $offerId,
+            'rating' => (int) $request->rating,
+            'notes' => $request->notes,
+            'notes_ar' => $request->notes_ar,
+            'notes_en' => $request->notes_en,
+            'visible_to_public' => true,
+        ]);
+
+        return response()->json([
+            'message' => 'Review created successfully',
+            'data' => $review->fresh()->loadMissing(['offer:id,title,title_en', 'merchant:id,company_name_ar,company_name_en']),
+        ], 201);
     }
 
     /**
