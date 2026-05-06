@@ -919,8 +919,8 @@ class OrderController extends Controller
     public function createReview(Request $request): JsonResponse
     {
         $request->validate([
-            'order_id' => 'nullable|exists:orders,id',
-            'merchant_id' => 'required|exists:merchants,id',
+            // When reviewing an offer (offer_id present), merchant_id can be omitted and will be inferred.
+            'merchant_id' => 'nullable|exists:merchants,id',
             'offer_id' => 'nullable|integer|exists:offers,id',
             'rating' => 'required|integer|min:1|max:5',
             'notes' => 'nullable|string',
@@ -931,6 +931,14 @@ class OrderController extends Controller
         $user = $request->user();
 
         $offerId = $request->filled('offer_id') ? (int) $request->input('offer_id') : null;
+        $merchantId = $request->filled('merchant_id') ? (int) $request->input('merchant_id') : null;
+
+        if ($offerId === null && $merchantId === null) {
+            return response()->json([
+                'message' => 'merchant_id is required when reviewing a merchant.',
+                'message_ar' => 'معرّف التاجر مطلوب عند تقييم التاجر.',
+            ], 422);
+        }
 
         if ($offerId === null && ! $request->filled('order_id')) {
             return response()->json([
@@ -958,7 +966,12 @@ class OrderController extends Controller
 
             $offer = Offer::query()->whereKey($offerId)->firstOrFail();
 
-            if ((int) $offer->merchant_id !== (int) $request->merchant_id) {
+            // Infer merchant_id from the offer when not provided.
+            if ($merchantId === null) {
+                $merchantId = (int) $offer->merchant_id;
+            }
+
+            if ((int) $offer->merchant_id !== (int) $merchantId) {
                 return response()->json([
                     'message' => 'merchant_id does not match the offer owner.',
                     'message_ar' => 'معرّف التاجر لا يطابق مالك العرض.',
@@ -969,7 +982,7 @@ class OrderController extends Controller
             if ($order === null) {
                 $order = Order::query()
                     ->where('user_id', $user->id)
-                    ->where('merchant_id', (int) $request->merchant_id)
+                    ->where('merchant_id', (int) $merchantId)
                     ->where(function ($q) {
                         $q->where('payment_status', 'paid')
                             ->orWhere('status', 'activated');
@@ -1011,7 +1024,7 @@ class OrderController extends Controller
         $visibleToPublic = $offerId !== null;
 
         $review = $user->reviews()->create([
-            'merchant_id' => $request->merchant_id,
+            'merchant_id' => $merchantId,
             'order_id' => $order?->id,
             'offer_id' => $offerId,
             'rating' => $request->rating,
